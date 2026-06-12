@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@fontsource/open-sans':
+        specifier: ^5.2.7
+        version: 5.2.7
       '@tauri-apps/api':
         specifier: ^2.4.0
         version: 2.11.0
@@ -563,6 +566,9 @@ packages:
     peerDependenciesMeta:
       '@noble/hashes':
         optional: true
+
+  '@fontsource/open-sans@5.2.7':
+    resolution: {integrity: sha512-8yfgDYjE5O0vmTPdrcjV35y4yMnctsokmi9gN49Gcsr0sjzkMkR97AnKDe6OqZh2SFkYlR28fxOvi21bYEgMSw==}
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -1948,6 +1954,8 @@ snapshots:
       levn: 0.4.1
 
   '@exodus/bytes@1.15.1': {}
+
+  '@fontsource/open-sans@5.2.7': {}
 
   '@humanfs/core@0.19.2':
     dependencies:

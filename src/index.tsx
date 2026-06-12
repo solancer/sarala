@@ -1,6 +1,10 @@
 /* @refresh reload */
 import { render } from "solid-js/web";
 import App from "./App";
+import "@fontsource/open-sans/400.css";
+import "@fontsource/open-sans/400-italic.css";
+import "@fontsource/open-sans/600.css";
+import "@fontsource/open-sans/700.css";
 import "highlight.js/styles/github.css";
 import "./styles/app.css";
 
