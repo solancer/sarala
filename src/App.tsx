@@ -4,10 +4,12 @@ import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
 import SourceView from "./components/SourceView";
 import QuickOpen from "./components/QuickOpen";
+import FindBar from "./components/FindBar";
 import { initSettings } from "./settings";
 import {
   doc, theme, sourceMode, sidebarOpen, setSidebarOpen,
   fileName, setActive, fileTree, folderName, THEMES,
+  spellcheckOn, smartPunctuation, preserveBreaks, lineEnding,
 } from "./store";
 import { isTauri, setMenuChecked } from "./platform";
 import { executeCommand, openFile, openFolder, save, exportHtml } from "./commands";
@@ -33,6 +35,10 @@ export default function App() {
     if (k === "/") { e.preventDefault(); executeCommand("view.source_mode"); }
     if (k === "l" && e.shiftKey) { e.preventDefault(); executeCommand("view.sidebar"); }
     if (k === "e" && e.shiftKey) { e.preventDefault(); executeCommand("file.export.html"); }
+    if (k === "p" && e.shiftKey) { e.preventDefault(); executeCommand("file.open_quickly"); }
+    if (k === "f" && e.altKey) { e.preventDefault(); executeCommand("edit.replace"); }
+    else if (k === "f" && !e.shiftKey) { e.preventDefault(); executeCommand("edit.find"); }
+    if (k === "g") { e.preventDefault(); executeCommand("edit.find_next"); }
   };
 
   onMount(() => {
@@ -55,6 +61,14 @@ export default function App() {
   createEffect(() => {
     const current = theme();
     for (const id of THEMES) setMenuChecked(`themes.set.${id}`, id === current);
+  });
+  createEffect(() => setMenuChecked("edit.spellcheck", spellcheckOn()));
+  createEffect(() => setMenuChecked("edit.smart_punctuation", smartPunctuation()));
+  createEffect(() => setMenuChecked("edit.preserve_breaks", preserveBreaks()));
+  createEffect(() => {
+    const le = lineEnding();
+    void setMenuChecked("edit.line_ending.lf", le === "lf");
+    void setMenuChecked("edit.line_ending.crlf", le === "crlf");
   });
 
   return (
@@ -80,6 +94,7 @@ export default function App() {
           <button class="ghost-btn" onClick={save}>Save</button>
           <button class="ghost-btn" onClick={exportHtml}>Export HTML</button>
         </header>
+        <FindBar />
         <div class="scroll" ref={editorEl}>
           <Show when={!sourceMode()} fallback={<SourceView />}>
             <Editor />

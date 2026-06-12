@@ -348,3 +348,28 @@ body { font-family: var(--font-ui); }
   }
   .block { border-left: none; margin-left: 0; padding-left: 0; }
 }
+
+/* ---- Find bar (Cmd/Ctrl+F) ---- */
+
+.findbar {
+  border-bottom: 1px solid var(--accent-soft);
+  background: var(--paper, #fff);
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.findbar-row { display: flex; align-items: center; gap: 6px; }
+.findbar input {
+  flex: 1;
+  max-width: 360px;
+  border: 1px solid var(--accent-soft);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font: 13px var(--font-ui);
+  background: transparent;
+  color: var(--ink);
+  outline: none;
+}
+.findbar input:focus { border-color: var(--accent); }
+.findbar-count { font: 11px var(--font-ui); color: var(--ink-soft); min-width: 64px; }

@@ -15,6 +15,11 @@ const marked = new Marked(
 );
 marked.setOptions({ gfm: true, breaks: false });
 
+/** Edit ▸ Whitespace: render single newlines as <br> when enabled. */
+export function setPreserveBreaksOption(on: boolean) {
+  marked.setOptions({ breaks: on });
+}
+
 /** Render a markdown string to sanitized HTML. */
 export function renderMarkdown(md: string): string {
   if (!md.trim()) return `<p class="empty-block">&nbsp;</p>`;

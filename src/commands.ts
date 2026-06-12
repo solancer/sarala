@@ -3,17 +3,24 @@ import {
   sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
   theme, setTheme, THEMES, setFileTree, setFolderName,
   folderPath, setFolderPath, setQuickOpenVisible,
+  moveBlock, removeBlock,
+  spellcheckOn, setSpellcheckOn, smartPunctuation, setSmartPunctuation,
+  preserveBreaks, setPreserveBreaks, lineEnding, setLineEnding,
+  bumpRenderEpoch,
 } from "./store";
 import {
   isTauri, pickFolder, pickMarkdownFile, pickSavePath, pickImportFile,
   readTextFile, writeTextFile, listDirectory, openExternal,
   confirmDialog, alertDialog, renameFile, deleteFile, openNewWindow,
   hasPandoc, pandocImport, pandocExport,
+  clipboardWriteText, clipboardReadText,
 } from "./platform";
-import { renderMarkdown } from "./markdown";
+import { renderMarkdown, setPreserveBreaksOption } from "./markdown";
 import {
   recentFiles, addRecentFile, clearRecentFiles, lastExport, setLastExport,
+  setSetting,
 } from "./settings";
+import { openFind, findNext } from "./components/FindBar";
 
 const HELP_URL = "https://github.com/inkdown/inkdown#readme";
 
@@ -24,6 +31,8 @@ const HELP_URL = "https://github.com/inkdown/inkdown#readme";
 export interface BlockApi {
   wrap(before: string, after?: string): void;
   insertAtCaret(text: string, caretWithin?: number): void;
+  selectRange(start: number, end: number): void;
+  caretOffset(): number;
 }
 
 let blockApi: BlockApi | null = null;
@@ -32,6 +41,9 @@ export function registerBlockApi(api: BlockApi) {
 }
 export function unregisterBlockApi(api: BlockApi) {
   if (blockApi === api) blockApi = null;
+}
+export function getActiveBlockApi(): BlockApi | null {
+  return blockApi;
 }
 
 const withBlock = (fn: (api: BlockApi) => void) => () => {
@@ -76,11 +88,15 @@ async function newFile() {
   if (await confirmDiscard()) loadDocument("", null);
 }
 
+/** Document text with the configured line endings applied (Edit ▸ Line Endings). */
+const textForDisk = () =>
+  lineEnding() === "crlf" ? fullText().replace(/\n/g, "\r\n") : fullText();
+
 export async function save() {
   let path = doc.filePath;
   if (!path) path = await pickSavePath(fileName());
   if (!path && isTauri) return;
-  await writeTextFile(path ?? fileName(), fullText());
+  await writeTextFile(path ?? fileName(), textForDisk());
   if (path) {
     markSaved(path);
     await addRecentFile(path);
@@ -90,7 +106,7 @@ export async function save() {
 async function saveAs() {
   const path = await pickSavePath(fileName());
   if (!path && isTauri) return;
-  await writeTextFile(path ?? fileName(), fullText());
+  await writeTextFile(path ?? fileName(), textForDisk());
   if (path) {
     markSaved(path);
     await addRecentFile(path);
@@ -224,6 +240,62 @@ async function exportPrevious() {
   await doExport(memo.id, memo.path);
 }
 
+// ---------- Edit ----------
+
+async function copyAsMarkdown() {
+  const text = doc.activeIndex >= 0 ? doc.blocks[doc.activeIndex].text : fullText();
+  await clipboardWriteText(text);
+}
+
+async function pastePlain() {
+  const text = await clipboardReadText();
+  if (text && blockApi) blockApi.insertAtCaret(text);
+}
+
+function selectLine() {
+  if (!blockApi || doc.activeIndex < 0) return;
+  const text = doc.blocks[doc.activeIndex].text;
+  const offset = blockApi.caretOffset();
+  const start = text.lastIndexOf("\n", offset - 1) + 1;
+  const endIdx = text.indexOf("\n", offset);
+  blockApi.selectRange(start, endIdx === -1 ? text.length : endIdx);
+}
+
+function selectWord() {
+  // Selection.modify is non-standard but supported by WebKit/Blink/Gecko.
+  const sel = window.getSelection() as
+    | (Selection & { modify?: (alter: string, dir: string, granularity: string) => void })
+    | null;
+  if (!sel?.modify) return;
+  sel.modify("move", "backward", "word");
+  sel.modify("extend", "forward", "word");
+}
+
+async function toggleSpellcheck() {
+  const v = !spellcheckOn();
+  setSpellcheckOn(v);
+  await setSetting("spellcheck", v);
+}
+
+async function toggleSmartPunctuation() {
+  const v = !smartPunctuation();
+  setSmartPunctuation(v);
+  await setSetting("smartPunctuation", v);
+}
+
+async function togglePreserveBreaks() {
+  const v = !preserveBreaks();
+  setPreserveBreaks(v);
+  setPreserveBreaksOption(v);
+  bumpRenderEpoch();
+  await setSetting("preserveBreaks", v);
+}
+
+async function chooseLineEnding(v: "lf" | "crlf") {
+  setLineEnding(v);
+  await setSetting("lineEnding", v);
+}
+
 // ---------- Registry ----------
 
 type Command = () => void | Promise<void>;
@@ -245,6 +317,27 @@ const registry: Record<string, Command> = {
   "file.import": importViaPandoc,
   "file.export.previous": exportPrevious,
   "file.print": () => { window.print(); },
+
+  // Edit
+  "edit.copy_markdown": copyAsMarkdown,
+  "edit.copy_html": () => clipboardWriteText(renderMarkdown(fullText())),
+  "edit.paste_plain": pastePlain,
+  "edit.move_row_up": () => { if (doc.activeIndex >= 0) moveBlock(doc.activeIndex, -1); },
+  "edit.move_row_down": () => { if (doc.activeIndex >= 0) moveBlock(doc.activeIndex, 1); },
+  "edit.delete_block": () => { if (doc.activeIndex >= 0) removeBlock(doc.activeIndex); },
+  "edit.select_block": () => {
+    if (doc.activeIndex >= 0) blockApi?.selectRange(0, doc.blocks[doc.activeIndex].text.length);
+  },
+  "edit.select_line": selectLine,
+  "edit.select_word": selectWord,
+  "edit.find": () => { openFind(false); },
+  "edit.find_next": () => { findNext(1); },
+  "edit.replace": () => { openFind(true); },
+  "edit.smart_punctuation": toggleSmartPunctuation,
+  "edit.spellcheck": toggleSpellcheck,
+  "edit.line_ending.lf": () => chooseLineEnding("lf"),
+  "edit.line_ending.crlf": () => chooseLineEnding("crlf"),
+  "edit.preserve_breaks": togglePreserveBreaks,
 
   // Paragraph — headings act on the active block
   "paragraph.heading.0": heading(0),
@@ -268,6 +361,7 @@ const registry: Record<string, Command> = {
   // View
   "view.source_mode": () => { setSourceMode(!sourceMode()); },
   "view.sidebar": () => { setSidebarOpen(!sidebarOpen()); },
+  "view.search": () => { openFind(false); },
 
   // Help
   "help.readme": () => openExternal(HELP_URL),

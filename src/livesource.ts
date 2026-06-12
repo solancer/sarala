@@ -152,6 +152,40 @@ export function setCaret(el: HTMLElement, offset: number) {
   sel.addRange(range);
 }
 
+/** Select a [start, end) text-offset range inside a contenteditable. */
+export function setSelection(el: HTMLElement, start: number, end: number) {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const max = el.textContent?.length ?? 0;
+  const from = Math.max(0, Math.min(start, max));
+  const to = Math.max(from, Math.min(end, max));
+  const range = document.createRange();
+  let pos = 0;
+  let startSet = false;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode() as Text | null;
+  while (node) {
+    const len = node.data.length;
+    if (!startSet && from <= pos + len) {
+      range.setStart(node, from - pos);
+      startSet = true;
+    }
+    if (startSet && to <= pos + len) {
+      range.setEnd(node, to - pos);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+    pos += len;
+    node = walker.nextNode() as Text | null;
+  }
+  if (startSet) {
+    range.setEnd(el, el.childNodes.length);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+}
+
 /**
  * Map a click position in rendered HTML to an offset in the markdown
  * source: rendered text is (approximately) an ordered subsequence of the

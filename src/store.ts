@@ -79,6 +79,16 @@ export const [folderName, setFolderName] = createSignal<string | null>(null);
 export const [folderPath, setFolderPath] = createSignal<string | null>(null);
 export const [quickOpenVisible, setQuickOpenVisible] = createSignal(false);
 
+// Edit-menu toggles (persisted in settings).
+export const [spellcheckOn, setSpellcheckOn] = createSignal(true);
+export const [smartPunctuation, setSmartPunctuation] = createSignal(false);
+export const [preserveBreaks, setPreserveBreaks] = createSignal(false);
+export const [lineEnding, setLineEnding] = createSignal<"lf" | "crlf">("lf");
+
+// Bumped when a global render option changes so rendered blocks re-render.
+export const [renderEpoch, setRenderEpoch] = createSignal(0);
+export const bumpRenderEpoch = () => setRenderEpoch((n) => n + 1);
+
 export const fullText = createMemo(() => joinBlocks(state.blocks.map((b) => b.text)));
 export const outline = createMemo(() => extractOutline(state.blocks.map((b) => b.text)));
 export const stats = createMemo(() => countWords(fullText()));
@@ -142,6 +152,32 @@ export function consumeCaretRequest(): number | null {
   const c = caretRequest;
   caretRequest = null;
   return c;
+}
+
+// Like the caret request, but selects a range once the block is styled —
+// used by find/replace to highlight the current match.
+let selectionRequest: { start: number; end: number } | null = null;
+export function requestSelection(start: number, end: number) {
+  selectionRequest = { start, end };
+}
+export function consumeSelectionRequest(): { start: number; end: number } | null {
+  const s = selectionRequest;
+  selectionRequest = null;
+  return s;
+}
+
+/** Move a block one position up or down, keeping activation glued to it. */
+export function moveBlock(index: number, dir: -1 | 1) {
+  setState(
+    produce((s) => {
+      const j = index + dir;
+      if (index < 0 || index >= s.blocks.length || j < 0 || j >= s.blocks.length) return;
+      const [b] = s.blocks.splice(index, 1);
+      s.blocks.splice(j, 0, b);
+      if (s.activeIndex === index) s.activeIndex = j;
+      s.dirty = true;
+    })
+  );
 }
 
 export function mergeWithPrevious(index: number) {

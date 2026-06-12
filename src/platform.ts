@@ -59,6 +59,21 @@ export async function listDirectory(path: string): Promise<FileNode[]> {
   return await invoke<FileNode[]>("list_dir", { path });
 }
 
+export async function clipboardWriteText(text: string): Promise<void> {
+  if (!isTauri) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
+  await writeText(text);
+}
+
+export async function clipboardReadText(): Promise<string> {
+  if (!isTauri) return await navigator.clipboard.readText().catch(() => "");
+  const { readText } = await import("@tauri-apps/plugin-clipboard-manager");
+  return await readText().catch(() => "");
+}
+
 /** Native yes/no confirm (dialog plugin); window.confirm in the browser. */
 export async function confirmDialog(message: string, title = "Inkdown"): Promise<boolean> {
   if (!isTauri) return window.confirm(message);

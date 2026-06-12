@@ -1,4 +1,9 @@
 import { isTauri } from "./platform";
+import {
+  setSpellcheckOn, setSmartPunctuation, setPreserveBreaks, setLineEnding,
+  bumpRenderEpoch,
+} from "./store";
+import { setPreserveBreaksOption } from "./markdown";
 
 export interface ExportMemo {
   /** Menu id of the export command, e.g. "file.export.docx". */
@@ -45,6 +50,18 @@ export async function initSettings(): Promise<void> {
     }
   }
   await syncRecentMenu();
+  hydrateStore();
+}
+
+/** Push persisted toggles into the reactive store on startup. */
+function hydrateStore() {
+  setSpellcheckOn(getSetting("spellcheck", true));
+  setSmartPunctuation(getSetting("smartPunctuation", false));
+  setLineEnding(getSetting<"lf" | "crlf">("lineEnding", "lf"));
+  const breaks = getSetting("preserveBreaks", false);
+  setPreserveBreaks(breaks);
+  setPreserveBreaksOption(breaks);
+  bumpRenderEpoch();
 }
 
 export function getSetting<T>(key: string, fallback: T): T {

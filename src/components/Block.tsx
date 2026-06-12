@@ -1,11 +1,14 @@
 import { Show, createEffect, on, onCleanup } from "solid-js";
 import { renderMarkdown, hasOpenFence } from "../markdown";
 import {
-  styleSource, getCaretOffset, getSelectionOffsets, setCaret,
+  styleSource, getCaretOffset, getSelectionOffsets, setCaret, setSelection,
   mapRenderedPrefixToSource,
 } from "../livesource";
 import { isTauri, openExternal } from "../platform";
-import { consumeCaretRequest } from "../store";
+import {
+  consumeCaretRequest, consumeSelectionRequest,
+  spellcheckOn, smartPunctuation, renderEpoch,
+} from "../store";
 import { executeCommand, registerBlockApi, unregisterBlockApi, type BlockApi } from "../commands";
 
 interface Props {
@@ -33,11 +36,17 @@ export default function Block(props: Props) {
   createEffect(
     on([() => props.active, () => props.text], ([active]) => {
       if (!active || !el || composing) return;
+      const selection = consumeSelectionRequest();
       const caret = pendingCaret ?? consumeCaretRequest() ?? props.text.length;
       pendingCaret = null;
       el.innerHTML = styleSource(props.text);
       el.focus();
-      setCaret(el, caret);
+      if (selection) {
+        setSelection(el, selection.start, selection.end);
+        el.scrollIntoView({ block: "nearest" });
+      } else {
+        setCaret(el, caret);
+      }
     })
   );
 
@@ -63,7 +72,16 @@ export default function Block(props: Props) {
   };
 
   // While active, expose caret-level editing to the menu/keyboard command bus.
-  const api: BlockApi = { wrap: wrapSelection, insertAtCaret: (t, c) => insertAtCaret(t, c) };
+  const api: BlockApi = {
+    wrap: wrapSelection,
+    insertAtCaret: (t, c) => insertAtCaret(t, c),
+    selectRange: (start, end) => {
+      if (!el) return;
+      setSelection(el, start, end);
+      el.scrollIntoView({ block: "nearest" });
+    },
+    caretOffset: () => (el ? getCaretOffset(el) : 0),
+  };
   createEffect(() => {
     if (props.active) registerBlockApi(api);
     else unregisterBlockApi(api);
@@ -130,6 +148,31 @@ export default function Block(props: Props) {
       if (k === "k") return e.preventDefault(), executeCommand("format.hyperlink");
       if (/^[0-6]$/.test(k)) return e.preventDefault(), executeCommand(`paragraph.heading.${k}`);
       return;
+    }
+    // Browser fallback for Alt+Up/Down (native menu accelerator in Tauri).
+    if (!isTauri && e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      e.preventDefault();
+      executeCommand(e.key === "ArrowUp" ? "edit.move_row_up" : "edit.move_row_down");
+      return;
+    }
+    // Smart punctuation: curly quotes and -- → em-dash (skipped in code fences).
+    if (smartPunctuation() && !isFence() && !e.altKey) {
+      if (e.key === '"' || e.key === "'") {
+        e.preventDefault();
+        const { start } = getSelectionOffsets(el!);
+        const prev = start > 0 ? props.text[start - 1] : "";
+        const opening = !prev || /[\s([{“‘—-]/.test(prev);
+        insertAtCaret(e.key === '"' ? (opening ? "“" : "”") : opening ? "‘" : "’");
+        return;
+      }
+      if (e.key === "-") {
+        const { start, end } = getSelectionOffsets(el!);
+        if (start === end && props.text[start - 1] === "-") {
+          e.preventDefault();
+          commit(props.text.slice(0, start - 1) + "—" + props.text.slice(end), start);
+          return;
+        }
+      }
     }
     if (e.key === "Escape") { e.preventDefault(); el?.blur(); return; }
     if (e.key === "Tab") { e.preventDefault(); insertAtCaret("  "); return; }
@@ -209,7 +252,7 @@ export default function Block(props: Props) {
         when={props.active}
         fallback={
           // eslint-disable-next-line solid/no-innerhtml -- renderMarkdown output is DOMPurify-sanitized
-          <div class="rendered" onMouseDown={onRenderedClick} innerHTML={renderMarkdown(props.text)} />
+          <div class="rendered" onMouseDown={onRenderedClick} innerHTML={(renderEpoch(), renderMarkdown(props.text))} />
         }
       >
         <div
@@ -217,7 +260,7 @@ export default function Block(props: Props) {
           class="source"
           classList={{ "code-block": isFence() }}
           contentEditable={true}
-          spellcheck={true}
+          spellcheck={spellcheckOn()}
           onInput={onInput}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
