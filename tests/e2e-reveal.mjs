@@ -176,6 +176,38 @@ const afterType = await page.evaluate(() => {
 check(afterType.hasTyped, "typed text lands in the table source");
 check(afterType.stillTable === "table", "grid layout survives typing re-styles");
 
+// Table toolbar: floats above the active table; align + resize work and
+// keep the block active (mousedown on the toolbar must not blur it).
+check(await page.locator(".block.active .table-toolbar").isVisible(), "table toolbar appears");
+await page.locator(".table-toolbar .tt-btn[title='Align column center']").click();
+await page.waitForTimeout(120);
+const aligned = await page.evaluate(() => {
+  const el = document.querySelector(".block.active .source");
+  return { sep: el?.textContent.split("\n")[1] ?? "", active: !!el };
+});
+check(aligned.active, "block stays active after toolbar click");
+check(aligned.sep.includes(":---:"), `align-center rewrites the separator (${aligned.sep.trim()})`);
+
+await page.locator(".table-toolbar .tt-btn[title='Resize table']").click();
+check(await page.locator(".tt-popover").isVisible(), "resize popover opens");
+const beforeRows = await page.evaluate(
+  () => document.querySelector(".block.active .source").textContent.split("\n").length
+);
+// Click the grid cell for 2 columns x 6 total rows (row index 5, col index 1).
+await page.locator(".tt-grid .tt-cell").nth(5 * 8 + 1).click();
+await page.waitForTimeout(150);
+const afterResize = await page.evaluate(() => {
+  const el = document.querySelector(".block.active .source");
+  return {
+    lines: el.textContent.split("\n").length,
+    stillTable: !!el.querySelector(".md-table"),
+    hasOld: el.textContent.includes("Save"),
+  };
+});
+check(afterResize.lines === 7, `grid pick resizes to 6 rows + separator = 7 lines (was ${beforeRows}, now ${afterResize.lines})`);
+check(afterResize.stillTable, "resized table still renders as a grid");
+check(afterResize.hasOld, "existing cells survive the resize");
+
 await browser.close();
 kill();
 console.log(failures ? `\n${failures} FAILURES` : "\nall live-app checks passed");

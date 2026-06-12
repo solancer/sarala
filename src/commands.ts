@@ -28,7 +28,7 @@ import {
 } from "./settings";
 import { openFind, findNext } from "./components/FindBar";
 import { openTableDialog } from "./components/TableDialog";
-import { skeletonTable, editTable, type TableEdit, type Align } from "./tabletools";
+import { skeletonTable, editTable, resizeTable, type TableEdit, type Align } from "./tabletools";
 
 const HELP_URL = "https://github.com/inkdown/inkdown#readme";
 
@@ -340,6 +340,17 @@ const tableAlign = (align: Align) => () => applyTableEdit({ kind: "align", align
 export function insertTable(rows: number, cols: number) {
   const md = skeletonTable(rows, cols);
   insertBlock(md, md.indexOf("|") + 2);
+}
+
+/** Called by the table toolbar's grid picker. Rows include the header. */
+export function resizeActiveTable(rows: number, cols: number) {
+  const i = targetBlockIndex();
+  if (i < 0) return;
+  const text = doc.blocks[i].text;
+  const next = resizeTable(text, rows, cols);
+  if (next == null || next === text) return;
+  requestCaret(Math.min(blockApi?.caretOffset() ?? 0, next.length));
+  updateBlock(i, next);
 }
 
 function insertFootnote() {

@@ -95,6 +95,39 @@ export function columnAtOffset(text: string, offset: number): number {
   return Math.max(0, before.trimStart().startsWith("|") ? pipes - 1 : pipes);
 }
 
+/** Current size of a table: total rows (incl. header) and columns. */
+export function tableDims(text: string): { rows: number; cols: number } | null {
+  const t = parseTable(text);
+  return t ? { rows: t.rows.length, cols: t.align.length } : null;
+}
+
+/**
+ * Resize to `rows` total rows (header included, min 2) and `cols` columns.
+ * Existing cell content survives; growth adds empty cells/rows.
+ *   resizeTable("| a |\n| --- |", 3, 2) → header gains a column, one empty
+ *   body row appended; resizeTable(t, 2, 1) truncates from the bottom/right.
+ */
+export function resizeTable(text: string, rows: number, cols: number): string | null {
+  const t = parseTable(text);
+  if (!t) return null;
+  const targetRows = Math.max(2, Math.min(rows, 64));
+  const targetCols = Math.max(1, Math.min(cols, 16));
+
+  t.align = t.align.slice(0, targetCols);
+  while (t.align.length < targetCols) t.align.push(null);
+  t.rows = t.rows.map((r) => {
+    const cells = r.slice(0, targetCols);
+    while (cells.length < targetCols) cells.push("  ");
+    return cells;
+  });
+
+  t.rows = t.rows.slice(0, targetRows);
+  while (t.rows.length < targetRows) {
+    t.rows.push(Array.from({ length: targetCols }, () => "  "));
+  }
+  return serializeTable(t);
+}
+
 export type TableEdit =
   | { kind: "row_above" }
   | { kind: "row_below" }

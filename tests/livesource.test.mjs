@@ -117,6 +117,39 @@ assert(!styleSource("1. x").includes("md-tok"), "ordered marker stays always-vis
 assert(!styleSource("| lone | row |").includes("md-table"),
   "a pipey line without a separator below is not a table");
 
+/* ---------- table resize (toolbar grid picker backend) ---------- */
+{
+  const { tableDims, resizeTable } = await import(
+    await (async () => {
+      const out = path.join(here, ".build", "tabletools.mjs");
+      await build({
+        entryPoints: [path.join(here, "..", "src", "tabletools.ts")],
+        bundle: true,
+        format: "esm",
+        outfile: out,
+      });
+      return out;
+    })()
+  );
+  const src = "| a | b |\n| --- | :-: |\n| 1 | 2 |";
+  assert(JSON.stringify(tableDims(src)) === '{"rows":2,"cols":2}',
+    "tableDims counts header+body rows and columns");
+  assert(tableDims("not a table") === null, "tableDims null for non-tables");
+
+  const grown = resizeTable(src, 4, 3);
+  const dims = tableDims(grown);
+  assert(JSON.stringify(dims) === '{"rows":4,"cols":3}', `resize grows to 4x3 (${JSON.stringify(dims)})`);
+  assert(grown.includes("| a |") && grown.includes("| 1 |"), "existing cells survive growth");
+  assert(grown.split("\n")[1].includes(":---:"), "alignment survives growth (canonical :---:)");
+
+  const shrunk = resizeTable(grown, 2, 1);
+  assert(JSON.stringify(tableDims(shrunk)) === '{"rows":2,"cols":1}', "resize shrinks to 2x1");
+  assert(shrunk.split("\n")[0].includes("a"), "header cell survives shrink");
+
+  assert(resizeTable(src, 1, 0) !== null && tableDims(resizeTable(src, 1, 0)).rows === 2,
+    "rows clamp to header + one body row");
+}
+
 /* ---------- inline reveal: bold ---------- */
 // "a **b** c" — the bold token spans source [2, 9].
 {

@@ -10,6 +10,8 @@ import {
   spellcheckOn, smartPunctuation, renderEpoch,
 } from "../store";
 import { executeCommand, registerBlockApi, unregisterBlockApi, type BlockApi } from "../commands";
+import { parseTable } from "../tabletools";
+import TableToolbar from "./TableToolbar";
 
 interface Props {
   text: string;
@@ -26,6 +28,7 @@ interface Props {
 
 export default function Block(props: Props) {
   let el: HTMLDivElement | undefined;
+  let rootEl: HTMLDivElement | undefined;
   let pendingCaret: number | null = null;
   let composing = false;
   let lastRevealCaret = -1;
@@ -273,7 +276,10 @@ export default function Block(props: Props) {
   };
 
   return (
-    <div class="block" classList={{ active: props.active }}>
+    <div class="block" classList={{ active: props.active }} ref={rootEl}>
+      <Show when={props.active && parseTable(props.text)}>
+        <TableToolbar text={props.text} />
+      </Show>
       <Show
         when={props.active}
         fallback={
@@ -290,10 +296,12 @@ export default function Block(props: Props) {
           onInput={onInput}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
-          onBlur={() => {
+          onBlur={(e) => {
             // Keep the block active when focus leaves the page itself (native
-            // menu click, app switch) so menu commands still have a target.
-            if (document.hasFocus()) props.onDeactivate();
+            // menu click, app switch) or moves into this block's own chrome
+            // (table toolbar inputs), so commands still have a target.
+            const to = e.relatedTarget as Node | null;
+            if (document.hasFocus() && !(to && rootEl?.contains(to))) props.onDeactivate();
           }}
           onCompositionStart={() => (composing = true)}
           onCompositionEnd={() => { composing = false; onInput(); }}

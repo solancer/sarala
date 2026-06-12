@@ -547,3 +547,94 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 }
 .source .md-table .md-pipe { display: none; }
 .source .md-table .md-tsep { display: none; }
+
+/* ---- Table toolbar (Typora-style, floats above the active table) ---- */
+
+.table-toolbar {
+  position: absolute;
+  top: -32px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 30;
+  pointer-events: none; /* the bar spans the row; only its buttons are live */
+}
+.table-toolbar .tt-group,
+.table-toolbar > .tt-btn,
+.table-toolbar .tt-popover { pointer-events: auto; }
+.tt-group {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-page);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 2px 3px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+.tt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: 0;
+}
+.tt-btn:hover, .tt-btn.on { background: var(--accent-soft); color: var(--accent); }
+.table-toolbar > .tt-delete {
+  background: var(--bg-page);
+  border: 1px solid var(--rule);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+.tt-delete:hover { color: #c0392b; }
+
+.tt-popover {
+  position: absolute;
+  top: 26px;
+  left: 0;
+  background: var(--bg-page);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+  padding: 10px;
+  z-index: 40;
+}
+.tt-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 15px);
+  gap: 3px;
+  margin-bottom: 8px;
+}
+.tt-cell {
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--bg-panel);
+  cursor: pointer;
+}
+.tt-cell.now { background: var(--rule); }
+.tt-cell.on { background: var(--accent); border-color: var(--accent); opacity: 0.55; }
+.tt-size { display: flex; align-items: center; gap: 6px; justify-content: center; }
+.tt-size input {
+  width: 44px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font: 12px var(--font-ui);
+  background: transparent;
+  color: var(--ink);
+  text-align: center;
+}
+.tt-size span { color: var(--ink-soft); font: 12px var(--font-ui); }
+.tt-apply { width: auto; padding: 0 8px; font: 12px var(--font-ui); }
+
+/* Zebra body rows, live table and rendered view alike (Typora look). */
+.source .md-table .md-trow:nth-child(even):not(.md-tsep) .md-tcell { background: var(--accent-soft); }
+.rendered tbody tr:nth-child(even) td { background: var(--accent-soft); }
