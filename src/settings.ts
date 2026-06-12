@@ -66,7 +66,7 @@ function hydrateStore() {
   setSmartPunctuation(getSetting("smartPunctuation", false));
   setLineEnding(getSetting<"lf" | "crlf">("lineEnding", "lf"));
   setCopyImageToAssets(getSetting("copyImageToAssets", false));
-  const savedTheme = getSetting<string>("theme", "paper");
+  const savedTheme = getSetting<string>("theme", "github");
   if ((THEMES as readonly string[]).includes(savedTheme)) setTheme(savedTheme as ThemeId);
   setZoom(clampZoom(getSetting("zoom", 100)));
   const breaks = getSetting("preserveBreaks", false);

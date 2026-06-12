@@ -12,6 +12,8 @@
 }
 
 [data-theme="paper"] {
+  --quote-bar: var(--accent);
+  --tint: var(--accent-soft);
   --bg: #f6f5f0;
   --bg-panel: #efeee7;
   --bg-page: #fdfcf9;
@@ -25,6 +27,8 @@
 }
 
 [data-theme="graphite"] {
+  --quote-bar: var(--accent);
+  --tint: var(--accent-soft);
   --bg: #15171b;
   --bg-panel: #1b1e23;
   --bg-page: #1e2126;
@@ -180,7 +184,7 @@ body { font-family: var(--font-ui); }
 .md-h6 { font-weight: 700; font-size: 0.9em; color: var(--ink-soft); }
 .md-link { color: var(--accent); }
 .md-url { color: var(--ink-soft); }
-.md-quote { color: var(--ink-soft); font-style: italic; }
+.md-quote { color: var(--ink-soft); }
 .md-codespan { font: 0.85em var(--font-mono); background: var(--code-bg); border-radius: 4px; padding: 1px 3px; }
 .md-code-line, .md-meta { font-family: var(--font-mono); }
 .md-meta { color: var(--ink-soft); }
@@ -231,9 +235,8 @@ body { font-family: var(--font-ui); }
 .rendered blockquote {
   margin: 0.5em 0;
   padding: 2px 18px;
-  border-left: 3px solid var(--accent);
+  border-left: 4px solid var(--quote-bar);
   color: var(--ink-soft);
-  font-style: italic;
 }
 .rendered code {
   font: 0.85em var(--font-mono);
@@ -269,7 +272,7 @@ body { font-family: var(--font-ui); }
 .rendered input[type="checkbox"] { accent-color: var(--accent); margin-right: 7px; cursor: pointer; }
 .rendered table { border-collapse: collapse; margin: 8.5px 0; font-size: 1em; }
 .rendered th, .rendered td { border: 1px solid var(--rule); padding: 6px 14px; }
-.rendered th { background: var(--accent-soft); font-family: var(--font-prose); font-weight: 600; text-align: left; }
+.rendered th { background: var(--tint); font-family: var(--font-prose); font-weight: 600; text-align: left; }
 .rendered hr { border: 0; border-top: 1px solid var(--rule); margin: 1.2em 0; }
 .rendered img { max-width: 100%; border-radius: 6px; }
 .empty-block { color: var(--ink-soft); }
@@ -423,19 +426,24 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 /* ---- Additional themes (View > Themes) ---- */
 
 [data-theme="github"] {
-  --bg: #f6f8fa;
-  --bg-panel: #eff2f5;
+  /* Typora's default theme palette */
+  --bg: #ffffff;
+  --bg-panel: #fafafa;
   --bg-page: #ffffff;
-  --ink: #1f2328;
-  --ink-soft: #59636e;
-  --accent: #0969da;
-  --accent-soft: rgba(9, 105, 218, 0.08);
-  --rule: #d1d9e0;
-  --code-bg: #f6f8fa;
-  --shadow: 0 1px 3px rgba(31, 35, 40, 0.06), 0 8px 24px rgba(31, 35, 40, 0.05);
+  --ink: #333333;
+  --ink-soft: #777777;
+  --accent: #4183c4;
+  --accent-soft: rgba(65, 131, 196, 0.08);
+  --rule: #ececec;
+  --code-bg: #f8f8f8;
+  --quote-bar: #dfe2e5;
+  --tint: #f8f8f8;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.04);
 }
 
 [data-theme="night"] {
+  --quote-bar: var(--accent);
+  --tint: var(--accent-soft);
   --bg: #1b212c;
   --bg-panel: #202835;
   --bg-page: #232b39;
@@ -449,6 +457,8 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 }
 
 [data-theme="newsprint"] {
+  --quote-bar: var(--accent);
+  --tint: var(--accent-soft);
   --bg: #f1ede4;
   --bg-panel: #eae5d9;
   --bg-page: #f8f5ee;
@@ -462,6 +472,8 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 }
 
 [data-theme="whitey"] {
+  --quote-bar: var(--accent);
+  --tint: var(--accent-soft);
   --bg: #ffffff;
   --bg-panel: #f7f7f7;
   --bg-page: #ffffff;
@@ -524,11 +536,9 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 .source .md-tok.md-quote-pre:not(.md-on)::before {
   content: "";
   display: inline-block;
-  width: 3px;
+  width: 4px;
   height: 1.05em;
-  background: var(--accent);
-  opacity: 0.45;
-  border-radius: 2px;
+  background: var(--quote-bar);
   margin-right: 18px;
   vertical-align: -0.15em;
 }
@@ -553,7 +563,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 }
 .source .md-table .md-trow:first-child .md-tcell {
   font-weight: 600;
-  background: var(--accent-soft);
+  background: var(--tint);
 }
 .source .md-table .md-pipe { display: none; }
 .source .md-table .md-tsep { display: none; }
@@ -646,8 +656,8 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 .tt-apply { width: auto; padding: 0 8px; font: 12px var(--font-ui); }
 
 /* Zebra body rows, live table and rendered view alike (Typora look). */
-.source .md-table .md-trow:nth-child(even):not(.md-tsep) .md-tcell { background: var(--accent-soft); }
-.rendered tbody tr:nth-child(even) td { background: var(--accent-soft); }
+.source .md-table .md-trow:nth-child(even):not(.md-tsep) .md-tcell { background: var(--tint); }
+.rendered tbody tr:nth-child(even) td { background: var(--tint); }
 
 /* ---- Zero-jank activation ----
    The live .source carries the same vertical metrics as the rendered

@@ -69,7 +69,7 @@ export const doc = state;
 export const THEMES = ["paper", "graphite", "github", "night", "newsprint", "whitey"] as const;
 export type ThemeId = (typeof THEMES)[number];
 
-export const [theme, setTheme] = createSignal<ThemeId>("paper");
+export const [theme, setTheme] = createSignal<ThemeId>("github");
 export const [sourceMode, setSourceMode] = createSignal(false);
 export const [sidebarOpen, setSidebarOpen] = createSignal(true);
 export const [sidebarTab, setSidebarTab] = createSignal<"files" | "outline">("files");
