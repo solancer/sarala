@@ -253,6 +253,18 @@ body { font-family: var(--font-ui); }
 [data-theme="graphite"] .hljs { color: var(--ink); background: transparent; }
 .rendered ul, .rendered ol { margin: 0.35em 0; padding-left: 1.5em; }
 .rendered li { margin: 0; }
+/* Same generated bullet as the live view's stand-in, so a list line looks
+   identical whether its block is rendered or active. */
+.rendered ul { list-style: none; }
+.rendered ul > li:not(:has(> input[type="checkbox"]))::before {
+  content: "•";
+  display: inline-block;
+  width: 1.5em;
+  margin-left: -1.5em;
+  text-align: right;
+  padding-right: 0.4em;
+  box-sizing: border-box;
+}
 .rendered li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.3em; }
 .rendered input[type="checkbox"] { accent-color: var(--accent); margin-right: 7px; cursor: pointer; }
 .rendered table { border-collapse: collapse; margin: 8.5px 0; font-size: 1em; }
@@ -493,12 +505,16 @@ ul.toc li.toc-l6 { padding-left: 92px; }
   content: "•";
   display: inline-block;
   width: 1.5em;
-  color: var(--ink-soft);
+  text-align: right;
+  padding-right: 0.4em;
+  box-sizing: border-box;
 }
 .source .md-tok.md-task:not(.md-on)::before {
   content: "☐";
   display: inline-block;
   width: 1.5em;
+  padding-left: 0.2em;
+  box-sizing: border-box;
   color: var(--ink-soft);
 }
 .source .md-tok.md-task.md-done:not(.md-on)::before {
@@ -667,3 +683,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
    box is the same height as the rendered one. Beats the generic
    .source.code-block "keep marks visible" rule by specificity. */
 .source.code-block .md-tok.md-fence:not(.md-on) > .md-mark { display: none; }
+
+/* Ordered-list numbers in the live view read as rendered numbers, not
+   dimmed source markers. */
+.source .md-olnum > .md-mark { color: var(--ink); opacity: 1; }

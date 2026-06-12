@@ -87,8 +87,11 @@ function styleLine(raw: string): string {
   const list = line.match(/^(\s*)([-*+]\s+(?:\[[ xX]\]\s+)?|\d+\.\s+)(.*)$/);
   if (list) {
     const marker = list[2];
-    // Ordered markers stay visible: "1." already looks like the rendered output.
-    if (/^\d/.test(marker)) return `${list[1]}${mark(marker)}${inline(list[3])}`;
+    // Ordered markers stay visible: "1." already looks like the rendered
+    // output — md-olnum styles it ink-colored like a real list number.
+    if (/^\d/.test(marker)) {
+      return `${list[1]}<span class="md-olnum">${mark(marker)}</span>${inline(list[3])}`;
+    }
     const task = marker.match(/\[( |x|X)\]/);
     const cls = task ? (task[1] === " " ? "md-task" : "md-task md-done") : "md-bullet";
     return `${list[1]}<span class="md-tok md-pre ${cls}">${mark(marker)}</span>${inline(list[3])}`;
