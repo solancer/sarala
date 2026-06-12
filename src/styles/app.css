@@ -3,8 +3,6 @@
    Paper: cool ivory page, graphite text, deep teal "ink" accent
    Graphite: charcoal page, warm off-white text, sea-glass accent
    Type: Charter/Georgia serif prose · system-ui chrome · mono source
-   Signature: the ink rule — a teal seam that marks the live block
-   where rendered text opens into raw Markdown.
    ============================================================ */
 
 :root {
@@ -148,10 +146,7 @@ body { font-family: var(--font-ui); }
 }
 @media (max-width: 720px) { .page { padding: 28px 22px 45vh; } }
 
-/* The signature: each block carries a quiet seam that fills with ink
-   when the block opens into source. */
-.block { position: relative; border-left: 2px solid transparent; margin-left: -16px; padding-left: 14px; }
-.block.active { border-left-color: var(--accent); }
+.block { position: relative; }
 
 
 /* Live source: same prose face as rendered text; markers dim, content
@@ -346,7 +341,6 @@ body { font-family: var(--font-ui); }
     padding: 0;
     box-shadow: none;
   }
-  .block { border-left: none; margin-left: 0; padding-left: 0; }
 }
 
 /* ---- Find bar (Cmd/Ctrl+F) ---- */

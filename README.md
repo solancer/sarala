@@ -2,7 +2,7 @@
 
 A seamless WYSIWYG Markdown editor in the spirit of Typora — no preview pane, no split view — built with **Tauri 2** (Rust) and **SolidJS**.
 
-The editing surface *is* the preview: every paragraph, heading, list, quote, table and code fence is a live block. Click a block and it opens into raw Markdown source (marked by the teal *ink seam* on its left edge); click away and it renders in place. One parser (`marked` + GFM), one theme, one window — what you see while writing is exactly what exports.
+The editing surface *is* the preview: every paragraph, heading, list, quote, table and code fence is a live block. Click a block and it opens into raw Markdown source; click away and it renders in place. One parser (`marked` + GFM), one theme, one window — what you see while writing is exactly what exports.
 
 ## Features
 
