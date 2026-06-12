@@ -59,6 +59,13 @@ export async function listDirectory(path: string): Promise<FileNode[]> {
   return await invoke<FileNode[]>("list_dir", { path });
 }
 
+/** Sync a native check/radio menu item with frontend state. No-op in browser. */
+export async function setMenuChecked(id: string, checked: boolean): Promise<void> {
+  if (!isTauri) return;
+  const { invoke } = await tauriCore();
+  await invoke("set_menu_checked", { id, checked }).catch(() => {});
+}
+
 export async function openExternal(url: string): Promise<void> {
   if (!isTauri) {
     window.open(url, "_blank", "noopener");

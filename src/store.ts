@@ -1,5 +1,6 @@
 import { createSignal, createMemo } from "solid-js";
 import { createStore, produce } from "solid-js/store";
+import type { FileNode } from "./platform";
 import {
   splitBlocks,
   joinBlocks,
@@ -64,9 +65,17 @@ const [state, setState] = createStore({
 // eslint-disable-next-line solid/reactivity -- store proxy re-export; consumers read it in tracked scopes
 export const doc = state;
 
-export const [theme, setTheme] = createSignal<"paper" | "graphite">("paper");
+export const THEMES = ["paper", "graphite"] as const;
+export type ThemeId = (typeof THEMES)[number];
+
+export const [theme, setTheme] = createSignal<ThemeId>("paper");
 export const [sourceMode, setSourceMode] = createSignal(false);
 export const [sidebarOpen, setSidebarOpen] = createSignal(true);
+
+// Workspace folder shown in the sidebar (lifted out of App so the command
+// bus can drive "Open Folder…").
+export const [fileTree, setFileTree] = createSignal<FileNode[]>([]);
+export const [folderName, setFolderName] = createSignal<string | null>(null);
 
 export const fullText = createMemo(() => joinBlocks(state.blocks.map((b) => b.text)));
 export const outline = createMemo(() => extractOutline(state.blocks.map((b) => b.text)));

@@ -1,8 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod menu;
+
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
+use tauri::Emitter;
 
 #[derive(Serialize)]
 struct FileNode {
@@ -97,7 +100,22 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![list_dir, read_file, save_file])
+        .setup(|app| {
+            let menu = menu::build_menu(app.handle())?;
+            app.set_menu(menu)?;
+            Ok(())
+        })
+        .on_menu_event(|app, event| {
+            // Single pipe: every custom menu item forwards its id to the frontend
+            // command bus; no editing logic lives on the Rust side.
+            let _ = app.emit("menu", event.id().as_ref().to_string());
+        })
+        .invoke_handler(tauri::generate_handler![
+            list_dir,
+            read_file,
+            save_file,
+            menu::set_menu_checked
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Inkdown");
 }

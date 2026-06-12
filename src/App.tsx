@@ -1,51 +1,17 @@
-import { Show, createSignal, onMount, onCleanup } from "solid-js";
+import { Show, createEffect, onMount, onCleanup } from "solid-js";
 import Editor from "./components/Editor";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
 import SourceView from "./components/SourceView";
 import {
-  doc, theme, sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
-  fileName, fullText, loadDocument, markSaved, setActive,
+  doc, theme, sourceMode, sidebarOpen, setSidebarOpen,
+  fileName, setActive, fileTree, folderName, THEMES,
 } from "./store";
-import {
-  isTauri, pickFolder, pickMarkdownFile, pickSavePath,
-  readTextFile, writeTextFile, listDirectory, type FileNode,
-} from "./platform";
-import { renderMarkdown } from "./markdown";
+import { isTauri, setMenuChecked } from "./platform";
+import { executeCommand, openFile, openFolder, save, exportHtml } from "./commands";
 
 export default function App() {
-  const [tree, setTree] = createSignal<FileNode[]>([]);
-  const [folderName, setFolderName] = createSignal<string | null>(null);
   let editorEl: HTMLDivElement | undefined;
-
-  const openFolder = async () => {
-    const path = await pickFolder();
-    if (!path) return;
-    setFolderName(path.replace(/\\/g, "/").split("/").pop() ?? path);
-    setTree(await listDirectory(path));
-  };
-
-  const openFile = async (path?: string) => {
-    const p = path ?? (await pickMarkdownFile());
-    if (!p) return;
-    loadDocument(await readTextFile(p), p);
-  };
-
-  const save = async () => {
-    let path = doc.filePath;
-    if (!path) path = await pickSavePath(fileName());
-    if (!path && isTauri) return;
-    await writeTextFile(path ?? fileName(), fullText());
-    if (path) markSaved(path);
-  };
-
-  const exportHtml = async () => {
-    const css = await fetch(new URL("./styles/export.css", import.meta.url)).then((r) => r.text()).catch(() => "");
-    const body = renderMarkdown(fullText());
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${fileName()}</title><style>${css}</style></head><body data-theme="${theme()}"><article class="rendered">${body}</article></body></html>`;
-    const out = await pickSavePath(fileName().replace(/\.(md|markdown|txt)$/i, "") + ".html");
-    await writeTextFile(out ?? fileName() + ".html", html);
-  };
 
   const jumpTo = (blockIndex: number) => {
     setActive(-1);
@@ -53,26 +19,46 @@ export default function App() {
     el?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  // Browser fallback only: in Tauri these chords are native menu accelerators,
+  // which dispatch through the "menu" event; handling both would double-fire.
   const onKey = (e: KeyboardEvent) => {
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
     const k = e.key.toLowerCase();
-    if (k === "s") { e.preventDefault(); save(); }
-    if (k === "o" && e.shiftKey) { e.preventDefault(); openFolder(); }
-    else if (k === "o") { e.preventDefault(); openFile(); }
-    if (k === "/") { e.preventDefault(); setSourceMode(!sourceMode()); }
-    if (k === "\\") { e.preventDefault(); setSidebarOpen(!sidebarOpen()); }
-    if (k === "e" && e.shiftKey) { e.preventDefault(); exportHtml(); }
+    if (k === "s") { e.preventDefault(); executeCommand("file.save"); }
+    if (k === "o" && e.shiftKey) { e.preventDefault(); executeCommand("file.open_folder"); }
+    else if (k === "o") { e.preventDefault(); executeCommand("file.open"); }
+    if (k === "/") { e.preventDefault(); executeCommand("view.source_mode"); }
+    if (k === "l" && e.shiftKey) { e.preventDefault(); executeCommand("view.sidebar"); }
+    if (k === "e" && e.shiftKey) { e.preventDefault(); executeCommand("file.export.html"); }
   };
 
-  onMount(() => window.addEventListener("keydown", onKey));
-  onCleanup(() => window.removeEventListener("keydown", onKey));
+  onMount(() => {
+    if (isTauri) {
+      let unlisten: (() => void) | undefined;
+      import("@tauri-apps/api/event").then(async ({ listen }) => {
+        unlisten = await listen<string>("menu", (e) => executeCommand(e.payload));
+      });
+      onCleanup(() => unlisten?.());
+    } else {
+      window.addEventListener("keydown", onKey);
+      onCleanup(() => window.removeEventListener("keydown", onKey));
+    }
+  });
+
+  // Keep native check/radio menu items in sync with frontend state.
+  createEffect(() => setMenuChecked("view.source_mode", sourceMode()));
+  createEffect(() => setMenuChecked("view.sidebar", sidebarOpen()));
+  createEffect(() => {
+    const current = theme();
+    for (const id of THEMES) setMenuChecked(`themes.set.${id}`, id === current);
+  });
 
   return (
     <div class="app" data-theme={theme()}>
       <Show when={sidebarOpen()}>
         <Sidebar
-          tree={tree()}
+          tree={fileTree()}
           folderName={folderName()}
           onOpenFolder={openFolder}
           onOpenFile={openFile}
@@ -81,7 +67,7 @@ export default function App() {
       </Show>
       <main class="main">
         <header class="titlebar">
-          <button class="ghost-btn" title="Toggle sidebar (Cmd/Ctrl+\\)" onClick={() => setSidebarOpen(!sidebarOpen())}>☰</button>
+          <button class="ghost-btn" title="Toggle sidebar (Shift+Cmd/Ctrl+L)" onClick={() => setSidebarOpen(!sidebarOpen())}>☰</button>
           <span class="title">
             {fileName()}
             <Show when={doc.dirty}><span class="dirty" title="Unsaved changes">●</span></Show>

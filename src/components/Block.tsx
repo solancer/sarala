@@ -1,11 +1,12 @@
-import { Show, createEffect, on } from "solid-js";
+import { Show, createEffect, on, onCleanup } from "solid-js";
 import { renderMarkdown, hasOpenFence } from "../markdown";
 import {
   styleSource, getCaretOffset, getSelectionOffsets, setCaret,
   mapRenderedPrefixToSource,
 } from "../livesource";
-import { openExternal } from "../platform";
+import { isTauri, openExternal } from "../platform";
 import { consumeCaretRequest } from "../store";
+import { executeCommand, registerBlockApi, unregisterBlockApi, type BlockApi } from "../commands";
 
 interface Props {
   text: string;
@@ -61,6 +62,14 @@ export default function Block(props: Props) {
     );
   };
 
+  // While active, expose caret-level editing to the menu/keyboard command bus.
+  const api: BlockApi = { wrap: wrapSelection, insertAtCaret: (t, c) => insertAtCaret(t, c) };
+  createEffect(() => {
+    if (props.active) registerBlockApi(api);
+    else unregisterBlockApi(api);
+  });
+  onCleanup(() => unregisterBlockApi(api));
+
   const currentLine = (offset: number) => {
     const t = props.text;
     const start = t.lastIndexOf("\n", offset - 1) + 1;
@@ -111,12 +120,15 @@ export default function Block(props: Props) {
     if (composing) return;
     const mod = e.metaKey || e.ctrlKey;
     if (mod) {
+      // Under Tauri these chords are native menu accelerators that dispatch
+      // through the command bus; handling them here too would double-fire.
+      if (isTauri) return;
       const k = e.key.toLowerCase();
-      if (k === "b") return e.preventDefault(), wrapSelection("**");
-      if (k === "i") return e.preventDefault(), wrapSelection("*");
-      if (k === "e") return e.preventDefault(), wrapSelection("`");
-      if (k === "k") return e.preventDefault(), wrapSelection("[", "](url)");
-      if (/^[0-6]$/.test(k)) return e.preventDefault(), props.setHeading(Number(k));
+      if (k === "b") return e.preventDefault(), executeCommand("format.strong");
+      if (k === "i") return e.preventDefault(), executeCommand("format.emphasis");
+      if (k === "e") return e.preventDefault(), executeCommand("format.code");
+      if (k === "k") return e.preventDefault(), executeCommand("format.hyperlink");
+      if (/^[0-6]$/.test(k)) return e.preventDefault(), executeCommand(`paragraph.heading.${k}`);
       return;
     }
     if (e.key === "Escape") { e.preventDefault(); el?.blur(); return; }
@@ -209,7 +221,11 @@ export default function Block(props: Props) {
           onInput={onInput}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
-          onBlur={() => props.onDeactivate()}
+          onBlur={() => {
+            // Keep the block active when focus leaves the page itself (native
+            // menu click, app switch) so menu commands still have a target.
+            if (document.hasFocus()) props.onDeactivate();
+          }}
           onCompositionStart={() => (composing = true)}
           onCompositionEnd={() => { composing = false; onInput(); }}
         />
