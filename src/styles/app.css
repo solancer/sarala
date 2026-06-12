@@ -257,7 +257,10 @@ body { font-family: var(--font-ui); }
 }
 .rendered pre code { background: transparent; padding: 0; font-size: 13.5px; line-height: 1.6; }
 [data-theme="graphite"] .hljs { color: var(--ink); background: transparent; }
-.rendered ul, .rendered ol { margin: 0.35em 0; padding-left: 1.5em; }
+/* Typora's list rhythm: items sit ~2.06 line-height apart. Spacing lives in
+   line-height (not li margins) so the live view — where items are bare text
+   lines — can match it exactly and activation stays shift-free. */
+.rendered ul, .rendered ol { margin: 0.35em 0; padding-left: 1.5em; line-height: 2.06; }
 .rendered li { margin: 0; }
 /* Same generated bullet as the live view's stand-in, so a list line looks
    identical whether its block is rendered or active. */
@@ -669,6 +672,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
    Heading paddings are the rendered hN margins scaled to the 17px base. */
 
 .source.b-p, .source.b-list { padding: calc(2px + 0.35em) 0; }
+.source.b-list { line-height: 2.06; }
 /* rendered blockquote nests a <p> (0.35em margins) inside its own padding */
 .source.b-quote { padding: calc(4px + 0.85em) 0; }
 
