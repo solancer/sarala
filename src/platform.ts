@@ -101,6 +101,24 @@ export async function pickImportFile(): Promise<string | null> {
   return typeof sel === "string" ? sel : null;
 }
 
+export const IMAGE_EXTS = ["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "avif"];
+
+export async function pickImageFile(): Promise<string | null> {
+  if (!isTauri) return null;
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const sel = await open({
+    multiple: false,
+    filters: [{ name: "Images", extensions: IMAGE_EXTS }],
+  });
+  return typeof sel === "string" ? sel : null;
+}
+
+/** Copy an image next to the document; returns the relative markdown path. */
+export async function copyAsset(src: string, docDir: string, subfolder: string): Promise<string> {
+  const { invoke } = await tauriCore();
+  return await invoke<string>("copy_asset", { src, docDir, subfolder });
+}
+
 export async function renameFile(from: string, to: string): Promise<void> {
   const { invoke } = await tauriCore();
   await invoke("rename_file", { from, to });

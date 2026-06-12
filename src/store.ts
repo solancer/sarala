@@ -86,6 +86,9 @@ export const [smartPunctuation, setSmartPunctuation] = createSignal(false);
 export const [preserveBreaks, setPreserveBreaks] = createSignal(false);
 export const [lineEnding, setLineEnding] = createSignal<"lf" | "crlf">("lf");
 
+// Format ▸ Image: copy inserted local images into ./assets next to the doc.
+export const [copyImageToAssets, setCopyImageToAssets] = createSignal(false);
+
 // Bumped when a global render option changes so rendered blocks re-render.
 export const [renderEpoch, setRenderEpoch] = createSignal(0);
 export const bumpRenderEpoch = () => setRenderEpoch((n) => n + 1);

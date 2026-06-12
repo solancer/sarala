@@ -1,7 +1,7 @@
 import { isTauri } from "./platform";
 import {
   setSpellcheckOn, setSmartPunctuation, setPreserveBreaks, setLineEnding,
-  bumpRenderEpoch,
+  setCopyImageToAssets, bumpRenderEpoch,
 } from "./store";
 import { setPreserveBreaksOption } from "./markdown";
 
@@ -58,6 +58,7 @@ function hydrateStore() {
   setSpellcheckOn(getSetting("spellcheck", true));
   setSmartPunctuation(getSetting("smartPunctuation", false));
   setLineEnding(getSetting<"lf" | "crlf">("lineEnding", "lf"));
+  setCopyImageToAssets(getSetting("copyImageToAssets", false));
   const breaks = getSetting("preserveBreaks", false);
   setPreserveBreaks(breaks);
   setPreserveBreaksOption(breaks);

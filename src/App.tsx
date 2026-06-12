@@ -10,10 +10,12 @@ import { initSettings } from "./settings";
 import {
   doc, theme, sourceMode, sidebarOpen, setSidebarOpen,
   fileName, setActive, fileTree, folderName, THEMES,
-  spellcheckOn, smartPunctuation, preserveBreaks, lineEnding,
+  spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
 } from "./store";
-import { isTauri, setMenuChecked } from "./platform";
-import { executeCommand, openFile, openFolder, save, exportHtml } from "./commands";
+import { isTauri, setMenuChecked, IMAGE_EXTS } from "./platform";
+import {
+  executeCommand, openFile, openFolder, save, exportHtml, insertImageFromPath,
+} from "./commands";
 
 export default function App() {
   let editorEl: HTMLDivElement | undefined;
@@ -49,7 +51,19 @@ export default function App() {
       import("@tauri-apps/api/event").then(async ({ listen }) => {
         unlisten = await listen<string>("menu", (e) => executeCommand(e.payload));
       });
-      onCleanup(() => unlisten?.());
+      // Dropped image files insert through the same path as Insert Image….
+      let undrop: (() => void) | undefined;
+      import("@tauri-apps/api/webviewWindow").then(async ({ getCurrentWebviewWindow }) => {
+        undrop = await getCurrentWebviewWindow().onDragDropEvent((e) => {
+          if (e.payload.type !== "drop") return;
+          for (const path of e.payload.paths) {
+            const ext = path.split(".").pop()?.toLowerCase() ?? "";
+            if (IMAGE_EXTS.includes(ext)) void insertImageFromPath(path);
+            else if (["md", "markdown", "txt"].includes(ext)) void openFile(path);
+          }
+        });
+      });
+      onCleanup(() => { unlisten?.(); undrop?.(); });
     } else {
       window.addEventListener("keydown", onKey);
       onCleanup(() => window.removeEventListener("keydown", onKey));
@@ -64,6 +78,7 @@ export default function App() {
     for (const id of THEMES) setMenuChecked(`themes.set.${id}`, id === current);
   });
   createEffect(() => setMenuChecked("edit.spellcheck", spellcheckOn()));
+  createEffect(() => setMenuChecked("format.image.copy_to_folder", copyImageToAssets()));
   createEffect(() => setMenuChecked("edit.smart_punctuation", smartPunctuation()));
   createEffect(() => setMenuChecked("edit.preserve_breaks", preserveBreaks()));
   createEffect(() => {

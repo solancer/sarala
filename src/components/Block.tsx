@@ -81,6 +81,7 @@ export default function Block(props: Props) {
       el.scrollIntoView({ block: "nearest" });
     },
     caretOffset: () => (el ? getCaretOffset(el) : 0),
+    selectionOffsets: () => (el ? getSelectionOffsets(el) : { start: 0, end: 0 }),
   };
   createEffect(() => {
     if (props.active) registerBlockApi(api);

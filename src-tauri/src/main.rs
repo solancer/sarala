@@ -147,6 +147,37 @@ fn delete_file(path: String) -> Result<(), String> {
     fs::remove_file(&path).map_err(|e| format!("Could not delete {path}: {e}"))
 }
 
+/// Copy an image into `<doc_dir>/<subfolder>/`, deduplicating names, and
+/// return the document-relative path to reference in markdown.
+#[tauri::command]
+fn copy_asset(src: String, doc_dir: String, subfolder: String) -> Result<String, String> {
+    let src_path = Path::new(&src);
+    let stem = src_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| format!("Bad source path: {src}"))?;
+    let ext = src_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let target_dir = Path::new(&doc_dir).join(&subfolder);
+    fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
+
+    let mut name = if ext.is_empty() {
+        stem.to_string()
+    } else {
+        format!("{stem}.{ext}")
+    };
+    let mut k = 1;
+    while target_dir.join(&name).exists() {
+        name = if ext.is_empty() {
+            format!("{stem}-{k}")
+        } else {
+            format!("{stem}-{k}.{ext}")
+        };
+        k += 1;
+    }
+    fs::copy(src_path, target_dir.join(&name)).map_err(|e| format!("Could not copy {src}: {e}"))?;
+    Ok(format!("{subfolder}/{name}"))
+}
+
 #[tauri::command]
 fn has_pandoc() -> bool {
     Command::new("pandoc")
@@ -209,6 +240,7 @@ fn main() {
             save_settings,
             rename_file,
             delete_file,
+            copy_asset,
             has_pandoc,
             pandoc_import,
             pandoc_export,

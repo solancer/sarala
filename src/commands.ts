@@ -7,6 +7,7 @@ import {
   targetBlockIndex, requestCaret,
   spellcheckOn, setSpellcheckOn, smartPunctuation, setSmartPunctuation,
   preserveBreaks, setPreserveBreaks, lineEnding, setLineEnding,
+  copyImageToAssets, setCopyImageToAssets,
   bumpRenderEpoch,
 } from "./store";
 import {
@@ -15,6 +16,7 @@ import {
   confirmDialog, alertDialog, renameFile, deleteFile, openNewWindow,
   hasPandoc, pandocImport, pandocExport,
   clipboardWriteText, clipboardReadText,
+  pickImageFile, copyAsset,
 } from "./platform";
 import { renderMarkdown, setPreserveBreaksOption } from "./markdown";
 import {
@@ -36,6 +38,7 @@ export interface BlockApi {
   insertAtCaret(text: string, caretWithin?: number): void;
   selectRange(start: number, end: number): void;
   caretOffset(): number;
+  selectionOffsets(): { start: number; end: number };
 }
 
 let blockApi: BlockApi | null = null;
@@ -408,6 +411,87 @@ async function chooseLineEnding(v: "lf" | "crlf") {
   await setSetting("lineEnding", v);
 }
 
+// ---------- Format ----------
+
+/** The markdown/bare link whose source span contains the caret, if any. */
+function linkAtCaret(): string | null {
+  const i = targetBlockIndex();
+  if (i < 0) return null;
+  const text = doc.blocks[i].text;
+  const offset = blockApi?.caretOffset() ?? 0;
+  for (const m of text.matchAll(/\[[^\]\n]*\]\(([^)\s]+)[^)]*\)/g)) {
+    if (offset >= m.index && offset <= m.index + m[0].length) return m[1];
+  }
+  for (const m of text.matchAll(/https?:\/\/[^\s<>)"]+/g)) {
+    if (offset >= m.index && offset <= m.index + m[0].length) return m[0];
+  }
+  return null;
+}
+
+function stripInlineMarkers(s: string): string {
+  let out = s;
+  // Two passes unwrap one level of nesting (e.g. bold inside a link label).
+  for (let pass = 0; pass < 2; pass++) {
+    out = out
+      .replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, "$2")
+      .replace(/(\*|_)(?=\S)([^*_\n]*?\S)\1/g, "$2")
+      .replace(/~~(?=\S)([\s\S]*?\S)~~/g, "$1")
+      .replace(/`([^`\n]+)`/g, "$1")
+      .replace(/<\/?u>/g, "")
+      .replace(/<!--\s?|\s?-->/g, "");
+  }
+  return out;
+}
+
+function clearFormat() {
+  const i = targetBlockIndex();
+  if (i < 0) return;
+  const sel = blockApi?.selectionOffsets();
+  if (sel && sel.end > sel.start) {
+    const text = doc.blocks[i].text;
+    blockApi!.insertAtCaret(stripInlineMarkers(text.slice(sel.start, sel.end)));
+  } else {
+    transformBlock(stripInlineMarkers);
+  }
+}
+
+const docDir = (): string | null => {
+  const path = doc.filePath;
+  if (!path) return null;
+  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return cut > 0 ? path.slice(0, cut) : null;
+};
+
+/** Insert an image reference, honoring the copy-to-assets setting. */
+export async function insertImageFromPath(absPath: string) {
+  let ref = absPath;
+  const dir = docDir();
+  if (dir && copyImageToAssets()) {
+    try {
+      ref = await copyAsset(absPath, dir, "assets");
+    } catch (e) {
+      await alertDialog(String(e));
+    }
+  } else if (dir) {
+    const norm = (p: string) => p.replace(/\\/g, "/");
+    if (norm(absPath).startsWith(norm(dir) + "/")) ref = norm(absPath).slice(norm(dir).length + 1);
+  }
+  const md = `![](${ref})`;
+  if (blockApi) blockApi.insertAtCaret(md, md.length - 1);
+  else insertBlock(md, md.length - 1);
+}
+
+async function insertImage() {
+  const path = await pickImageFile();
+  if (path) await insertImageFromPath(path);
+}
+
+async function toggleCopyImageToAssets() {
+  const v = !copyImageToAssets();
+  setCopyImageToAssets(v);
+  await setSetting("copyImageToAssets", v);
+}
+
 // ---------- Registry ----------
 
 type Command = () => void | Promise<void>;
@@ -505,6 +589,19 @@ const registry: Record<string, Command> = {
   "format.comment": wrap("<!-- ", " -->"),
   "format.inline_math": wrap("$"),
   "format.hyperlink": wrap("[", "](url)"),
+  "format.link.open": async () => {
+    const url = linkAtCaret();
+    if (url) await openExternal(url);
+  },
+  "format.link.copy": async () => {
+    const url = linkAtCaret();
+    if (url) await clipboardWriteText(url);
+  },
+  "format.image.insert": insertImage,
+  "format.image.copy_to_folder": toggleCopyImageToAssets,
+  "format.image.root_path": () => alertDialog("Image root path is not implemented yet."),
+  "format.image.upload": () => alertDialog("Image upload is not implemented yet."),
+  "format.clear": clearFormat,
 
   // View
   "view.source_mode": () => { setSourceMode(!sourceMode()); },
