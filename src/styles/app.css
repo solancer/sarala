@@ -491,3 +491,34 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 /* Fence blocks keep every marker visible — hiding fence syntax collapses
    the layout and they are not caret-scoped tokens. */
 .source.code-block .md-tok > .md-mark { display: inline; }
+
+/* Hidden prefix markers get rendered-looking stand-ins (::before is not a
+   text node, so textContent — and every caret offset — is untouched). */
+
+.source .md-tok.md-bullet:not(.md-on)::before {
+  content: "•";
+  display: inline-block;
+  width: 1.15em;
+  color: var(--ink-soft);
+}
+.source .md-tok.md-task:not(.md-on)::before {
+  content: "☐";
+  display: inline-block;
+  width: 1.35em;
+  color: var(--ink-soft);
+}
+.source .md-tok.md-task.md-done:not(.md-on)::before {
+  content: "☑";
+  color: var(--accent);
+}
+.source .md-tok.md-quote-pre:not(.md-on)::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 1.05em;
+  background: var(--accent);
+  opacity: 0.45;
+  border-radius: 2px;
+  margin-right: 0.6em;
+  vertical-align: -0.15em;
+}

@@ -71,18 +71,28 @@ function styleLine(raw: string): string {
   const h = line.match(/^(#{1,6})(\s+)(.*)$/);
   if (h) {
     const lvl = h[1].length;
-    // .md-line: revealed while the caret is anywhere on this LINE, not just
-    // inside the hashes. The space hides with them so the title stays flush.
-    return `<span class="md-h${lvl}"><span class="md-tok md-line">${mark(h[1] + h[2])}</span>${inline(h[3])}</span>`;
+    // Hashes (and their space) reveal only while the caret touches the
+    // prefix region — a re-entered heading stays looking rendered.
+    return `<span class="md-h${lvl}"><span class="md-tok md-pre">${mark(h[1] + h[2])}</span>${inline(h[3])}</span>`;
   }
   const hr = line.match(/^\s*((?:-\s*){3,}|(?:\*\s*){3,}|(?:_\s*){3,})$/);
   if (hr) return mark(line);
 
   const quote = line.match(/^((?:&gt;\s*)+)(.*)$/);
-  if (quote) return `${mark(quote[1])}<span class="md-quote">${inline(quote[2])}</span>`;
+  if (quote) {
+    // Hidden `>` draws a quote bar via ::before so the line still reads as a quote.
+    return `<span class="md-tok md-pre md-quote-pre">${mark(quote[1])}</span><span class="md-quote">${inline(quote[2])}</span>`;
+  }
 
   const list = line.match(/^(\s*)([-*+]\s+(?:\[[ xX]\]\s+)?|\d+\.\s+)(.*)$/);
-  if (list) return `${list[1]}${mark(list[2])}${inline(list[3])}`;
+  if (list) {
+    const marker = list[2];
+    // Ordered markers stay visible: "1." already looks like the rendered output.
+    if (/^\d/.test(marker)) return `${list[1]}${mark(marker)}${inline(list[3])}`;
+    const task = marker.match(/\[( |x|X)\]/);
+    const cls = task ? (task[1] === " " ? "md-task" : "md-task md-done") : "md-bullet";
+    return `${list[1]}<span class="md-tok md-pre ${cls}">${mark(marker)}</span>${inline(list[3])}`;
+  }
 
   return inline(line);
 }
@@ -120,18 +130,17 @@ export function styleSource(src: string): string {
 
 /**
  * Typora-style caret-scoped reveal: toggle .md-on on every .md-tok in a
- * live-styled block. Inline tokens reveal while the caret sits inside their
- * source range (edges inclusive — completing `**bold**` leaves the caret on
- * the end edge, so the pair stays revealed until the caret moves away).
- * .md-line tokens (heading hashes) reveal while the caret is anywhere on
- * their source line. Pure class toggling: the DOM text is never altered, so
- * textContent stays byte-identical to the source.
+ * live-styled block. A token reveals while the caret sits inside its source
+ * range, edges inclusive — completing `**bold**` leaves the caret on the end
+ * edge so the pair stays revealed, and a list/heading prefix reveals when the
+ * caret reaches the start of the line's text (its end edge), which also keeps
+ * hidden markers reachable by arrow keys (browsers skip display:none text, so
+ * the caret lands on the edge and the reveal makes the marker traversable).
+ * Pure class toggling: the DOM text is never altered, so textContent stays
+ * byte-identical to the source.
  */
 export function applyMarkerVisibility(el: HTMLElement, source: string, caret: number) {
   const c = Math.max(0, Math.min(caret, source.length));
-  const lineStart = source.lastIndexOf("\n", c - 1) + 1;
-  const lineEndIdx = source.indexOf("\n", c);
-  const lineEnd = lineEndIdx === -1 ? source.length : lineEndIdx;
 
   // One DFS accumulating text length; an element's source range spans from
   // the offset before its children to the offset after them. Nested tokens
@@ -146,10 +155,7 @@ export function applyMarkerVisibility(el: HTMLElement, source: string, caret: nu
     for (let child = node.firstChild; child; child = child.nextSibling) walk(child);
     const end = pos;
     if (node instanceof HTMLElement && node.classList.contains("md-tok")) {
-      const revealed = node.classList.contains("md-line")
-        ? start <= lineEnd && end >= lineStart
-        : c >= start && c <= end;
-      node.classList.toggle("md-on", revealed);
+      node.classList.toggle("md-on", c >= start && c <= end);
     }
   };
   walk(el);

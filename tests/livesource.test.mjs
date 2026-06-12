@@ -83,10 +83,12 @@ for (const src of SAMPLES) {
 /* ---------- token wrappers present ---------- */
 
 assert(styleSource("a **b** c").includes('class="md-tok"'), "styleSource emits md-tok");
-assert(
-  styleSource("# H").includes("md-tok md-line"),
-  "heading hashes wrapped in md-tok md-line"
-);
+assert(styleSource("# H").includes("md-tok md-pre"), "heading hashes wrapped in md-tok md-pre");
+assert(styleSource("- item").includes("md-tok md-pre md-bullet"), "bullet marker wrapped");
+assert(styleSource("- [ ] t").includes("md-task"), "task marker wrapped");
+assert(styleSource("- [x] t").includes("md-task md-done"), "checked task marker flagged");
+assert(styleSource("> q").includes("md-quote-pre"), "quote marker wrapped");
+assert(!styleSource("1. x").includes("md-tok"), "ordered marker stays always-visible (no token)");
 
 /* ---------- inline reveal: bold ---------- */
 // "a **b** c" — the bold token spans source [2, 9].
@@ -110,19 +112,42 @@ assert(
   assert(el.querySelector("strong")?.textContent === "b", "bold content stays <strong> when hidden");
 }
 
-/* ---------- heading line reveal ---------- */
+/* ---------- heading prefix reveal (caret-scoped, NOT line-scoped) ---------- */
+// "## Head\nbody text" — the hash prefix token spans source [0, 3].
 {
   const src = "## Head\nbody text";
   const el = host();
   el.innerHTML = styleSource(src);
-  const lineTok = () => el.querySelector(".md-tok.md-line").classList.contains("md-on");
+  const preTok = () => el.querySelector(".md-tok.md-pre").classList.contains("md-on");
 
-  applyMarkerVisibility(el, src, 5); // on the heading line, outside the hashes
-  assert(lineTok(), "caret anywhere on heading line reveals hashes");
+  applyMarkerVisibility(el, src, 5); // inside the heading text — stays rendered
+  assert(!preTok(), "caret in heading text hides hashes (re-entered heading looks rendered)");
   applyMarkerVisibility(el, src, 7); // end of heading line
-  assert(lineTok(), "caret at heading line end reveals hashes");
+  assert(!preTok(), "caret at heading line end hides hashes");
+  applyMarkerVisibility(el, src, 3); // start of the text = prefix end edge
+  assert(preTok(), "caret at text start (prefix edge) reveals hashes — keeps them reachable");
+  applyMarkerVisibility(el, src, 1); // inside the hashes
+  assert(preTok(), "caret inside hashes reveals them");
   applyMarkerVisibility(el, src, 12); // on the body line
-  assert(!lineTok(), "caret on another line hides hashes");
+  assert(!preTok(), "caret on another line hides hashes");
+}
+
+/* ---------- list prefix reveal + per-line independence ---------- */
+// "- alpha\n- [x] beta" — bullet prefix [0, 2], task prefix [8, 14].
+{
+  const src = "- alpha\n- [x] beta";
+  const el = host();
+  el.innerHTML = styleSource(src);
+  const toks = () => [...el.querySelectorAll(".md-tok.md-pre")];
+  assert(toks().length === 2, "both list prefixes tokenized");
+
+  applyMarkerVisibility(el, src, src.length); // caret at end of "beta"
+  assert(toks().every((t) => !t.classList.contains("md-on")),
+    "caret at end of item text leaves every marker hidden (block looks rendered)");
+  applyMarkerVisibility(el, src, 9); // inside "- [x] "
+  assert(!toks()[0].classList.contains("md-on") && toks()[1].classList.contains("md-on"),
+    "caret inside a marker reveals only that line's marker");
+  assert(toks()[1].classList.contains("md-done"), "checked task carries md-done for the ☑ stand-in");
 }
 
 /* ---------- link reveal + URL hides with markers ---------- */

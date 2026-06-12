@@ -101,19 +101,42 @@ s = await state();
 check(isTok() && !isTok().on && isTok().markDisplay === "none",
   `arrowed past token → markers hidden again (display:${isTok()?.markDisplay})`);
 
-// Heading: caret anywhere on the line reveals the hashes (spec'd behavior).
-await page.locator(".block", { hasText: "Why no preview window" }).click();
+// Heading: a re-entered heading stays looking rendered — hashes hidden while
+// the caret is in the text, revealed only at/inside the prefix.
+await page.locator(".block .rendered", { hasText: "Why no preview window" }).click();
+await page.waitForSelector(".block.active .source");
 await page.waitForTimeout(120);
 const heading = await page.evaluate(() => {
   const el = document.querySelector(".block.active .source");
-  const tok = el.querySelector(".md-tok.md-line");
+  const tok = el.querySelector(".md-tok.md-pre");
   return {
     on: tok.classList.contains("md-on"),
     display: getComputedStyle(tok.querySelector(".md-mark")).display,
   };
 });
-check(heading.on && heading.display === "inline",
-  "heading: caret on the line reveals ## (single-line heading always reveals — as specified)");
+check(!heading.on && heading.display === "none",
+  "heading: caret in the text keeps ## hidden (block looks rendered)");
+
+// List block: markers hidden with rendered-looking stand-ins.
+await page.locator(".block .rendered", { hasText: "Task lists with clickable" }).click();
+await page.waitForSelector(".block.active .source");
+await page.waitForTimeout(120);
+const list = await page.evaluate(() => {
+  const el = document.querySelector(".block.active .source");
+  const toks = [...el.querySelectorAll(".md-tok.md-pre")];
+  const bullet = toks.find((t) => t.classList.contains("md-bullet"));
+  const done = toks.find((t) => t.classList.contains("md-done"));
+  return {
+    prefixes: toks.length,
+    revealed: toks.filter((t) => t.classList.contains("md-on")).length,
+    bulletBefore: bullet ? getComputedStyle(bullet, "::before").content : null,
+    doneBefore: done ? getComputedStyle(done, "::before").content : null,
+  };
+});
+check(list.prefixes >= 5, `list block tokenized ${list.prefixes} prefixes`);
+check(list.revealed <= 1, `at most the caret line's marker is revealed (${list.revealed})`);
+check(list.bulletBefore === '"•"', `hidden bullet shows • stand-in (got ${list.bulletBefore})`);
+check(list.doneBefore === '"☑"', `checked task shows ☑ stand-in (got ${list.doneBefore})`);
 
 await browser.close();
 kill();
