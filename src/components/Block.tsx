@@ -200,6 +200,10 @@ export default function Block(props: Props) {
       // through the command bus; handling them here too would double-fire.
       if (isTauri) return;
       const k = e.key.toLowerCase();
+      if (k === "z") {
+        e.preventDefault();
+        return executeCommand(e.shiftKey ? "edit.redo" : "edit.undo");
+      }
       if (k === "b") return e.preventDefault(), executeCommand("format.strong");
       if (k === "i") return e.preventDefault(), executeCommand("format.emphasis");
       if (k === "e") return e.preventDefault(), executeCommand("format.code");

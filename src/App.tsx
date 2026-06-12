@@ -33,6 +33,7 @@ export default function App() {
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
     const k = e.key.toLowerCase();
+    if (k === "z") { e.preventDefault(); executeCommand(e.shiftKey ? "edit.redo" : "edit.undo"); }
     if (k === "s") { e.preventDefault(); executeCommand("file.save"); }
     if (k === "o" && e.shiftKey) { e.preventDefault(); executeCommand("file.open_folder"); }
     else if (k === "o") { e.preventDefault(); executeCommand("file.open"); }

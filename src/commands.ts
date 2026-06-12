@@ -4,7 +4,7 @@ import {
   theme, setTheme, THEMES, setFileTree, setFolderName,
   folderPath, setFolderPath, setQuickOpenVisible,
   moveBlock, removeBlock, updateBlock, insertBlockAfter, appendBlock,
-  targetBlockIndex, requestCaret,
+  targetBlockIndex, requestCaret, undo, redo, setCaretProvider,
   spellcheckOn, setSpellcheckOn, smartPunctuation, setSmartPunctuation,
   preserveBreaks, setPreserveBreaks, lineEnding, setLineEnding,
   copyImageToAssets, setCopyImageToAssets, tableFullWidth, setTableFullWidth,
@@ -54,6 +54,9 @@ export function unregisterBlockApi(api: BlockApi) {
 export function getActiveBlockApi(): BlockApi | null {
   return blockApi;
 }
+
+// Undo snapshots include the caret of the active block.
+setCaretProvider(() => (blockApi ? blockApi.caretOffset() : null));
 
 const withBlock = (fn: (api: BlockApi) => void) => () => {
   if (blockApi) fn(blockApi);
@@ -536,6 +539,8 @@ const registry: Record<string, Command> = {
   "file.print": () => { window.print(); },
 
   // Edit
+  "edit.undo": undo,
+  "edit.redo": redo,
   "edit.copy_markdown": copyAsMarkdown,
   "edit.copy_html": () => clipboardWriteText(renderMarkdown(fullText())),
   "edit.paste_plain": pastePlain,

@@ -112,7 +112,84 @@ export const fileName = createMemo(() =>
   state.filePath ? state.filePath.replace(/\\/g, "/").split("/").pop()! : "Untitled.md"
 );
 
+/* ---------- undo / redo ----------
+   The live styler rebuilds innerHTML on every keystroke, which destroys the
+   browser's native undo stack — so history lives here, at the document
+   level. Snapshots capture blocks + activation + caret; consecutive typing
+   into the same block coalesces into one entry. */
+
+interface Snapshot {
+  blocks: Block[];
+  activeIndex: number;
+  caret: number | null;
+}
+
+const undoStack: Snapshot[] = [];
+const redoStack: Snapshot[] = [];
+let lastPushKey: string | null = null;
+let lastPushAt = 0;
+
+// Injected by commands.ts (store can't import it — circular).
+let caretProvider: (() => number | null) | null = null;
+export function setCaretProvider(fn: () => number | null) {
+  caretProvider = fn;
+}
+
+function snapshot(): Snapshot {
+  return {
+    blocks: state.blocks.map((b) => ({ ...b })),
+    activeIndex: state.activeIndex,
+    caret: caretProvider?.() ?? null,
+  };
+}
+
+/**
+ * Record the pre-mutation state. A `coalesceKey` (e.g. "type-3") merges
+ * rapid consecutive pushes with the same key — keystrokes — into one entry.
+ */
+function pushHistory(coalesceKey: string | null = null) {
+  const now = Date.now();
+  redoStack.length = 0;
+  if (coalesceKey !== null && coalesceKey === lastPushKey && now - lastPushAt < 800) {
+    lastPushAt = now;
+    return;
+  }
+  undoStack.push(snapshot());
+  if (undoStack.length > 200) undoStack.shift();
+  lastPushKey = coalesceKey;
+  lastPushAt = now;
+}
+
+function applySnapshot(s: Snapshot) {
+  setState(
+    produce((st) => {
+      st.blocks = s.blocks.map((b) => ({ ...b }));
+      st.activeIndex = Math.min(s.activeIndex, s.blocks.length - 1);
+      st.dirty = true;
+    })
+  );
+  if (s.caret != null) requestCaret(s.caret);
+  lastPushKey = null; // the next edit starts a fresh history entry
+}
+
+export function undo() {
+  const prev = undoStack.pop();
+  if (!prev) return;
+  redoStack.push(snapshot());
+  applySnapshot(prev);
+}
+
+export function redo() {
+  const next = redoStack.pop();
+  if (!next) return;
+  undoStack.push(snapshot());
+  applySnapshot(next);
+}
+
 export function loadDocument(text: string, path: string | null) {
+  undoStack.length = 0;
+  redoStack.length = 0;
+  lastPushKey = null;
   setState(
     produce((s) => {
       s.blocks = splitBlocks(text).map(mkBlock);
@@ -157,6 +234,7 @@ export function markSaved(path: string) {
  * continuous, like Typora.
  */
 export function updateBlock(index: number, text: string) {
+  pushHistory(`type-${index}`);
   const parts = hasOpenFence(text) ? [text] : splitBlocks(text);
   setState(
     produce((s) => {
@@ -195,10 +273,11 @@ export function consumeSelectionRequest(): { start: number; end: number } | null
 
 /** Move a block one position up or down, keeping activation glued to it. */
 export function moveBlock(index: number, dir: -1 | 1) {
+  const j = index + dir;
+  if (index < 0 || index >= state.blocks.length || j < 0 || j >= state.blocks.length) return;
+  pushHistory();
   setState(
     produce((s) => {
-      const j = index + dir;
-      if (index < 0 || index >= s.blocks.length || j < 0 || j >= s.blocks.length) return;
       const [b] = s.blocks.splice(index, 1);
       s.blocks.splice(j, 0, b);
       if (s.activeIndex === index) s.activeIndex = j;
@@ -209,6 +288,7 @@ export function moveBlock(index: number, dir: -1 | 1) {
 
 export function mergeWithPrevious(index: number) {
   if (index <= 0) return;
+  pushHistory();
   setState(
     produce((s) => {
       const prev = s.blocks[index - 1];
@@ -223,6 +303,7 @@ export function mergeWithPrevious(index: number) {
 
 /** Finalize a block at the caret: `before` renders, `after` opens for editing. */
 export function splitBlock(index: number, before: string, after: string) {
+  pushHistory();
   setState(
     produce((s) => {
       s.blocks.splice(index, 1, mkBlock(before), mkBlock(after));
@@ -234,6 +315,7 @@ export function splitBlock(index: number, before: string, after: string) {
 }
 
 export function insertBlockAfter(index: number, text = "") {
+  pushHistory();
   setState(
     produce((s) => {
       s.blocks.splice(index + 1, 0, mkBlock(text));
@@ -245,6 +327,7 @@ export function insertBlockAfter(index: number, text = "") {
 
 /** Append a block at the end without stealing activation (footnote defs). */
 export function appendBlock(text: string) {
+  pushHistory();
   setState(
     produce((s) => {
       s.blocks.push(mkBlock(text));
@@ -254,6 +337,7 @@ export function appendBlock(text: string) {
 }
 
 export function removeBlock(index: number) {
+  pushHistory();
   setState(
     produce((s) => {
       s.blocks.splice(index, 1);
@@ -266,6 +350,7 @@ export function removeBlock(index: number) {
 
 /** Set heading level (0 = paragraph) on a block. */
 export function setHeading(index: number, level: number) {
+  pushHistory();
   setState(
     produce((s) => {
       const t = s.blocks[index].text.replace(/^#{1,6}\s+/, "");
@@ -276,6 +361,7 @@ export function setHeading(index: number, level: number) {
 }
 
 export function replaceAll(text: string) {
+  pushHistory();
   setState(
     produce((s) => {
       s.blocks = splitBlocks(text).map(mkBlock);

@@ -279,5 +279,48 @@ assert(!styleSource("| lone | row |").includes("md-table"),
   assert(on.includes(true) && on.includes(false), "caret in bold marker reveals bold but not the inner link");
 }
 
+/* ---------- undo / redo history ---------- */
+{
+  const out = path.join(here, ".build", "store.mjs");
+  await build({
+    entryPoints: [path.join(here, "..", "src", "store.ts")],
+    bundle: true,
+    format: "esm",
+    outfile: out,
+  });
+  const store = await import(out);
+  const text = () => store.doc.blocks.map((b) => b.text).join("\n\n");
+
+  store.loadDocument("alpha\n\nbeta", null);
+  store.updateBlock(0, "alphaX");
+  store.updateBlock(0, "alphaXY");
+  store.updateBlock(0, "alphaXYZ");
+  assert(text() === "alphaXYZ\n\nbeta", "typing applies");
+  store.undo();
+  assert(text() === "alpha\n\nbeta", "rapid keystrokes coalesce into ONE undo step");
+  store.redo();
+  assert(text() === "alphaXYZ\n\nbeta", "redo restores the coalesced edit");
+
+  store.splitBlock(0, "al", "phaXYZ");
+  assert(store.doc.blocks.length === 3, "structural edit applies");
+  store.undo();
+  assert(store.doc.blocks.length === 2 && store.doc.blocks[0].text === "alphaXYZ",
+    "undo reverses the structural edit");
+
+  store.undo(); // back to "alpha"
+  store.updateBlock(0, "fresh");
+  store.redo(); // must be a no-op: new edits clear the redo stack
+  assert(store.doc.blocks[0].text === "fresh", "a new edit clears the redo stack");
+
+  store.undo();
+  store.undo();
+  store.undo(); // underflow: no-ops, never throws
+  assert(text() === "alpha\n\nbeta", "undo stops at the loaded document");
+
+  store.loadDocument("clean", null);
+  store.undo();
+  assert(text() === "clean", "loading a document clears history");
+}
+
 console.log(`${passes} passed, ${failures} failed`);
 if (failures) process.exit(1);

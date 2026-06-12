@@ -189,9 +189,11 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         )?)
         .build()?;
 
+    // Undo/Redo are custom: the live styler rebuilds the DOM per keystroke,
+    // so history lives in the frontend store, not the webview's undo stack.
     let edit = SubmenuBuilder::new(app, "Edit")
-        .item(&PredefinedMenuItem::undo(app, None)?)
-        .item(&PredefinedMenuItem::redo(app, None)?)
+        .item(&mi(app, "edit.undo", "Undo", Some("CmdOrCtrl+Z"))?)
+        .item(&mi(app, "edit.redo", "Redo", Some("Shift+CmdOrCtrl+Z"))?)
         .separator()
         .item(&PredefinedMenuItem::cut(app, None)?)
         .item(&PredefinedMenuItem::copy(app, None)?)

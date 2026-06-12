@@ -343,6 +343,25 @@ await page.waitForTimeout(100);
 check((await page.evaluate(() => CSS.highlights?.get("inkdown-find")?.size ?? 0)) === 0,
   "closing the find bar clears the highlights");
 
+// Undo / redo: typing coalesces into one step; Cmd/Ctrl+Z round-trips.
+await page.locator(".block .rendered", { hasText: "Split panes duplicate" }).first().click();
+await page.waitForSelector(".block.active .source");
+await page.keyboard.type("QQQ");
+await page.waitForTimeout(200);
+const hasQQQ = () => page.evaluate(() => document.querySelector(".page").textContent.includes("QQQ"));
+check(await hasQQQ(), "typed text lands in the document");
+await page.keyboard.press("Control+z");
+await page.waitForTimeout(120);
+check(!(await hasQQQ()), "one undo removes the whole typing burst (coalesced)");
+await page.keyboard.press("Control+Shift+z");
+await page.waitForTimeout(120);
+check(await hasQQQ(), "redo restores it");
+await page.keyboard.press("Control+z");
+await page.waitForTimeout(120);
+check(!(await hasQQQ()), "undo works again after redo");
+await page.keyboard.press("Escape");
+await page.waitForTimeout(80);
+
 // Within-block stability: the text itself must not move when its block
 // activates (code pills, checkboxes, and heading tracking once did).
 const textX = (needle) =>
