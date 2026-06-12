@@ -12,6 +12,7 @@ import {
 import { executeCommand, registerBlockApi, unregisterBlockApi, type BlockApi } from "../commands";
 import { parseTable, cellRanges } from "../tabletools";
 import TableToolbar from "./TableToolbar";
+import CodeLangPicker from "./CodeLangPicker";
 
 interface Props {
   text: string;
@@ -40,6 +41,20 @@ export default function Block(props: Props) {
   };
 
   const isFence = () => /^\s*(`{3,}|~{3,})/.test(props.text) || props.text.startsWith("---\n");
+
+  // Code fence (not front matter): expose the language picker while active.
+  const isCodeFence = () => /^\s*(`{3,}|~{3,})/.test(props.text);
+  const fenceLang = () => props.text.match(/^\s*(?:`{3,}|~{3,})\s*([^\s`]*)/)?.[1] ?? "";
+  const setFenceLang = (lang: string) => {
+    const lines = props.text.split("\n");
+    const head = lines[0].match(/^(\s*(?:`{3,}|~{3,}))/);
+    if (!head) return;
+    const newFirst = head[1] + lang;
+    const delta = newFirst.length - lines[0].length;
+    const cur = el ? getCaretOffset(el) : 0;
+    const caret = cur > lines[0].length ? cur + delta : Math.min(cur, newFirst.length);
+    commit([newFirst, ...lines.slice(1)].join("\n"), Math.max(0, caret));
+  };
 
   // Block-type class so the live view's box metrics match the rendered view
   // (same margins the rendered elements carry) — activation must not shift
@@ -329,6 +344,9 @@ export default function Block(props: Props) {
     <div class="block" classList={{ active: props.active }} ref={rootEl}>
       <Show when={props.active && parseTable(props.text)}>
         <TableToolbar text={props.text} />
+      </Show>
+      <Show when={props.active && isCodeFence()}>
+        <CodeLangPicker current={fenceLang()} onSelect={setFenceLang} onCancel={() => el?.focus()} />
       </Show>
       <Show
         when={props.active}

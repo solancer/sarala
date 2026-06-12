@@ -15,6 +15,11 @@ const marked = new Marked(
 );
 marked.setOptions({ gfm: true, breaks: false });
 
+/** Languages the bundled highlighter knows, for the code-block picker. */
+export function listCodeLanguages(): string[] {
+  return hljs.listLanguages().sort();
+}
+
 /** Edit ▸ Whitespace: render single newlines as <br> when enabled. */
 export function setPreserveBreaksOption(on: boolean) {
   marked.setOptions({ breaks: on });

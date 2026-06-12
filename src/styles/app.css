@@ -730,3 +730,42 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 /* Tables stretch to the page column when toggled (table toolbar ↔ icon). */
 .app.tables-full .source .md-table,
 .app.tables-full .rendered table { width: 100%; }
+
+/* ---- Code block language picker (Typora-style) ---- */
+
+.code-lang {
+  position: absolute;
+  right: 0;
+  bottom: -30px;
+  z-index: 30;
+}
+.code-lang input {
+  width: 150px;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 4px 9px;
+  font: 12px var(--font-mono);
+  background: var(--bg-page);
+  color: var(--ink);
+  outline: none;
+}
+.code-lang input:focus { border-color: var(--accent); }
+.code-lang ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 4px 0;
+  width: 150px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--bg-page);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+}
+.code-lang li {
+  padding: 4px 10px;
+  font: 12px var(--font-mono);
+  color: var(--ink);
+  cursor: pointer;
+}
+.code-lang li.selected { background: var(--accent-soft); color: var(--accent); }

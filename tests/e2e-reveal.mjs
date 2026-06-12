@@ -288,6 +288,25 @@ await page.waitForTimeout(120);
 check(Math.abs((await tableWidth()) - narrow) < 2, "toggling back restores content width");
 await page.keyboard.press("Escape");
 
+// Code block language picker: filterable dropdown rewrites the fence line.
+await page.locator(".block .rendered", { hasText: "tauri::command" }).click();
+await page.waitForSelector(".block.active .code-lang input");
+check((await page.locator(".code-lang input").inputValue()) === "rust",
+  "picker shows the fence's current language");
+await page.locator(".code-lang input").click();
+await page.locator(".code-lang input").fill("py");
+await page.waitForTimeout(80);
+await page.locator(".code-lang li", { hasText: "python" }).first().click();
+await page.waitForTimeout(150);
+const fence = await page.evaluate(() => {
+  const el = document.querySelector(".block.active .source");
+  return { firstLine: el?.textContent.split("\n")[0], active: !!el };
+});
+check(fence.active, "block stays active after picking a language");
+check(fence.firstLine === "```python", `fence line rewritten (${JSON.stringify(fence.firstLine)})`);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(100);
+
 // Within-block stability: the text itself must not move when its block
 // activates (code pills, checkboxes, and heading tracking once did).
 const textX = (needle) =>
