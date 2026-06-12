@@ -1,7 +1,7 @@
 import { isTauri } from "./platform";
 import {
   setSpellcheckOn, setSmartPunctuation, setPreserveBreaks, setLineEnding,
-  setCopyImageToAssets, bumpRenderEpoch,
+  setCopyImageToAssets, setTableFullWidth, bumpRenderEpoch,
   setTheme, setZoom, clampZoom, THEMES, type ThemeId,
 } from "./store";
 import { setPreserveBreaksOption } from "./markdown";
@@ -66,6 +66,7 @@ function hydrateStore() {
   setSmartPunctuation(getSetting("smartPunctuation", false));
   setLineEnding(getSetting<"lf" | "crlf">("lineEnding", "lf"));
   setCopyImageToAssets(getSetting("copyImageToAssets", false));
+  setTableFullWidth(getSetting("tableFullWidth", false));
   const savedTheme = getSetting<string>("theme", "github");
   if ((THEMES as readonly string[]).includes(savedTheme)) setTheme(savedTheme as ThemeId);
   setZoom(clampZoom(getSetting("zoom", 100)));

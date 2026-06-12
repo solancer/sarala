@@ -241,6 +241,53 @@ for (const [label, text] of JANK_TARGETS) {
   await page.waitForTimeout(80);
 }
 
+// Tab cycles table cells, selecting each cell's content; the toolbar's
+// width toggle stretches the table to the page column.
+await page.reload();
+await page.waitForSelector(".block");
+await page.locator(".block .rendered", { hasText: "Cmd/Ctrl+S" }).click({ position: { x: 30, y: 12 } });
+await page.waitForSelector(".block.active .source .md-table");
+// Park the caret deterministically inside the first header cell ("Shortcut").
+await page.evaluate(() => {
+  const el = document.querySelector(".block.active .source");
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let remaining = 2;
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (remaining <= n.data.length) {
+      const r = document.createRange();
+      r.setStart(n, remaining);
+      r.collapse(true);
+      const s = getSelection();
+      s.removeAllRanges();
+      s.addRange(r);
+      return;
+    }
+    remaining -= n.data.length;
+  }
+});
+await page.waitForTimeout(80);
+const selected = () => page.evaluate(() => window.getSelection().toString());
+await page.keyboard.press("Tab");
+check((await selected()) === "Action", `Tab selects the next cell ("${await selected()}")`);
+await page.keyboard.press("Tab");
+check((await selected()) === "Cmd/Ctrl+S", "Tab wraps from the row's last column to the next row");
+await page.keyboard.press("Shift+Tab");
+check((await selected()) === "Action", "Shift+Tab goes back a cell");
+for (let i = 0; i < 7; i++) await page.keyboard.press("Tab");
+check((await selected()) === "Shortcut", "Tab cycles from the table's end back to the first cell");
+
+const tableWidth = () =>
+  page.evaluate(() => document.querySelector(".block.active .md-table").getBoundingClientRect().width);
+const narrow = await tableWidth();
+await page.locator(".table-toolbar .tt-btn[title='Full width']").click();
+await page.waitForTimeout(120);
+const wide = await tableWidth();
+check(wide > narrow + 100, `full-width toggle stretches the table (${narrow.toFixed(0)} → ${wide.toFixed(0)}px)`);
+await page.locator(".table-toolbar .tt-btn[title='Default width']").click();
+await page.waitForTimeout(120);
+check(Math.abs((await tableWidth()) - narrow) < 2, "toggling back restores content width");
+await page.keyboard.press("Escape");
+
 // Within-block stability: the text itself must not move when its block
 // activates (code pills, checkboxes, and heading tracking once did).
 const textX = (needle) =>

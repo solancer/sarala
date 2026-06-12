@@ -7,7 +7,7 @@ import {
   targetBlockIndex, requestCaret,
   spellcheckOn, setSpellcheckOn, smartPunctuation, setSmartPunctuation,
   preserveBreaks, setPreserveBreaks, lineEnding, setLineEnding,
-  copyImageToAssets, setCopyImageToAssets,
+  copyImageToAssets, setCopyImageToAssets, tableFullWidth, setTableFullWidth,
   setSidebarTab, focusMode, setFocusMode, typewriterMode, setTypewriterMode,
   alwaysOnTop, setAlwaysOnTop, zoom, setZoom, clampZoom,
   bumpRenderEpoch,
@@ -340,6 +340,13 @@ const tableAlign = (align: Align) => () => applyTableEdit({ kind: "align", align
 export function insertTable(rows: number, cols: number) {
   const md = skeletonTable(rows, cols);
   insertBlock(md, md.indexOf("|") + 2);
+}
+
+/** Table toolbar: tables stretch to the page column or size to content. */
+export async function toggleTableFullWidth() {
+  const v = !tableFullWidth();
+  setTableFullWidth(v);
+  await setSetting("tableFullWidth", v);
 }
 
 /** Called by the table toolbar's grid picker. Rows include the header. */

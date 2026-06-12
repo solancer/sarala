@@ -10,7 +10,7 @@ import {
   spellcheckOn, smartPunctuation, renderEpoch,
 } from "../store";
 import { executeCommand, registerBlockApi, unregisterBlockApi, type BlockApi } from "../commands";
-import { parseTable } from "../tabletools";
+import { parseTable, cellRanges } from "../tabletools";
 import TableToolbar from "./TableToolbar";
 
 interface Props {
@@ -218,7 +218,23 @@ export default function Block(props: Props) {
       }
     }
     if (e.key === "Escape") { e.preventDefault(); el?.blur(); return; }
-    if (e.key === "Tab") { e.preventDefault(); insertAtCaret("  "); return; }
+    if (e.key === "Tab") {
+      e.preventDefault();
+      // In a table, Tab cycles through cells (selecting each cell's content),
+      // wrapping from a row's last column to the next row and from the table's
+      // end back to the first cell. Shift+Tab goes backward.
+      const cells = cellRanges(props.text);
+      if (cells.length && el) {
+        const { start } = getSelectionOffsets(el);
+        let idx = cells.findIndex((c) => start <= c.end);
+        if (idx === -1) idx = 0;
+        const next = e.shiftKey ? (idx - 1 + cells.length) % cells.length : (idx + 1) % cells.length;
+        setSelection(el, cells[next].start, cells[next].end);
+        return;
+      }
+      insertAtCaret("  ");
+      return;
+    }
     if (e.key === "Enter") {
       e.preventDefault();
       if (e.shiftKey) insertAtCaret("\n");

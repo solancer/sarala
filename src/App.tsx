@@ -11,7 +11,7 @@ import {
   doc, theme, sourceMode, sidebarOpen, setSidebarOpen,
   fileName, setActive, fileTree, folderName, THEMES, targetBlockIndex,
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
-  focusMode, typewriterMode, alwaysOnTop, zoom,
+  focusMode, typewriterMode, alwaysOnTop, zoom, tableFullWidth,
 } from "./store";
 import { isTauri, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS } from "./platform";
 import {
@@ -154,7 +154,7 @@ export default function App() {
     <div
       class="app"
       data-theme={theme()}
-      classList={{ "focus-mode": focusMode() }}
+      classList={{ "focus-mode": focusMode(), "tables-full": tableFullWidth() }}
       style={{ "--zoom": `${zoom()}%` }}
     >
       <Show when={sidebarOpen()}>

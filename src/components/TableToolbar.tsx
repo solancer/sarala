@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { tableDims } from "../tabletools";
-import { executeCommand, resizeActiveTable } from "../commands";
+import { executeCommand, resizeActiveTable, toggleTableFullWidth } from "../commands";
+import { tableFullWidth } from "../store";
 
 interface Props {
   text: string;
@@ -56,6 +57,14 @@ export default function TableToolbar(props: Props) {
         </button>
         <button class="tt-btn" title="Align column right" onClick={() => executeCommand("paragraph.table.align_right")}>
           <svg viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M2 3h12v1.6H2zM6 7.2h8v1.6H6zM2 11.4h12v1.6H2z"/></svg>
+        </button>
+        <button
+          class="tt-btn"
+          title={tableFullWidth() ? "Default width" : "Full width"}
+          classList={{ on: tableFullWidth() }}
+          onClick={() => void toggleTableFullWidth()}
+        >
+          <svg viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M1.5 2h1.5v12H1.5zM13 2h1.5v12H13zM5.9 4.9 2.8 8l3.1 3.1 1-1L5.6 8.7h4.8l-1.3 1.4 1 1L13.2 8l-3.1-3.1-1 1 1.3 1.4H5.6l1.3-1.4z"/></svg>
         </button>
       </div>
       <button class="tt-btn tt-delete" title="Delete table" onClick={() => executeCommand("edit.delete_block")}>

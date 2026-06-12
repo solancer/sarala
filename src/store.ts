@@ -96,6 +96,9 @@ export const [lineEnding, setLineEnding] = createSignal<"lf" | "crlf">("lf");
 // Format ▸ Image: copy inserted local images into ./assets next to the doc.
 export const [copyImageToAssets, setCopyImageToAssets] = createSignal(false);
 
+// Tables stretch to the page column instead of sizing to their content.
+export const [tableFullWidth, setTableFullWidth] = createSignal(false);
+
 // Bumped when a global render option changes so rendered blocks re-render.
 export const [renderEpoch, setRenderEpoch] = createSignal(0);
 export const bumpRenderEpoch = () => setRenderEpoch((n) => n + 1);

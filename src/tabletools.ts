@@ -128,6 +128,42 @@ export function resizeTable(text: string, rows: number, cols: number): string | 
   return serializeTable(t);
 }
 
+/**
+ * Source-offset ranges of every cell's trimmed content, in tab order
+ * (header cells left-to-right, then each body row; the separator line is
+ * skipped). Whitespace-only cells collapse to a caret position mid-cell.
+ *   cellRanges("| a | b |\n| --- | --- |\n| 1 | 2 |")
+ *     → [{2,3}, {6,7}, …] — "a" then "b" then "1" then "2"
+ */
+export function cellRanges(text: string): { start: number; end: number }[] {
+  if (!parseTable(text)) return [];
+  const out: { start: number; end: number }[] = [];
+  const lines = text.split("\n");
+  let offset = 0;
+  lines.forEach((line, i) => {
+    if (i !== 1 && line.includes("|")) {
+      const parts = line.split("|");
+      let pos = offset;
+      for (let k = 0; k < parts.length; k++) {
+        const a = pos;
+        pos += parts[k].length + 1; // advance past this part and its pipe
+        // mirror styleTableRow: empty text outside the outermost pipes isn't a cell
+        if ((k === 0 || k === parts.length - 1) && parts[k] === "") continue;
+        const leading = parts[k].length - parts[k].trimStart().length;
+        const trimmed = parts[k].trim().length;
+        if (trimmed === 0) {
+          const mid = a + Math.floor(parts[k].length / 2);
+          out.push({ start: mid, end: mid });
+        } else {
+          out.push({ start: a + leading, end: a + leading + trimmed });
+        }
+      }
+    }
+    offset += line.length + 1;
+  });
+  return out;
+}
+
 export type TableEdit =
   | { kind: "row_above" }
   | { kind: "row_below" }

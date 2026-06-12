@@ -170,6 +170,19 @@ assert(!styleSource("| lone | row |").includes("md-table"),
 
   assert(resizeTable(src, 1, 0) !== null && tableDims(resizeTable(src, 1, 0)).rows === 2,
     "rows clamp to header + one body row");
+
+  const { cellRanges } = await import(path.join(here, ".build", "tabletools.mjs"));
+  // "| a | b |\n| --- | :-: |\n| 1 | 2 |" — a@2, b@6, 1@... line2 starts at 24.
+  const ranges = cellRanges(src);
+  assert(ranges.length === 4, `four cells in tab order (${ranges.length})`);
+  assert(src.slice(ranges[0].start, ranges[0].end) === "a", "first cell range covers 'a'");
+  assert(src.slice(ranges[1].start, ranges[1].end) === "b", "second cell range covers 'b'");
+  assert(src.slice(ranges[2].start, ranges[2].end) === "1", "third cell skips the separator row");
+  assert(src.slice(ranges[3].start, ranges[3].end) === "2", "fourth cell covers '2'");
+  const blanks = cellRanges("| a |\n| --- |\n|   |");
+  assert(blanks.length === 2 && blanks[1].start === blanks[1].end,
+    "whitespace-only cell collapses to a caret position");
+  assert(cellRanges("not a table").length === 0, "cellRanges empty for non-tables");
 }
 
 /* ---------- inline reveal: bold ---------- */

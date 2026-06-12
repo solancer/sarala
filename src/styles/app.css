@@ -726,3 +726,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 /* Ordered-list numbers in the live view read as rendered numbers, not
    dimmed source markers. */
 .source .md-olnum > .md-mark { color: var(--ink); opacity: 1; }
+
+/* Tables stretch to the page column when toggled (table toolbar ↔ icon). */
+.app.tables-full .source .md-table,
+.app.tables-full .rendered table { width: 100%; }
