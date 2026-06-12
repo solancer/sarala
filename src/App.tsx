@@ -5,6 +5,7 @@ import StatusBar from "./components/StatusBar";
 import SourceView from "./components/SourceView";
 import QuickOpen from "./components/QuickOpen";
 import FindBar from "./components/FindBar";
+import TableDialog from "./components/TableDialog";
 import { initSettings } from "./settings";
 import {
   doc, theme, sourceMode, sidebarOpen, setSidebarOpen,
@@ -103,6 +104,7 @@ export default function App() {
         <StatusBar />
       </main>
       <QuickOpen />
+      <TableDialog />
     </div>
   );
 }

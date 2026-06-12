@@ -3,7 +3,8 @@ import {
   sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
   theme, setTheme, THEMES, setFileTree, setFolderName,
   folderPath, setFolderPath, setQuickOpenVisible,
-  moveBlock, removeBlock,
+  moveBlock, removeBlock, updateBlock, insertBlockAfter, appendBlock,
+  targetBlockIndex, requestCaret,
   spellcheckOn, setSpellcheckOn, smartPunctuation, setSmartPunctuation,
   preserveBreaks, setPreserveBreaks, lineEnding, setLineEnding,
   bumpRenderEpoch,
@@ -21,6 +22,8 @@ import {
   setSetting,
 } from "./settings";
 import { openFind, findNext } from "./components/FindBar";
+import { openTableDialog } from "./components/TableDialog";
+import { skeletonTable, editTable, type TableEdit, type Align } from "./tabletools";
 
 const HELP_URL = "https://github.com/inkdown/inkdown#readme";
 
@@ -240,6 +243,115 @@ async function exportPrevious() {
   await doExport(memo.id, memo.path);
 }
 
+// ---------- Paragraph ----------
+
+/** Replace the target block's text, parking the caret at a sane offset. */
+function transformBlock(fn: (text: string) => string) {
+  const i = targetBlockIndex();
+  if (i < 0) return;
+  const text = doc.blocks[i].text;
+  const next = fn(text);
+  if (next === text) return;
+  requestCaret(Math.min(blockApi?.caretOffset() ?? next.length, next.length));
+  updateBlock(i, next);
+}
+
+/** Apply fn to the line under the caret of the target block. */
+function mutateCaretLine(fn: (line: string) => string) {
+  transformBlock((text) => {
+    const offset = blockApi?.caretOffset() ?? 0;
+    const start = text.lastIndexOf("\n", offset - 1) + 1;
+    const endIdx = text.indexOf("\n", offset);
+    const end = endIdx === -1 ? text.length : endIdx;
+    return text.slice(0, start) + fn(text.slice(start, end)) + text.slice(end);
+  });
+}
+
+/** Insert a fresh block after the target (or at the end) and focus it. */
+function insertBlock(text: string, caretWithin = text.length) {
+  const at = targetBlockIndex();
+  requestCaret(caretWithin);
+  insertBlockAfter(at >= 0 ? at : doc.blocks.length - 1, text);
+}
+
+function shiftHeading(delta: number) {
+  const i = targetBlockIndex();
+  if (i < 0) return;
+  const m = doc.blocks[i].text.match(/^(#{1,6})\s/);
+  const level = m ? m[1].length : 0;
+  setHeading(i, Math.max(0, Math.min(6, level + delta)));
+}
+
+const LIST_MARKER = /^(\s*)(?:[-*+]\s+(?:\[[ xX]\]\s+)?|\d+\.\s+)/;
+const stripListMarker = (l: string) => l.replace(LIST_MARKER, "$1");
+
+/** Toggle a per-line list marker on the whole block. */
+function toggleList(kind: "ul" | "ol" | "task") {
+  const has = {
+    ul: (l: string) => /^\s*[-*+]\s+(?!\[[ xX]\]\s)/.test(l),
+    ol: (l: string) => /^\s*\d+\.\s+/.test(l),
+    task: (l: string) => /^\s*[-*+]\s+\[[ xX]\]\s/.test(l),
+  }[kind];
+  transformBlock((text) => {
+    const lines = text.split("\n");
+    const content = lines.filter((l) => l.trim() !== "");
+    if (content.length && content.every(has)) return lines.map(stripListMarker).join("\n");
+    let n = 0;
+    return lines
+      .map((l) => {
+        if (l.trim() === "") return l;
+        const core = stripListMarker(l).trimStart();
+        if (kind === "ol") return `${++n}. ${core}`;
+        if (kind === "task") return `- [ ] ${core}`;
+        return `- ${core}`;
+      })
+      .join("\n");
+  });
+}
+
+function toggleQuote(text: string): string {
+  const lines = text.split("\n");
+  const content = lines.filter((l) => l.trim() !== "");
+  if (content.length && content.every((l) => /^\s*>/.test(l))) {
+    return lines.map((l) => l.replace(/^(\s*)>\s?/, "$1")).join("\n");
+  }
+  return lines.map((l) => "> " + l).join("\n");
+}
+
+function applyTableEdit(edit: TableEdit) {
+  const i = targetBlockIndex();
+  if (i < 0) return;
+  const text = doc.blocks[i].text;
+  const next = editTable(text, blockApi?.caretOffset() ?? 0, edit);
+  if (next == null || next === text) return;
+  requestCaret(Math.min(blockApi?.caretOffset() ?? 0, next.length));
+  updateBlock(i, next);
+}
+
+const tableAlign = (align: Align) => () => applyTableEdit({ kind: "align", align });
+
+/** Called by the TableDialog overlay with the chosen dimensions. */
+export function insertTable(rows: number, cols: number) {
+  const md = skeletonTable(rows, cols);
+  insertBlock(md, md.indexOf("|") + 2);
+}
+
+function insertFootnote() {
+  if (!blockApi || targetBlockIndex() < 0) return;
+  const defs = doc.blocks.flatMap((b) =>
+    [...b.text.matchAll(/^\[\^(\d+)\]:/gm)].map((m) => Number(m[1]))
+  );
+  const n = (defs.length ? Math.max(...defs) : 0) + 1;
+  blockApi.insertAtCaret(`[^${n}]`);
+  appendBlock(`[^${n}]: `);
+}
+
+function insertFrontMatter() {
+  if (doc.blocks[0]?.text.startsWith("---\n")) return;
+  requestCaret(4);
+  insertBlockAfter(-1, "---\n\n---");
+}
+
 // ---------- Edit ----------
 
 async function copyAsMarkdown() {
@@ -347,6 +459,42 @@ const registry: Record<string, Command> = {
   "paragraph.heading.4": heading(4),
   "paragraph.heading.5": heading(5),
   "paragraph.heading.6": heading(6),
+  "paragraph.heading_up": () => shiftHeading(1),
+  "paragraph.heading_down": () => shiftHeading(-1),
+  "paragraph.table.insert": () => openTableDialog(),
+  "paragraph.table.row_above": () => applyTableEdit({ kind: "row_above" }),
+  "paragraph.table.row_below": () => applyTableEdit({ kind: "row_below" }),
+  "paragraph.table.delete_row": () => applyTableEdit({ kind: "delete_row" }),
+  "paragraph.table.add_col": () => applyTableEdit({ kind: "add_col" }),
+  "paragraph.table.delete_col": () => applyTableEdit({ kind: "delete_col" }),
+  "paragraph.table.align_left": tableAlign("left"),
+  "paragraph.table.align_center": tableAlign("center"),
+  "paragraph.table.align_right": tableAlign("right"),
+  "paragraph.math_block": () => insertBlock("$$\n\n$$", 3),
+  "paragraph.code_fences": () => insertBlock("```\n\n```", 4),
+  "paragraph.quote": () => transformBlock(toggleQuote),
+  "paragraph.ordered_list": () => toggleList("ol"),
+  "paragraph.unordered_list": () => toggleList("ul"),
+  "paragraph.task_list": () => toggleList("task"),
+  "paragraph.task_toggle": () =>
+    mutateCaretLine((l) => l.replace(/\[( |x|X)\]/, (_, s) => (s === " " ? "[x]" : "[ ]"))),
+  "paragraph.indent": () => mutateCaretLine((l) => "  " + l),
+  "paragraph.outdent": () => mutateCaretLine((l) => l.replace(/^ {1,2}/, "")),
+  "paragraph.insert_before": () => {
+    const i = targetBlockIndex();
+    if (i >= 0) insertBlockAfter(i - 1);
+  },
+  "paragraph.insert_after": () => {
+    const i = targetBlockIndex();
+    if (i >= 0) insertBlockAfter(i);
+  },
+  "paragraph.hr": () => insertBlock("---"),
+  "paragraph.toc": () => insertBlock("[TOC]"),
+  "paragraph.front_matter": insertFrontMatter,
+  "paragraph.footnote": insertFootnote,
+  "paragraph.alert.note": () => insertBlock("> [!NOTE]\n> "),
+  "paragraph.alert.tip": () => insertBlock("> [!TIP]\n> "),
+  "paragraph.alert.warning": () => insertBlock("> [!WARNING]\n> "),
 
   // Format — inline wraps at the caret of the active block
   "format.strong": wrap("**"),

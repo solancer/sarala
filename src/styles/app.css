@@ -373,3 +373,43 @@ body { font-family: var(--font-ui); }
 }
 .findbar input:focus { border-color: var(--accent); }
 .findbar-count { font: 11px var(--font-ui); color: var(--ink-soft); min-width: 64px; }
+
+/* ---- Table of contents block ([TOC]) ---- */
+
+ul.toc { list-style: none; padding-left: 0; border-left: 3px solid var(--accent-soft); }
+ul.toc li { padding: 2px 0 2px 12px; color: var(--accent); }
+ul.toc li.toc-l2 { padding-left: 28px; }
+ul.toc li.toc-l3 { padding-left: 44px; }
+ul.toc li.toc-l4 { padding-left: 60px; }
+ul.toc li.toc-l5 { padding-left: 76px; }
+ul.toc li.toc-l6 { padding-left: 92px; }
+
+/* ---- Insert Table dialog ---- */
+
+.table-dialog {
+  width: 280px;
+  background: var(--paper, #fff);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  padding: 16px 18px;
+}
+.table-dialog h3 { margin: 0 0 12px; font: 600 14px var(--font-ui); color: var(--ink); }
+.table-dialog label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font: 13px var(--font-ui);
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+.table-dialog input {
+  width: 72px;
+  border: 1px solid var(--accent-soft);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: 13px var(--font-ui);
+  background: transparent;
+  color: var(--ink);
+}
+.table-dialog-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px; }
+.table-dialog .primary { color: var(--accent); font-weight: 600; }

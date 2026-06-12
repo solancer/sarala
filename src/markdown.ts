@@ -20,9 +20,25 @@ export function setPreserveBreaksOption(on: boolean) {
   marked.setOptions({ breaks: on });
 }
 
+// Injected by the store (markdown.ts cannot import store — circular).
+let tocProvider: (() => Heading[]) | null = null;
+export function setTocProvider(fn: () => Heading[]) {
+  tocProvider = fn;
+}
+
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
 /** Render a markdown string to sanitized HTML. */
 export function renderMarkdown(md: string): string {
   if (!md.trim()) return `<p class="empty-block">&nbsp;</p>`;
+  // A lone [TOC] paragraph renders as the document outline.
+  if (md.trim() === "[TOC]" && tocProvider) {
+    const items = tocProvider()
+      .map((h) => `<li class="toc-l${h.level}">${escapeHtml(h.text)}</li>`)
+      .join("");
+    return DOMPurify.sanitize(`<ul class="toc">${items || "<li>No headings</li>"}</ul>`);
+  }
   const raw = marked.parse(md, { async: false }) as string;
   return DOMPurify.sanitize(raw, { ADD_ATTR: ["target"] });
 }

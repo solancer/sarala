@@ -7,6 +7,7 @@ import {
   hasOpenFence,
   extractOutline,
   countWords,
+  setTocProvider,
 } from "./markdown";
 
 export interface Block {
@@ -91,6 +92,8 @@ export const bumpRenderEpoch = () => setRenderEpoch((n) => n + 1);
 
 export const fullText = createMemo(() => joinBlocks(state.blocks.map((b) => b.text)));
 export const outline = createMemo(() => extractOutline(state.blocks.map((b) => b.text)));
+// eslint-disable-next-line solid/reactivity -- the provider runs inside Block's render (a tracked scope)
+setTocProvider(() => outline());
 export const stats = createMemo(() => countWords(fullText()));
 export const fileName = createMemo(() =>
   state.filePath ? state.filePath.replace(/\\/g, "/").split("/").pop()! : "Untitled.md"
@@ -107,8 +110,19 @@ export function loadDocument(text: string, path: string | null) {
   );
 }
 
+let lastActive = -1;
 export function setActive(index: number) {
+  if (index >= 0) lastActive = index;
   setState("activeIndex", index);
+}
+
+/**
+ * Block that paragraph/format commands should operate on: the active block,
+ * else the block that last held the caret, else none (-1).
+ */
+export function targetBlockIndex(): number {
+  if (state.activeIndex >= 0) return state.activeIndex;
+  return lastActive >= 0 && lastActive < state.blocks.length ? lastActive : -1;
 }
 
 /** Point the document at a new path (rename/move) without touching dirty state. */
@@ -211,6 +225,16 @@ export function insertBlockAfter(index: number, text = "") {
     produce((s) => {
       s.blocks.splice(index + 1, 0, mkBlock(text));
       s.activeIndex = index + 1;
+      s.dirty = true;
+    })
+  );
+}
+
+/** Append a block at the end without stealing activation (footnote defs). */
+export function appendBlock(text: string) {
+  setState(
+    produce((s) => {
+      s.blocks.push(mkBlock(text));
       s.dirty = true;
     })
   );
