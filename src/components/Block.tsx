@@ -41,6 +41,20 @@ export default function Block(props: Props) {
 
   const isFence = () => /^\s*(`{3,}|~{3,})/.test(props.text) || props.text.startsWith("---\n");
 
+  // Block-type class so the live view's box metrics match the rendered view
+  // (same margins the rendered elements carry) — activation must not shift
+  // the layout below.
+  const blockType = () => {
+    const t = props.text;
+    if (isFence()) return "";
+    const h = t.match(/^(#{1,6})\s/);
+    if (h) return `b-h${h[1].length}`;
+    if (/^\s*>/.test(t)) return "b-quote";
+    if (parseTable(t)) return "b-table";
+    if (/^\s*(?:[-*+]|\d+\.)\s/.test(t)) return "b-list";
+    return "b-p";
+  };
+
   // Re-style the live source whenever the text changes while active,
   // restoring the caret to where the user left it.
   createEffect(
@@ -289,7 +303,7 @@ export default function Block(props: Props) {
       >
         <div
           ref={el}
-          class="source"
+          class={`source ${blockType()}`}
           classList={{ "code-block": isFence() }}
           contentEditable={true}
           spellcheck={spellcheckOn()}

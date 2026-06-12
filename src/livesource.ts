@@ -127,6 +127,20 @@ function styleTableRow(raw: string, isSep: boolean): string {
 export function styleSource(src: string): string {
   if (!src) return "";
   const lines = src.split("\n");
+
+  // Whole-block fenced code (the common shape: opening fence first line,
+  // closing fence last line): conceal the fence lines as caret-scoped tokens
+  // so the active block's height matches the rendered code box. Each fence
+  // span swallows its adjacent newline so the line collapses completely;
+  // textContent is still byte-identical.
+  const fenceLine = (s: string) => /^\s*(`{3,}|~{3,})/.test(s);
+  if (lines.length >= 2 && fenceLine(lines[0]) && fenceLine(lines[lines.length - 1])) {
+    const inner = lines.slice(1, -1);
+    const open = `<span class="md-tok md-fence"><span class="md-mark">${esc(lines[0])}\n</span></span>`;
+    const close = `<span class="md-tok md-fence"><span class="md-mark">${inner.length ? "\n" : ""}${esc(lines[lines.length - 1])}</span></span>`;
+    const body = inner.map((l) => `<span class="md-code-line">${esc(l)}</span>`).join("\n");
+    return open + body + close;
+  }
   const out: string[] = [];
   let inFence = false;
   let fenceMark = "";

@@ -174,11 +174,11 @@ body { font-family: var(--font-ui); }
   border: 1px solid var(--rule);
   border-radius: 8px;
   padding: 14px 16px;
-  margin: 0.5em 0;
+  margin: 10.5px 0; /* rendered: 2px wrapper pad + 8.5px pre margin */
 }
 .md-mark { color: var(--ink-soft); opacity: 0.55; }
-.md-h1 { font-size: 2em;   font-weight: 700; line-height: 1.3; }
-.md-h2 { font-size: 1.5em; font-weight: 700; line-height: 1.3; }
+.md-h1 { font-size: 2em;   font-weight: 700; line-height: 1.25; }
+.md-h2 { font-size: 1.5em; font-weight: 700; line-height: 1.25; }
 .md-h3 { font-size: 1.2em; font-weight: 700; }
 .md-h4 { font-weight: 700; }
 .md-h5 { font-weight: 700; font-size: 0.95em; }
@@ -252,17 +252,17 @@ body { font-family: var(--font-ui); }
   border-radius: 8px;
   padding: 14px 16px;
   overflow-x: auto;
-  margin: 0.5em 0;
+  margin: 8.5px 0; /* = .source.code-block total, see jank notes */
 }
 .rendered pre code { background: transparent; padding: 0; font-size: 13.5px; line-height: 1.6; }
 [data-theme="graphite"] .hljs { color: var(--ink); background: transparent; }
 .rendered ul, .rendered ol { margin: 0.35em 0; padding-left: 1.5em; }
-.rendered li { margin: 0.15em 0; }
+.rendered li { margin: 0; }
 .rendered li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.3em; }
 .rendered input[type="checkbox"] { accent-color: var(--accent); margin-right: 7px; cursor: pointer; }
-.rendered table { border-collapse: collapse; margin: 0.6em 0; font-size: 0.92em; }
+.rendered table { border-collapse: collapse; margin: 8.5px 0; font-size: 1em; }
 .rendered th, .rendered td { border: 1px solid var(--rule); padding: 6px 14px; }
-.rendered th { background: var(--code-bg); font-family: var(--font-ui); font-size: 0.85em; letter-spacing: 0.03em; }
+.rendered th { background: var(--accent-soft); font-family: var(--font-prose); font-weight: 600; text-align: left; }
 .rendered hr { border: 0; border-top: 1px solid var(--rule); margin: 1.2em 0; }
 .rendered img { max-width: 100%; border-radius: 6px; }
 .empty-block { color: var(--ink-soft); }
@@ -498,13 +498,13 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 .source .md-tok.md-bullet:not(.md-on)::before {
   content: "•";
   display: inline-block;
-  width: 1.15em;
+  width: 1.5em;
   color: var(--ink-soft);
 }
 .source .md-tok.md-task:not(.md-on)::before {
   content: "☐";
   display: inline-block;
-  width: 1.35em;
+  width: 1.5em;
   color: var(--ink-soft);
 }
 .source .md-tok.md-task.md-done:not(.md-on)::before {
@@ -519,7 +519,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
   background: var(--accent);
   opacity: 0.45;
   border-radius: 2px;
-  margin-right: 0.6em;
+  margin-right: 18px;
   vertical-align: -0.15em;
 }
 
@@ -532,13 +532,13 @@ ul.toc li.toc-l6 { padding-left: 92px; }
   display: table;
   white-space: normal;
   border-collapse: collapse;
-  margin: 4px 0;
+  margin: 8.5px 0;
 }
 .source .md-table .md-trow { display: table-row; }
 .source .md-table .md-tcell {
   display: table-cell;
   border: 1px solid var(--rule);
-  padding: 5px 12px;
+  padding: 6px 14px;
   min-width: 3ch;
 }
 .source .md-table .md-trow:first-child .md-tcell {
@@ -638,3 +638,38 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 /* Zebra body rows, live table and rendered view alike (Typora look). */
 .source .md-table .md-trow:nth-child(even):not(.md-tsep) .md-tcell { background: var(--accent-soft); }
 .rendered tbody tr:nth-child(even) td { background: var(--accent-soft); }
+
+/* ---- Zero-jank activation ----
+   The live .source carries the same vertical metrics as the rendered
+   elements it replaces (their margins, expressed as padding/margin on the
+   block-typed source), so opening a block never shifts the layout below.
+   Heading paddings are the rendered hN margins scaled to the 17px base. */
+
+.source.b-p, .source.b-list { padding: calc(2px + 0.35em) 0; }
+/* rendered blockquote nests a <p> (0.35em margins) inside its own padding */
+.source.b-quote { padding: calc(4px + 0.85em) 0; }
+
+/* heading line boxes: match the heading's own line-height so the 17px strut
+   doesn't add baseline slack that the rendered hN doesn't have */
+.source.b-h1, .source.b-h2, .source.b-h3,
+.source.b-h4, .source.b-h5, .source.b-h6 { line-height: 1.25; }
+
+.source.b-h1 {
+  padding: calc(2px + 2em) 0 0.5em;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: calc(0.9em + 2px);
+}
+.source.b-h2 {
+  padding: calc(2px + 1.5em) 0 0.375em;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: calc(0.675em + 2px);
+}
+.source.b-h3 { padding: calc(2px + 1.2em) 0 calc(2px + 0.54em); }
+.source.b-h4 { padding: calc(2px + 1em) 0 calc(2px + 0.45em); }
+.source.b-h5 { padding: calc(2px + 0.95em) 0 calc(2px + 0.4275em); }
+.source.b-h6 { padding: calc(2px + 0.9em) 0 calc(2px + 0.405em); }
+
+/* Whole-block fence lines are concealed (caret-scoped) so the active code
+   box is the same height as the rendered one. Beats the generic
+   .source.code-block "keep marks visible" rule by specificity. */
+.source.code-block .md-tok.md-fence:not(.md-on) > .md-mark { display: none; }

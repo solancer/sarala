@@ -208,6 +208,37 @@ check(afterResize.lines === 7, `grid pick resizes to 6 rows + separator = 7 line
 check(afterResize.stillTable, "resized table still renders as a grid");
 check(afterResize.hasOld, "existing cells survive the resize");
 
+// Zero-jank activation: opening any block type must not shift the layout
+// below it (Typora behavior). Reload first to discard earlier edits.
+await page.reload();
+await page.waitForSelector(".block");
+const JANK_TARGETS = [
+  ["h1", "Welcome to Inkdown"],
+  ["paragraph", "Split panes duplicate"],
+  ["h2", "Why no preview window"],
+  ["h3", "highlighted the same"],
+  ["list", "Task lists with clickable"],
+  ["quote", "publishable as-is"],
+  ["fence", "tauri::command"],
+  ["table", "Cmd/Ctrl+S"],
+];
+for (const [label, text] of JANK_TARGETS) {
+  // Document-relative position: compensate for the .scroll container's
+  // scroll offset (focusing a below-the-fold block scrolls it into view).
+  const lastBlockY = () => page.evaluate(() => {
+    const blocks = document.querySelectorAll(".block");
+    const scroller = document.querySelector(".scroll");
+    return blocks[blocks.length - 1].getBoundingClientRect().top + scroller.scrollTop;
+  });
+  const before = await lastBlockY();
+  await page.locator(".block:not(.active) .rendered", { hasText: text }).first().click();
+  await page.waitForTimeout(120);
+  const shift = Math.abs((await lastBlockY()) - before);
+  check(shift < 1, `${label}: activation shifts layout below by ${shift.toFixed(1)}px (<1px)`);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(80);
+}
+
 await browser.close();
 kill();
 console.log(failures ? `\n${failures} FAILURES` : "\nall live-app checks passed");

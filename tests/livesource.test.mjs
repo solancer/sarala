@@ -117,6 +117,28 @@ assert(!styleSource("1. x").includes("md-tok"), "ordered marker stays always-vis
 assert(!styleSource("| lone | row |").includes("md-table"),
   "a pipey line without a separator below is not a table");
 
+/* ---------- fence concealment (zero-jank code blocks) ---------- */
+// "```rust\ncode\n```" — fence tokens swallow their newlines: open [0, 8),
+// close [13, 17); the code line sits between.
+{
+  const src = "```rust\nlet x;\n```";
+  const el = host();
+  el.innerHTML = styleSource(src);
+  assert(el.textContent === src, "fence block roundtrip with concealed fences");
+  const fences = [...el.querySelectorAll(".md-tok.md-fence")];
+  assert(fences.length === 2, "both fence lines tokenized");
+  applyMarkerVisibility(el, src, 11); // caret inside the code line
+  assert(fences.every((f) => !f.classList.contains("md-on")),
+    "caret in code keeps both fences concealed");
+  applyMarkerVisibility(el, src, 2); // caret inside the opening fence
+  assert(fences[0].classList.contains("md-on") && !fences[1].classList.contains("md-on"),
+    "caret in opening fence reveals only it");
+
+  const two = host();
+  two.innerHTML = styleSource("```\n```");
+  assert(two.textContent === "```\n```", "empty fence pair roundtrips (no doubled newline)");
+}
+
 /* ---------- table resize (toolbar grid picker backend) ---------- */
 {
   const { tableDims, resizeTable } = await import(
