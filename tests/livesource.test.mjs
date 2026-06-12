@@ -67,6 +67,10 @@ const SAMPLES = [
   "## Head\nbody line with [a](b)\nlast line",
   "**unpaired marker stays plain",
   "emoji ✨ **宽字符** test",
+  "| Shortcut | Action |\n| --- | --- |\n| Cmd/Ctrl+S | Save **now** |",
+  "| Column 1 | Column 2 |\n| --- | --- |\n|   |   |\n|   |   |",
+  "intro line\n| a | b |\n| :-- | --: |\n| 1 | 2 |",
+  "| not a table without separator |",
 ];
 
 for (const src of SAMPLES) {
@@ -89,6 +93,29 @@ assert(styleSource("- [ ] t").includes("md-task"), "task marker wrapped");
 assert(styleSource("- [x] t").includes("md-task md-done"), "checked task marker flagged");
 assert(styleSource("> q").includes("md-quote-pre"), "quote marker wrapped");
 assert(!styleSource("1. x").includes("md-tok"), "ordered marker stays always-visible (no token)");
+
+/* ---------- table structure ---------- */
+{
+  const src = "| a | b |\n| --- | --- |\n| 1 | **2** |";
+  const html = styleSource(src);
+  assert(html.includes('class="md-table"'), "table run wrapped in md-table");
+  assert(html.includes("md-tsep"), "separator row flagged md-tsep");
+  const el = host();
+  el.innerHTML = html;
+  assert(el.textContent === src, "table roundtrip");
+  const pipes = el.querySelectorAll(".md-pipe").length;
+  assert(pipes === (src.match(/\|/g) || []).length, `every pipe wrapped (${pipes})`);
+  assert(el.querySelectorAll(".md-trow").length === 3, "three rows");
+  assert(el.querySelectorAll(".md-trow:not(.md-tsep) .md-tcell").length === 4, "four content cells");
+  assert(!!el.querySelector(".md-tcell .md-tok"), "inline tokens still work inside cells");
+  // pipes are not caret-scoped tokens: reveal pass leaves them untouched
+  applyMarkerVisibility(el, src, 3);
+  assert(![...el.querySelectorAll(".md-pipe")].some((p) => p.classList.contains("md-on")),
+    "pipes never gain md-on (always concealed by table layout)");
+}
+
+assert(!styleSource("| lone | row |").includes("md-table"),
+  "a pipey line without a separator below is not a table");
 
 /* ---------- inline reveal: bold ---------- */
 // "a **b** c" — the bold token spans source [2, 9].

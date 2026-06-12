@@ -97,6 +97,33 @@ function styleLine(raw: string): string {
   return inline(line);
 }
 
+/** True for a pipe-table separator line like `| --- | :-: |`. */
+function isTableSeparator(raw: string): boolean {
+  if (!raw.includes("|") || !raw.includes("-")) return false;
+  const cells = raw.trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
+  return cells.length >= 1 && cells.every((c) => /^\s*:?-+:?\s*$/.test(c));
+}
+
+/**
+ * One table source line as a CSS table row: pipes become hidden .md-pipe
+ * marks, cell content becomes .md-tcell (laid out as table cells), and the
+ * separator row is display:none entirely. Split/join on "|" keeps the row's
+ * textContent identical to the source line.
+ */
+function styleTableRow(raw: string, isSep: boolean): string {
+  const line = esc(raw);
+  const parts = line.split("|");
+  let html = `<span class="md-trow${isSep ? " md-tsep" : ""}">`;
+  for (let i = 0; i < parts.length; i++) {
+    if (i > 0) html += `<span class="md-mark md-pipe">|</span>`;
+    // Empty text outside the outermost pipes isn't a cell — keeping it bare
+    // avoids phantom empty columns.
+    if ((i === 0 || i === parts.length - 1) && parts[i] === "") continue;
+    html += `<span class="md-tcell">${isSep ? mark(parts[i]) : inline(parts[i])}</span>`;
+  }
+  return html + "</span>";
+}
+
 export function styleSource(src: string): string {
   if (!src) return "";
   const lines = src.split("\n");
@@ -121,6 +148,20 @@ export function styleSource(src: string): string {
     }
     if (inFence) {
       out.push(`<span class="md-code-line">${esc(raw)}</span>`);
+      continue;
+    }
+    // Pipe-table run: header + separator (+ body rows) render as a real
+    // table via CSS. Rows are joined with "\n" INSIDE the wrapper so the
+    // block's overall textContent is unchanged.
+    if (raw.includes("|") && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+      const rows: string[] = [];
+      let j = i;
+      while (j < lines.length && lines[j].includes("|")) {
+        rows.push(styleTableRow(lines[j], j === i + 1));
+        j++;
+      }
+      out.push(`<span class="md-table">${rows.join("\n")}</span>`);
+      i = j - 1;
       continue;
     }
     out.push(styleLine(raw));

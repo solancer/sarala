@@ -138,6 +138,44 @@ check(list.revealed <= 1, `at most the caret line's marker is revealed (${list.r
 check(list.bulletBefore === '"•"', `hidden bullet shows • stand-in (got ${list.bulletBefore})`);
 check(list.doneBefore === '"☑"', `checked task shows ☑ stand-in (got ${list.doneBefore})`);
 
+// Table block: active table renders as a real grid, pipes and separator
+// concealed, textContent still byte-identical to the source.
+await page.locator(".block .rendered", { hasText: "Cmd/Ctrl+S" }).click();
+await page.waitForSelector(".block.active .source");
+await page.waitForTimeout(120);
+const table = await page.evaluate(() => {
+  const el = document.querySelector(".block.active .source");
+  const t = el.querySelector(".md-table");
+  return {
+    sourceText: el.textContent.startsWith("| Shortcut | Action |"),
+    display: t ? getComputedStyle(t).display : null,
+    pipeDisplay: t ? getComputedStyle(t.querySelector(".md-pipe")).display : null,
+    sepDisplay: t ? getComputedStyle(t.querySelector(".md-tsep")).display : null,
+    cellDisplay: t ? getComputedStyle(t.querySelector(".md-tcell")).display : null,
+    headerWeight: t ? getComputedStyle(t.querySelector(".md-tcell")).fontWeight : null,
+  };
+});
+check(table.sourceText, "active table block still holds raw pipe source as text");
+check(table.display === "table", `table lays out as a grid (display:${table.display})`);
+check(table.cellDisplay === "table-cell", `cells are table cells (display:${table.cellDisplay})`);
+check(table.pipeDisplay === "none", `pipes concealed (display:${table.pipeDisplay})`);
+check(table.sepDisplay === "none", `separator row concealed (display:${table.sepDisplay})`);
+check(table.headerWeight === "600", `header row bold (weight:${table.headerWeight})`);
+
+// Typing in a cell survives the re-style round trip and keeps the grid.
+await page.keyboard.type("XYZ");
+await page.waitForTimeout(150);
+const afterType = await page.evaluate(() => {
+  const el = document.querySelector(".block.active .source");
+  const t = el.querySelector(".md-table");
+  return {
+    hasTyped: el.textContent.includes("XYZ"),
+    stillTable: t ? getComputedStyle(t).display : null,
+  };
+});
+check(afterType.hasTyped, "typed text lands in the table source");
+check(afterType.stillTable === "table", "grid layout survives typing re-styles");
+
 await browser.close();
 kill();
 console.log(failures ? `\n${failures} FAILURES` : "\nall live-app checks passed");

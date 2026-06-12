@@ -522,3 +522,28 @@ ul.toc li.toc-l6 { padding-left: 92px; }
   margin-right: 0.6em;
   vertical-align: -0.15em;
 }
+
+/* ---- Live table: active blocks render pipe tables as real grids ----
+   The source text (pipes, separator row, newlines) stays in the DOM —
+   pipes and the separator are display:none, inter-row newlines collapse
+   under white-space:normal — so textContent stays byte-identical. */
+
+.source .md-table {
+  display: table;
+  white-space: normal;
+  border-collapse: collapse;
+  margin: 4px 0;
+}
+.source .md-table .md-trow { display: table-row; }
+.source .md-table .md-tcell {
+  display: table-cell;
+  border: 1px solid var(--rule);
+  padding: 5px 12px;
+  min-width: 3ch;
+}
+.source .md-table .md-trow:first-child .md-tcell {
+  font-weight: 600;
+  background: var(--accent-soft);
+}
+.source .md-table .md-pipe { display: none; }
+.source .md-table .md-tsep { display: none; }
