@@ -239,6 +239,46 @@ for (const [label, text] of JANK_TARGETS) {
   await page.waitForTimeout(80);
 }
 
+// Arrow-key navigation: line by line through wrapped paragraphs, leaving a
+// block only from its first/last VISUAL line, entering the next at its start.
+await page.setViewportSize({ width: 900, height: 800 }); // force the paragraph to wrap
+await page.reload();
+await page.waitForSelector(".block");
+await page.locator(".block .rendered", { hasText: "Split panes duplicate" }).click({ position: { x: 30, y: 12 } });
+await page.waitForSelector(".block.active .source");
+const caretState = () =>
+  page.evaluate(() => {
+    const el = document.querySelector(".block.active .source");
+    if (!el) return null;
+    const sel = window.getSelection();
+    const pre = sel.getRangeAt(0).cloneRange();
+    pre.selectNodeContents(el);
+    pre.setEnd(sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset);
+    return { text: el.textContent, caret: pre.toString().length };
+  });
+
+let nav = await caretState();
+check(nav && nav.text.startsWith("Split panes") && nav.caret < 30,
+  `caret starts near the top of the wrapped paragraph (@${nav?.caret})`);
+// Walk down one visual line at a time until the block changes; a wrapped
+// paragraph must take several presses (no instant jump to the next block).
+let downs = 0;
+while (downs < 8) {
+  await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(80);
+  downs++;
+  nav = await caretState();
+  if (!nav.text.startsWith("Split panes")) break;
+}
+check(downs >= 2, `wrapped paragraph takes ${downs} ArrowDowns to leave (>= 2 — line by line, no jump)`);
+check(nav && nav.text.startsWith("## What works") && nav.caret === 0,
+  `ArrowDown enters the next block at its START (@${nav?.caret} in ${JSON.stringify(nav?.text.slice(0, 16))})`);
+await page.keyboard.press("ArrowUp");
+await page.waitForTimeout(120);
+nav = await caretState();
+check(nav && nav.text.startsWith("Split panes") && nav.caret === nav.text.length,
+  "ArrowUp from a block's first line arrives at the END of the previous block");
+
 await browser.close();
 kill();
 console.log(failures ? `\n${failures} FAILURES` : "\nall live-app checks passed");

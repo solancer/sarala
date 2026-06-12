@@ -14,6 +14,9 @@ export default function Editor() {
       if (doc.blocks[index].text.trim() !== "") insertBlockAfter(index);
       return;
     }
+    // Arrow down enters the next block at its start; arrow up arrives at the
+    // end of the previous one — line-by-line, never skipping content.
+    requestCaret(dir === 1 ? 0 : doc.blocks[next].text.length);
     setActive(next);
   };
 

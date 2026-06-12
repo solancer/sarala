@@ -230,13 +230,33 @@ export default function Block(props: Props) {
       if (start === 0 && end === 0) { e.preventDefault(); props.onMergePrev(); }
       return;
     }
-    if (e.key === "ArrowUp") {
-      const o = getCaretOffset(el!);
-      if (!props.text.slice(0, o).includes("\n")) { e.preventDefault(); props.onNavigate(-1); }
-    }
-    if (e.key === "ArrowDown") {
-      const o = getCaretOffset(el!);
-      if (!props.text.slice(o).includes("\n")) { e.preventDefault(); props.onNavigate(1); }
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      // Leave the block only from its first/last VISUAL line — wrapped
+      // paragraphs have one source line but many visual lines, and the
+      // browser must keep handling movement between those.
+      if (!el) return;
+      const sel = window.getSelection();
+      if (!sel?.rangeCount) return;
+      const range = sel.getRangeAt(0).cloneRange();
+      range.collapse(e.key === "ArrowUp");
+      let rect: DOMRect | undefined = range.getClientRects()[0];
+      if (!rect) {
+        // Empty line or caret inside hidden text: fall back to the nearest
+        // element box.
+        const n = range.startContainer;
+        rect = (n instanceof Element ? n : n.parentElement)?.getBoundingClientRect();
+      }
+      if (!rect) return;
+      const cs = getComputedStyle(el);
+      const host = el.getBoundingClientRect();
+      const line = rect.height || parseFloat(cs.lineHeight) || 24;
+      if (e.key === "ArrowUp") {
+        const innerTop = host.top + parseFloat(cs.paddingTop);
+        if (rect.top - innerTop < line * 0.5) { e.preventDefault(); props.onNavigate(-1); }
+      } else {
+        const innerBottom = host.bottom - parseFloat(cs.paddingBottom);
+        if (innerBottom - rect.bottom < line * 0.5) { e.preventDefault(); props.onNavigate(1); }
+      }
     }
   };
 
