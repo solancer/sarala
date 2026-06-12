@@ -130,13 +130,15 @@ const list = await page.evaluate(() => {
     prefixes: toks.length,
     revealed: toks.filter((t) => t.classList.contains("md-on")).length,
     bulletBefore: bullet ? getComputedStyle(bullet, "::before").content : null,
-    doneBefore: done ? getComputedStyle(done, "::before").content : null,
+    doneBg: done ? getComputedStyle(done, "::before").backgroundColor : null,
+    doneBorder: done ? getComputedStyle(done, "::before").borderRadius : null,
   };
 });
 check(list.prefixes >= 5, `list block tokenized ${list.prefixes} prefixes`);
 check(list.revealed <= 1, `at most the caret line's marker is revealed (${list.revealed})`);
 check(list.bulletBefore === '"•"', `hidden bullet shows • stand-in (got ${list.bulletBefore})`);
-check(list.doneBefore === '"☑"', `checked task shows ☑ stand-in (got ${list.doneBefore})`);
+check(list.doneBg !== null && list.doneBg !== "rgba(0, 0, 0, 0)" && list.doneBorder === "3px",
+  `checked task draws the filled checkbox stand-in (bg ${list.doneBg}, radius ${list.doneBorder})`);
 
 // Table block: active table renders as a real grid, pipes and separator
 // concealed, textContent still byte-identical to the source.
@@ -235,6 +237,36 @@ for (const [label, text] of JANK_TARGETS) {
   await page.waitForTimeout(120);
   const shift = Math.abs((await lastBlockY()) - before);
   check(shift < 1, `${label}: activation shifts layout below by ${shift.toFixed(1)}px (<1px)`);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(80);
+}
+
+// Within-block stability: the text itself must not move when its block
+// activates (code pills, checkboxes, and heading tracking once did).
+const textX = (needle) =>
+  page.evaluate((needle) => {
+    const walker = document.createTreeWalker(document.querySelector(".page"), NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const i = n.data.indexOf(needle);
+      if (i !== -1) {
+        const r = document.createRange();
+        r.setStart(n, i);
+        r.setEnd(n, i + needle.length);
+        return r.getBoundingClientRect().x;
+      }
+    }
+    return null;
+  }, needle);
+for (const [label, blockText, needle] of [
+  ["task line", "Task lists with clickable", "try checking"],
+  ["code pill line", "Task lists with clickable", "italic,"],
+  ["heading text", "Why no preview window", "no preview"],
+]) {
+  const before = await textX(needle);
+  await page.locator(".block:not(.active) .rendered", { hasText: blockText }).first().click({ position: { x: 400, y: 12 } });
+  await page.waitForTimeout(120);
+  const delta = Math.abs((await textX(needle)) - before);
+  check(delta < 1, `${label}: text shifts ${delta.toFixed(1)}px on activation (<1px)`);
   await page.keyboard.press("Escape");
   await page.waitForTimeout(80);
 }

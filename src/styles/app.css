@@ -179,6 +179,7 @@ body { font-family: var(--font-ui); }
   margin: 10.5px 0; /* rendered: 2px wrapper pad + 8.5px pre margin */
 }
 .md-mark { color: var(--ink-soft); opacity: 0.55; }
+.md-h1, .md-h2, .md-h3, .md-h4 { letter-spacing: -0.012em; }
 .md-h1 { font-size: 2em;   font-weight: 700; line-height: 1.25; }
 .md-h2 { font-size: 1.5em; font-weight: 700; line-height: 1.25; }
 .md-h3 { font-size: 1.2em; font-weight: 700; }
@@ -188,7 +189,7 @@ body { font-family: var(--font-ui); }
 .md-link { color: var(--accent); }
 .md-url { color: var(--ink-soft); }
 .md-quote { color: var(--ink-soft); }
-.md-codespan { font: 0.85em var(--font-mono); background: var(--code-bg); border-radius: 4px; padding: 1px 3px; }
+.md-codespan { font: 0.85em var(--font-mono); background: var(--code-bg); border-radius: 4px; padding: 2px 5px; }
 .md-code-line, .md-meta { font-family: var(--font-mono); }
 .md-meta { color: var(--ink-soft); }
 
@@ -275,7 +276,24 @@ body { font-family: var(--font-ui); }
   box-sizing: border-box;
 }
 .rendered li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.3em; }
-.rendered input[type="checkbox"] { accent-color: var(--accent); margin-right: 7px; cursor: pointer; }
+.rendered input[type="checkbox"] {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  box-sizing: border-box;
+  border: 1px solid var(--ink-soft);
+  border-radius: 3px;
+  background: var(--bg-page);
+  /* marked emits a literal space after the input; 2.5px + that space lines
+     the text up with the live stand-in's 7px margin */
+  margin: 0 2.5px 0 0;
+  vertical-align: -1px;
+  cursor: pointer;
+}
+.rendered input[type="checkbox"]:checked {
+  border-color: var(--accent);
+  background: var(--accent) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12"><path d="M2.5 6.5l2.5 2.5 4.5-5" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>') center / 10px no-repeat;
+}
 .rendered table { border-collapse: collapse; margin: 8.5px 0; font-size: 1em; }
 .rendered th, .rendered td { border: 1px solid var(--rule); padding: 6px 14px; }
 .rendered th { background: var(--tint); font-family: var(--font-prose); font-weight: 600; text-align: left; }
@@ -528,16 +546,20 @@ ul.toc li.toc-l6 { padding-left: 92px; }
   box-sizing: border-box;
 }
 .source .md-tok.md-task:not(.md-on)::before {
-  content: "☐";
+  content: "";
   display: inline-block;
-  width: 1.5em;
-  padding-left: 0.2em;
+  width: 13px;
+  height: 13px;
   box-sizing: border-box;
-  color: var(--ink-soft);
+  border: 1px solid var(--ink-soft);
+  border-radius: 3px;
+  background: var(--bg-page);
+  margin: 0 7px 0 0.2em;
+  vertical-align: -1px;
 }
 .source .md-tok.md-task.md-done:not(.md-on)::before {
-  content: "☑";
-  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12"><path d="M2.5 6.5l2.5 2.5 4.5-5" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>') center / 10px no-repeat;
 }
 .source .md-tok.md-quote-pre:not(.md-on)::before {
   content: "";
