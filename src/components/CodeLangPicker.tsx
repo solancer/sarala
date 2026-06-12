@@ -11,9 +11,10 @@ interface Props {
 }
 
 /**
- * Typora-style language selector under an active code block: an input that
- * filters the bundled highlighter's languages. Free-form input is allowed —
- * unknown languages fall back to plaintext highlighting.
+ * Language selector anchored inside an active code block's top-right corner:
+ * a quiet badge with the current language (or a </> glyph) that expands into
+ * a filterable dropdown of the bundled highlighter's languages. Free-form
+ * input is allowed — unknown languages fall back to plaintext.
  */
 export default function CodeLangPicker(props: Props) {
   const [open, setOpen] = createSignal(false);
@@ -26,6 +27,13 @@ export default function CodeLangPicker(props: Props) {
     const all = listCodeLanguages();
     return q ? all.filter((l) => l.includes(q)) : all;
   });
+
+  const openPicker = () => {
+    setQuery("");
+    setCursor(0);
+    setOpen(true);
+    queueMicrotask(() => inputEl?.focus());
+  };
 
   const pick = (lang: string) => {
     setOpen(false);
@@ -48,30 +56,42 @@ export default function CodeLangPicker(props: Props) {
 
   return (
     <div class="code-lang">
-      <input
-        ref={inputEl}
-        spellcheck={false}
-        placeholder="language"
-        value={open() ? query() : props.current}
-        onFocus={() => { setOpen(true); setQuery(""); setCursor(0); }}
-        onInput={(e) => { setQuery(e.currentTarget.value); setCursor(0); }}
-        onKeyDown={onKeyDown}
-        onBlur={() => setOpen(false)}
-      />
-      <Show when={open() && matches().length}>
-        <ul onMouseDown={(e) => e.preventDefault()}>
-          <For each={matches()}>
-            {(lang, i) => (
-              <li
-                classList={{ selected: i() === cursor() }}
-                onMouseMove={() => setCursor(i())}
-                onClick={() => pick(lang)}
-              >
-                {lang}
-              </li>
-            )}
-          </For>
-        </ul>
+      <Show
+        when={open()}
+        fallback={
+          <button class="cl-badge" title="Code language" onClick={openPicker}>
+            <Show when={props.current} fallback={
+              <svg viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M5.7 3.2 1.2 8l4.5 4.8 1.2-1.1L3.4 8l3.5-3.7zM10.3 3.2 9.1 4.3 12.6 8l-3.5 3.7 1.2 1.1L14.8 8z"/></svg>
+            }>
+              {props.current}
+            </Show>
+          </button>
+        }
+      >
+        <input
+          ref={inputEl}
+          spellcheck={false}
+          placeholder="language"
+          value={query()}
+          onInput={(e) => { setQuery(e.currentTarget.value); setCursor(0); }}
+          onKeyDown={onKeyDown}
+          onBlur={() => setOpen(false)}
+        />
+        <Show when={matches().length}>
+          <ul onMouseDown={(e) => e.preventDefault()}>
+            <For each={matches()}>
+              {(lang, i) => (
+                <li
+                  classList={{ selected: i() === cursor() }}
+                  onMouseMove={() => setCursor(i())}
+                  onClick={() => pick(lang)}
+                >
+                  {lang}
+                </li>
+              )}
+            </For>
+          </ul>
+        </Show>
       </Show>
     </div>
   );

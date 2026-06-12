@@ -288,12 +288,14 @@ await page.waitForTimeout(120);
 check(Math.abs((await tableWidth()) - narrow) < 2, "toggling back restores content width");
 await page.keyboard.press("Escape");
 
-// Code block language picker: filterable dropdown rewrites the fence line.
+// Code block language picker: a quiet badge expands into a filterable
+// dropdown that rewrites the fence line.
 await page.locator(".block .rendered", { hasText: "tauri::command" }).click();
-await page.waitForSelector(".block.active .code-lang input");
-check((await page.locator(".code-lang input").inputValue()) === "rust",
-  "picker shows the fence's current language");
-await page.locator(".code-lang input").click();
+await page.waitForSelector(".block.active .code-lang .cl-badge");
+check((await page.locator(".cl-badge").textContent()) === "rust",
+  "badge shows the fence's current language");
+await page.locator(".cl-badge").click();
+await page.waitForSelector(".code-lang input");
 await page.locator(".code-lang input").fill("py");
 await page.waitForTimeout(80);
 await page.locator(".code-lang li", { hasText: "python" }).first().click();

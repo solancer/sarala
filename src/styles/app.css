@@ -733,15 +733,32 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 
 /* ---- Code block language picker (Typora-style) ---- */
 
+/* Anchored INSIDE the code box's top-right corner so it can never drift
+   away from its block; resting state is a quiet badge, the dropdown only
+   appears on demand. */
 .code-lang {
   position: absolute;
-  right: 0;
-  bottom: -30px;
+  top: 16px;
+  right: 12px;
   z-index: 30;
 }
+.cl-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font: 11px var(--font-mono);
+  background: var(--bg-page);
+  color: var(--ink-soft);
+  cursor: pointer;
+  opacity: 0.85;
+}
+.cl-badge:hover { color: var(--accent); border-color: var(--accent); opacity: 1; }
 .code-lang input {
   width: 150px;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--accent);
   border-radius: 5px;
   padding: 4px 9px;
   font: 12px var(--font-mono);
@@ -749,7 +766,6 @@ ul.toc li.toc-l6 { padding-left: 92px; }
   color: var(--ink);
   outline: none;
 }
-.code-lang input:focus { border-color: var(--accent); }
 .code-lang ul {
   list-style: none;
   margin: 4px 0 0;
@@ -757,6 +773,8 @@ ul.toc li.toc-l6 { padding-left: 92px; }
   width: 150px;
   max-height: 220px;
   overflow-y: auto;
+  position: absolute;
+  right: 0;
   background: var(--bg-page);
   border: 1px solid var(--rule);
   border-radius: 6px;
