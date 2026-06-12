@@ -787,3 +787,9 @@ ul.toc li.toc-l6 { padding-left: 92px; }
   cursor: pointer;
 }
 .code-lang li.selected { background: var(--accent-soft); color: var(--accent); }
+
+/* ---- Find highlights (CSS Custom Highlight API — paint only, no DOM
+   mutation, so caret offsets stay exact) ---- */
+
+::highlight(inkdown-find) { background-color: rgba(255, 193, 7, 0.4); }
+::highlight(inkdown-find-current) { background-color: #4183c4; color: #ffffff; }

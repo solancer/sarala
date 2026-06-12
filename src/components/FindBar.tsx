@@ -1,20 +1,24 @@
 import { Show, createSignal, createEffect } from "solid-js";
-import { doc, setActive, updateBlock, requestSelection } from "../store";
-import { getActiveBlockApi } from "../commands";
+import { doc, fullText, updateBlock, renderEpoch } from "../store";
 
-interface Match {
-  blockIndex: number;
-  start: number;
-  end: number;
-}
+/**
+ * Typora-style find: every match in the document is highlighted (CSS Custom
+ * Highlight API — pure painting, no DOM mutation, so the textContent caret
+ * invariant is untouched), the current match gets a distinct style, and
+ * Enter cycles while focus STAYS in the search input. Blocks are never
+ * activated by searching.
+ */
 
 const [visible, setVisible] = createSignal(false);
 const [withReplace, setWithReplace] = createSignal(false);
 const [query, setQuery] = createSignal("");
 const [replaceWith, setReplaceWith] = createSignal("");
 const [cursor, setCursor] = createSignal(0);
+const [matchCount, setMatchCount] = createSignal(0);
 
 let focusInput: (() => void) | undefined;
+/** DOM ranges of all matches, refreshed by the highlight effect. */
+let domMatches: Range[] = [];
 
 export function openFind(replace = false) {
   setWithReplace(replace);
@@ -26,53 +30,74 @@ export function closeFind() {
   setVisible(false);
 }
 
-// Plain function rather than createMemo: it runs at module scope (no root to
-// own a computation), and reads of the reactive store still track in callers.
-const matches = (): Match[] => {
-  const q = query().toLowerCase();
-  if (!visible() || !q) return [];
-  const out: Match[] = [];
-  doc.blocks.forEach((block, blockIndex) => {
-    const text = block.text.toLowerCase();
+/** Find query matches across each block's DOM text (whatever view it shows). */
+function computeDomMatches(q: string): Range[] {
+  const out: Range[] = [];
+  const needle = q.toLowerCase();
+  for (const block of document.querySelectorAll(".page .block")) {
+    // Full block text with a node map so matches can span inline elements.
+    const nodes: { node: Text; start: number }[] = [];
+    let text = "";
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
+      nodes.push({ node: n, start: text.length });
+      text += n.data;
+    }
+    const hay = text.toLowerCase();
+    const at = (offset: number) => {
+      let lo = 0;
+      for (let i = 0; i < nodes.length; i++) if (nodes[i].start <= offset) lo = i;
+      return { node: nodes[lo].node, offset: offset - nodes[lo].start };
+    };
     let from = 0;
     while (out.length < 999) {
-      const at = text.indexOf(q, from);
-      if (at === -1) break;
-      out.push({ blockIndex, start: at, end: at + q.length });
-      from = at + Math.max(q.length, 1);
+      const i = hay.indexOf(needle, from);
+      if (i === -1) break;
+      const range = document.createRange();
+      const s = at(i);
+      const e = at(i + needle.length);
+      range.setStart(s.node, s.offset);
+      range.setEnd(e.node, e.offset);
+      out.push(range);
+      from = i + Math.max(needle.length, 1);
     }
-  });
-  return out;
-};
-
-function jumpTo(match: Match) {
-  if (doc.activeIndex === match.blockIndex) {
-    getActiveBlockApi()?.selectRange(match.start, match.end);
-  } else {
-    requestSelection(match.start, match.end);
-    setActive(match.blockIndex);
   }
+  return out;
 }
 
 export function findNext(dir: 1 | -1 = 1) {
-  const all = matches();
-  if (!all.length) return;
-  const next = ((cursor() + dir) % all.length + all.length) % all.length;
-  setCursor(next);
-  jumpTo(all[next]);
+  const n = matchCount();
+  if (!n) return;
+  setCursor(((cursor() + dir) % n + n) % n);
+}
+
+/** Block index (into doc.blocks) of a DOM range, via element order. */
+function blockIndexOf(range: Range): number {
+  const block = (range.startContainer.parentElement as HTMLElement)?.closest(".block");
+  return block ? [...document.querySelectorAll(".page .block")].indexOf(block) : -1;
 }
 
 function replaceCurrent() {
-  const all = matches();
-  if (!all.length) return;
-  const i = Math.min(cursor(), all.length - 1);
-  const m = all[i];
-  const text = doc.blocks[m.blockIndex].text;
-  updateBlock(m.blockIndex, text.slice(0, m.start) + replaceWith() + text.slice(m.end));
-  // matches recompute from the edited doc; stay at the same slot, which now
-  // holds the next occurrence.
-  setCursor(i - 1);
-  findNext();
+  const n = matchCount();
+  if (!n || !query()) return;
+  const idx = Math.min(cursor(), n - 1);
+  const range = domMatches[idx];
+  if (!range) return;
+  const blockIndex = blockIndexOf(range);
+  if (blockIndex < 0 || blockIndex >= doc.blocks.length) return;
+  // Ordinal of this match within its block → same ordinal in the source.
+  let ordinal = 0;
+  for (let k = 0; k < idx; k++) if (blockIndexOf(domMatches[k]) === blockIndex) ordinal++;
+  const source = doc.blocks[blockIndex].text;
+  const hay = source.toLowerCase();
+  const needle = query().toLowerCase();
+  let at = -1;
+  for (let k = 0, from = 0; k <= ordinal; k++) {
+    at = hay.indexOf(needle, from);
+    if (at === -1) return;
+    from = at + Math.max(needle.length, 1);
+  }
+  updateBlock(blockIndex, source.slice(0, at) + replaceWith() + source.slice(at + needle.length));
 }
 
 function replaceAllMatches() {
@@ -94,14 +119,52 @@ export default function FindBar() {
 
   createEffect(() => {
     query();
-    setCursor(-1);
+    setCursor(0);
+  });
+
+  // Paint all matches + the current one; track everything that changes the
+  // DOM text (doc edits, block activation swaps, render-option flips).
+  createEffect(() => {
+    fullText();
+    renderEpoch();
+    void doc.activeIndex;
+    const q = query();
+    const idx = cursor();
+    const on = visible() && q.length > 0;
+    const highlights = (window.CSS as typeof CSS & { highlights?: Map<string, unknown> }).highlights;
+    if (!on) {
+      highlights?.delete("inkdown-find");
+      highlights?.delete("inkdown-find-current");
+      domMatches = [];
+      setMatchCount(0);
+      return;
+    }
+    domMatches = computeDomMatches(q);
+    setMatchCount(domMatches.length);
+    const current = domMatches[Math.min(idx, domMatches.length - 1)];
+    if (highlights && "Highlight" in window) {
+      const H = (window as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
+      highlights.set("inkdown-find", new H(...domMatches));
+      if (current) highlights.set("inkdown-find-current", new H(current));
+      else highlights.delete("inkdown-find-current");
+    }
+    // Keep the current match in view without activating anything.
+    if (current) {
+      const scroller = document.querySelector(".scroll");
+      const rect = current.getBoundingClientRect();
+      if (scroller && (rect.top < 80 || rect.bottom > scroller.clientHeight - 40)) {
+        scroller.scrollTo({
+          top: scroller.scrollTop + rect.top - scroller.clientHeight / 2,
+          behavior: "instant" as ScrollBehavior,
+        });
+      }
+    }
   });
 
   const count = () => {
-    const total = matches().length;
     if (!query()) return "";
-    if (!total) return "0 results";
-    return `${Math.min(cursor() + 1, total) || 1} of ${total}`;
+    if (!matchCount()) return "0 results";
+    return `${Math.min(cursor() + 1, matchCount())} of ${matchCount()}`;
   };
 
   const onKeyDown = (e: KeyboardEvent) => {

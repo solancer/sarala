@@ -309,6 +309,40 @@ check(fence.firstLine === "```python", `fence line rewritten (${JSON.stringify(f
 await page.keyboard.press("Escape");
 await page.waitForTimeout(100);
 
+// Find: all matches highlighted, Enter cycles with focus staying in the
+// input, no block ever activates from searching.
+await page.keyboard.press("Control+f");
+await page.waitForSelector(".findbar input");
+await page.locator(".findbar input").first().fill("markdown");
+await page.waitForTimeout(150);
+const findState = () =>
+  page.evaluate(() => ({
+    count: document.querySelector(".findbar-count")?.textContent,
+    highlights: CSS.highlights?.get("inkdown-find")?.size ?? -1,
+    current: CSS.highlights?.get("inkdown-find-current")?.size ?? -1,
+    inputFocused: document.activeElement === document.querySelector(".findbar input"),
+    anyActive: !!document.querySelector(".block.active"),
+  }));
+let fs = await findState();
+check(fs.highlights >= 3, `all matches highlighted (${fs.highlights})`);
+check(fs.current === 1, "current match has its own highlight");
+check(fs.count?.startsWith("1 of"), `count shows position (${fs.count})`);
+check(!fs.anyActive, "searching does not activate any block");
+await page.keyboard.press("Enter");
+await page.waitForTimeout(100);
+fs = await findState();
+check(fs.count?.startsWith("2 of"), `Enter advances to the next match (${fs.count})`);
+check(fs.inputFocused, "focus stays in the search input after Enter");
+const total = fs.highlights;
+for (let i = 0; i < total - 1; i++) await page.keyboard.press("Enter");
+await page.waitForTimeout(100);
+fs = await findState();
+check(fs.count?.startsWith("1 of"), `Enter wraps around the match list (${fs.count})`);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(100);
+check((await page.evaluate(() => CSS.highlights?.get("inkdown-find")?.size ?? 0)) === 0,
+  "closing the find bar clears the highlights");
+
 // Within-block stability: the text itself must not move when its block
 // activates (code pills, checkboxes, and heading tracking once did).
 const textX = (needle) =>
