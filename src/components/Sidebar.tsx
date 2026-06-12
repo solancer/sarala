@@ -1,6 +1,6 @@
 import { For, Show, createSignal } from "solid-js";
 import type { FileNode } from "../platform";
-import { outline, doc } from "../store";
+import { outline, doc, sidebarTab, setSidebarTab } from "../store";
 
 interface Props {
   tree: FileNode[];
@@ -47,7 +47,9 @@ function Tree(props: { nodes: FileNode[]; depth: number; onOpenFile: (p: string)
 }
 
 export default function Sidebar(props: Props) {
-  const [tab, setTab] = createSignal<"files" | "outline">("files");
+  // Lifted to the store so View > File Tree / Outline can switch it.
+  const tab = sidebarTab;
+  const setTab = setSidebarTab;
   return (
     <aside class="sidebar">
       <div class="sidebar-tabs" role="tablist">

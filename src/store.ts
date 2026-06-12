@@ -66,12 +66,19 @@ const [state, setState] = createStore({
 // eslint-disable-next-line solid/reactivity -- store proxy re-export; consumers read it in tracked scopes
 export const doc = state;
 
-export const THEMES = ["paper", "graphite"] as const;
+export const THEMES = ["paper", "graphite", "github", "night", "newsprint", "whitey"] as const;
 export type ThemeId = (typeof THEMES)[number];
 
 export const [theme, setTheme] = createSignal<ThemeId>("paper");
 export const [sourceMode, setSourceMode] = createSignal(false);
 export const [sidebarOpen, setSidebarOpen] = createSignal(true);
+export const [sidebarTab, setSidebarTab] = createSignal<"files" | "outline">("files");
+export const [focusMode, setFocusMode] = createSignal(false);
+export const [typewriterMode, setTypewriterMode] = createSignal(false);
+export const [alwaysOnTop, setAlwaysOnTop] = createSignal(false);
+/** Page zoom in percent, clamped to 90–180. */
+export const [zoom, setZoom] = createSignal(100);
+export const clampZoom = (z: number) => Math.max(90, Math.min(180, z));
 
 // Workspace folder shown in the sidebar (lifted out of App so the command
 // bus can drive "Open Folder…").

@@ -8,6 +8,8 @@ import {
   spellcheckOn, setSpellcheckOn, smartPunctuation, setSmartPunctuation,
   preserveBreaks, setPreserveBreaks, lineEnding, setLineEnding,
   copyImageToAssets, setCopyImageToAssets,
+  setSidebarTab, focusMode, setFocusMode, typewriterMode, setTypewriterMode,
+  alwaysOnTop, setAlwaysOnTop, zoom, setZoom, clampZoom,
   bumpRenderEpoch,
 } from "./store";
 import {
@@ -17,6 +19,7 @@ import {
   hasPandoc, pandocImport, pandocExport,
   clipboardWriteText, clipboardReadText,
   pickImageFile, copyAsset,
+  setWindowAlwaysOnTop, toggleFullscreen,
 } from "./platform";
 import { renderMarkdown, setPreserveBreaksOption } from "./markdown";
 import {
@@ -606,14 +609,36 @@ const registry: Record<string, Command> = {
   // View
   "view.source_mode": () => { setSourceMode(!sourceMode()); },
   "view.sidebar": () => { setSidebarOpen(!sidebarOpen()); },
+  "view.file_tree": () => { setSidebarOpen(true); setSidebarTab("files"); },
+  "view.outline": () => { setSidebarOpen(true); setSidebarTab("outline"); },
   "view.search": () => { openFind(false); },
+  "view.focus_mode": () => { setFocusMode(!focusMode()); },
+  "view.typewriter_mode": () => { setTypewriterMode(!typewriterMode()); },
+  "view.zoom_in": () => changeZoom(zoom() + 10),
+  "view.zoom_out": () => changeZoom(zoom() - 10),
+  "view.zoom_actual": () => changeZoom(100),
+  "view.always_on_top": async () => {
+    const v = !alwaysOnTop();
+    setAlwaysOnTop(v);
+    await setWindowAlwaysOnTop(v);
+  },
+  "view.fullscreen": () => toggleFullscreen(),
 
   // Help
   "help.readme": () => openExternal(HELP_URL),
 };
 
+async function changeZoom(value: number) {
+  const z = clampZoom(value);
+  setZoom(z);
+  await setSetting("zoom", z);
+}
+
 for (const id of THEMES) {
-  registry[`themes.set.${id}`] = () => { setTheme(id); };
+  registry[`themes.set.${id}`] = async () => {
+    setTheme(id);
+    await setSetting("theme", id);
+  };
 }
 for (const id of Object.keys(PANDOC_EXPORTS).concat("file.export.html", "file.export.html_plain", "file.export.pdf")) {
   registry[id] = () => doExport(id);

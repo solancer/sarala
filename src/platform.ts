@@ -154,6 +154,23 @@ export async function pandocExport(markdown: string, output: string, format: str
   await invoke("pandoc_export", { markdown, output, format });
 }
 
+export async function setWindowAlwaysOnTop(onTop: boolean): Promise<void> {
+  if (!isTauri) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().setAlwaysOnTop(onTop);
+}
+
+export async function toggleFullscreen(): Promise<void> {
+  if (!isTauri) {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen().catch(() => {});
+    return;
+  }
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  const win = getCurrentWindow();
+  await win.setFullscreen(!(await win.isFullscreen()));
+}
+
 /** Sync a native check/radio menu item with frontend state. No-op in browser. */
 export async function setMenuChecked(id: string, checked: boolean): Promise<void> {
   if (!isTauri) return;

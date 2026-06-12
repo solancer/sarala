@@ -11,6 +11,7 @@ import {
   doc, theme, sourceMode, sidebarOpen, setSidebarOpen,
   fileName, setActive, fileTree, folderName, THEMES,
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
+  focusMode, typewriterMode, alwaysOnTop, zoom,
 } from "./store";
 import { isTauri, setMenuChecked, IMAGE_EXTS } from "./platform";
 import {
@@ -79,6 +80,20 @@ export default function App() {
   });
   createEffect(() => setMenuChecked("edit.spellcheck", spellcheckOn()));
   createEffect(() => setMenuChecked("format.image.copy_to_folder", copyImageToAssets()));
+  createEffect(() => setMenuChecked("view.focus_mode", focusMode()));
+  createEffect(() => setMenuChecked("view.typewriter_mode", typewriterMode()));
+  createEffect(() => setMenuChecked("view.always_on_top", alwaysOnTop()));
+
+  // Typewriter mode: keep the line being edited vertically centered.
+  createEffect(() => {
+    if (!typewriterMode()) return;
+    const i = doc.activeIndex;
+    if (i < 0) return;
+    void doc.blocks[i]?.text; // re-center as the user types
+    requestAnimationFrame(() => {
+      editorEl?.querySelectorAll(".block")[i]?.scrollIntoView({ block: "center" });
+    });
+  });
   createEffect(() => setMenuChecked("edit.smart_punctuation", smartPunctuation()));
   createEffect(() => setMenuChecked("edit.preserve_breaks", preserveBreaks()));
   createEffect(() => {
@@ -88,7 +103,12 @@ export default function App() {
   });
 
   return (
-    <div class="app" data-theme={theme()}>
+    <div
+      class="app"
+      data-theme={theme()}
+      classList={{ "focus-mode": focusMode() }}
+      style={{ "--zoom": `${zoom()}%` }}
+    >
       <Show when={sidebarOpen()}>
         <Sidebar
           tree={fileTree()}
