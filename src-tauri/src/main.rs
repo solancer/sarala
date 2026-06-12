@@ -4,8 +4,9 @@ mod menu;
 
 use serde::Serialize;
 use std::fs;
-use std::path::Path;
-use tauri::Emitter;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Serialize)]
 struct FileNode {
@@ -96,6 +97,94 @@ fn save_file(path: String, contents: String) -> Result<(), String> {
     fs::rename(&tmp, target).map_err(|e| format!("Could not finalize {path}: {e}"))
 }
 
+#[tauri::command]
+fn new_window(app: AppHandle) -> Result<(), String> {
+    let label = format!(
+        "main-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or_default()
+    );
+    tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::default())
+        .title("Inkdown")
+        .inner_size(1120.0, 760.0)
+        .min_inner_size(520.0, 400.0)
+        .build()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join("settings.json"))
+}
+
+#[tauri::command]
+fn load_settings(app: AppHandle) -> Result<serde_json::Value, String> {
+    let path = settings_path(&app)?;
+    match fs::read_to_string(&path) {
+        Ok(text) => serde_json::from_str(&text).map_err(|e| e.to_string()),
+        Err(_) => Ok(serde_json::json!({})),
+    }
+}
+
+#[tauri::command]
+fn save_settings(app: AppHandle, value: serde_json::Value) -> Result<(), String> {
+    let path = settings_path(&app)?;
+    let text = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
+    fs::write(&path, text).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn rename_file(from: String, to: String) -> Result<(), String> {
+    fs::rename(&from, &to).map_err(|e| format!("Could not rename {from}: {e}"))
+}
+
+#[tauri::command]
+fn delete_file(path: String) -> Result<(), String> {
+    fs::remove_file(&path).map_err(|e| format!("Could not delete {path}: {e}"))
+}
+
+#[tauri::command]
+fn has_pandoc() -> bool {
+    Command::new("pandoc")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+fn pandoc_import(path: String) -> Result<String, String> {
+    let out = Command::new("pandoc")
+        .arg(&path)
+        .args(["-t", "gfm", "--wrap=none"])
+        .output()
+        .map_err(|e| format!("Could not run pandoc: {e}"))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).into_owned());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+#[tauri::command]
+fn pandoc_export(markdown: String, output: String, format: String) -> Result<(), String> {
+    let tmp = std::env::temp_dir().join("inkdown-export.md");
+    fs::write(&tmp, &markdown).map_err(|e| e.to_string())?;
+    let out = Command::new("pandoc")
+        .arg(&tmp)
+        .args(["-f", "gfm", "-t", &format, "-o", &output])
+        .output()
+        .map_err(|e| format!("Could not run pandoc: {e}"))?;
+    let _ = fs::remove_file(&tmp);
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).into_owned());
+    }
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -114,7 +203,16 @@ fn main() {
             list_dir,
             read_file,
             save_file,
-            menu::set_menu_checked
+            new_window,
+            load_settings,
+            save_settings,
+            rename_file,
+            delete_file,
+            has_pandoc,
+            pandoc_import,
+            pandoc_export,
+            menu::set_menu_checked,
+            menu::update_recent_menu
         ])
         .run(tauri::generate_context!())
         .expect("error while running Inkdown");

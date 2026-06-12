@@ -76,6 +76,8 @@ export const [sidebarOpen, setSidebarOpen] = createSignal(true);
 // bus can drive "Open Folder…").
 export const [fileTree, setFileTree] = createSignal<FileNode[]>([]);
 export const [folderName, setFolderName] = createSignal<string | null>(null);
+export const [folderPath, setFolderPath] = createSignal<string | null>(null);
+export const [quickOpenVisible, setQuickOpenVisible] = createSignal(false);
 
 export const fullText = createMemo(() => joinBlocks(state.blocks.map((b) => b.text)));
 export const outline = createMemo(() => extractOutline(state.blocks.map((b) => b.text)));
@@ -97,6 +99,11 @@ export function loadDocument(text: string, path: string | null) {
 
 export function setActive(index: number) {
   setState("activeIndex", index);
+}
+
+/** Point the document at a new path (rename/move) without touching dirty state. */
+export function setFilePath(path: string) {
+  setState("filePath", path);
 }
 
 export function markSaved(path: string) {

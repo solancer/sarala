@@ -669,6 +669,54 @@ fn find_check_item(items: Vec<MenuItemKind<Wry>>, id: &str) -> Option<CheckMenuI
     None
 }
 
+fn find_submenu(items: Vec<MenuItemKind<Wry>>, id: &str) -> Option<tauri::menu::Submenu<Wry>> {
+    for item in items {
+        if let MenuItemKind::Submenu(s) = item {
+            if s.id().as_ref() == id {
+                return Some(s);
+            }
+            if let Ok(children) = s.items() {
+                if let Some(found) = find_submenu(children, id) {
+                    return Some(found);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Rebuild the File ▸ Open Recent submenu. Item ids carry the index into the
+/// frontend's recent-files list ("file.open_recent.item.<n>").
+#[tauri::command]
+pub fn update_recent_menu(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
+    let menu = app.menu().ok_or("application menu not set")?;
+    let items = menu.items().map_err(|e| e.to_string())?;
+    let submenu = find_submenu(items, "file.open_recent").ok_or("Open Recent submenu missing")?;
+
+    while !submenu.items().map_err(|e| e.to_string())?.is_empty() {
+        submenu.remove_at(0).map_err(|e| e.to_string())?;
+    }
+
+    let err = |e: tauri::Error| e.to_string();
+    if paths.is_empty() {
+        submenu
+            .append(&mi_disabled(&app, "file.open_recent.empty", "No Recent Files").map_err(err)?)
+            .map_err(err)?;
+    } else {
+        for (i, path) in paths.iter().take(10).enumerate() {
+            let item = mi(&app, &format!("file.open_recent.item.{i}"), path, None).map_err(err)?;
+            submenu.append(&item).map_err(err)?;
+        }
+    }
+    submenu
+        .append(&PredefinedMenuItem::separator(&app).map_err(err)?)
+        .map_err(err)?;
+    submenu
+        .append(&mi(&app, "file.open_recent.clear", "Clear Menu", None).map_err(err)?)
+        .map_err(err)?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn set_menu_checked(app: AppHandle, id: String, checked: bool) -> Result<(), String> {
     let menu = app.menu().ok_or("application menu not set")?;

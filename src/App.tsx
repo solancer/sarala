@@ -3,6 +3,8 @@ import Editor from "./components/Editor";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
 import SourceView from "./components/SourceView";
+import QuickOpen from "./components/QuickOpen";
+import { initSettings } from "./settings";
 import {
   doc, theme, sourceMode, sidebarOpen, setSidebarOpen,
   fileName, setActive, fileTree, folderName, THEMES,
@@ -34,6 +36,7 @@ export default function App() {
   };
 
   onMount(() => {
+    void initSettings();
     if (isTauri) {
       let unlisten: (() => void) | undefined;
       import("@tauri-apps/api/event").then(async ({ listen }) => {
@@ -84,6 +87,7 @@ export default function App() {
         </div>
         <StatusBar />
       </main>
+      <QuickOpen />
     </div>
   );
 }

@@ -284,3 +284,67 @@ body { font-family: var(--font-ui); }
   .block { transition: border-color 120ms ease; }
   .ghost-btn { transition: background 120ms ease, color 120ms ease; }
 }
+
+/* ---- Quick Open (Shift+Cmd/Ctrl+P) ---- */
+
+.quick-open-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+  z-index: 100;
+}
+.quick-open {
+  width: min(560px, 90vw);
+  background: var(--paper, #fff);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+.quick-open input {
+  width: 100%;
+  border: none;
+  outline: none;
+  padding: 14px 16px;
+  font: 15px var(--font-ui);
+  background: transparent;
+  color: var(--ink);
+  border-bottom: 1px solid var(--accent-soft);
+}
+.quick-open ul { list-style: none; margin: 0; padding: 4px 0; max-height: 40vh; overflow-y: auto; }
+.quick-open li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 16px;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.quick-open li.selected { background: var(--accent-soft); }
+.quick-open .qo-name { font: 600 13px var(--font-ui); color: var(--ink); }
+.quick-open .qo-path { font: 11px var(--font-ui); color: var(--ink-soft); text-overflow: ellipsis; overflow: hidden; }
+.quick-open-empty { padding: 14px 16px; color: var(--ink-soft); font: 13px var(--font-ui); }
+
+/* ---- Print (File > Print…, Export > PDF) ---- */
+
+@media print {
+  .sidebar,
+  .titlebar,
+  .statusbar,
+  .quick-open-backdrop {
+    display: none !important;
+  }
+  .app, .main, .scroll { display: block; overflow: visible; height: auto; }
+  .editor { padding: 0; }
+  .page {
+    max-width: none;
+    width: 100%;
+    padding: 0;
+    box-shadow: none;
+  }
+  .block { border-left: none; margin-left: 0; padding-left: 0; }
+}
