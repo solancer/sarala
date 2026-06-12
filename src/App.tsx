@@ -167,17 +167,21 @@ export default function App() {
         />
       </Show>
       <main class="main">
-        <header class="titlebar">
-          <button class="ghost-btn" title="Toggle sidebar (Shift+Cmd/Ctrl+L)" onClick={() => setSidebarOpen(!sidebarOpen())}>☰</button>
-          <span class="title">
-            {fileName()}
-            <Show when={doc.dirty}><span class="dirty" title="Unsaved changes">●</span></Show>
-          </span>
-          <span class="spacer" />
-          <button class="ghost-btn" onClick={() => openFile()}>Open</button>
-          <button class="ghost-btn" onClick={save}>Save</button>
-          <button class="ghost-btn" onClick={exportHtml}>Export HTML</button>
-        </header>
+        {/* Desktop gets the native title bar and menus (Typora layout); the
+            in-app toolbar only exists for the browser fallback. */}
+        <Show when={!isTauri}>
+          <header class="titlebar">
+            <button class="ghost-btn" title="Toggle sidebar (Shift+Cmd/Ctrl+L)" onClick={() => setSidebarOpen(!sidebarOpen())}>☰</button>
+            <span class="title">
+              {fileName()}
+              <Show when={doc.dirty}><span class="dirty" title="Unsaved changes">●</span></Show>
+            </span>
+            <span class="spacer" />
+            <button class="ghost-btn" onClick={() => openFile()}>Open</button>
+            <button class="ghost-btn" onClick={save}>Save</button>
+            <button class="ghost-btn" onClick={exportHtml}>Export HTML</button>
+          </header>
+        </Show>
         <FindBar />
         <div class="scroll" ref={editorEl}>
           <Show when={!sourceMode()} fallback={<SourceView />}>

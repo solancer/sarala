@@ -136,18 +136,17 @@ body { font-family: var(--font-ui); }
 
 .scroll { flex: 1; overflow-y: auto; }
 
-/* ---------- editor page ---------- */
-.editor { min-height: 100%; padding: 40px 24px 45vh; cursor: text; }
+/* ---------- editor page ----------
+   Typora-style use of space: the editing surface IS the window — one flat
+   background, no page card, a wide fluid column with ~80px gutters. */
+.main { background: var(--bg-page); }
+.editor { min-height: 100%; cursor: text; }
 .page {
-  max-width: 760px;
+  max-width: 1180px;
   margin: 0 auto;
-  background: var(--bg-page);
-  border: 1px solid var(--rule);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
-  padding: 56px 64px;
+  padding: 48px 80px 45vh;
 }
-@media (max-width: 720px) { .page { padding: 28px 22px; } }
+@media (max-width: 720px) { .page { padding: 28px 22px 45vh; } }
 
 /* The signature: each block carries a quiet seam that fills with ink
    when the block opens into source. */
@@ -220,16 +219,17 @@ body { font-family: var(--font-ui); }
   color: var(--ink);
   padding: 2px 0;
 }
-.rendered > :first-child { margin-top: 0; }
-.rendered > :last-child { margin-bottom: 0; }
+/* Typora-like vertical rhythm: blocks keep their natural margins so a
+   heading breathes above the paragraph that follows it. */
 .rendered h1, .rendered h2, .rendered h3, .rendered h4 {
   font-family: var(--font-prose);
   line-height: 1.25;
-  margin: 0.4em 0;
+  margin: 1em 0 0.45em;
   letter-spacing: -0.012em;
 }
 .rendered h1 { font-size: 2em; }
 .rendered h2 { font-size: 1.5em; }
+.rendered h1, .rendered h2 { padding-bottom: 0.25em; border-bottom: 1px solid var(--rule); }
 .rendered h3 { font-size: 1.2em; }
 .rendered p { margin: 0.35em 0; }
 .rendered a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-soft); }

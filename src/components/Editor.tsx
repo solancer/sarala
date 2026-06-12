@@ -21,7 +21,10 @@ export default function Editor() {
     <div
       class="editor"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) {
+        // Clicking empty space (the editor gutters or the page's padding
+        // below the last block) starts writing at the end of the document.
+        const t = e.target as HTMLElement;
+        if (e.target === e.currentTarget || t.classList?.contains("page")) {
           const last = doc.blocks.length - 1;
           if (doc.blocks[last].text.trim() === "") setActive(last);
           else insertBlockAfter(last);
