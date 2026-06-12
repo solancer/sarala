@@ -11,24 +11,37 @@ The editing surface *is* the preview: every paragraph, heading, list, quote, tab
 - Click anywhere in rendered text and the caret lands at that spot in the source (rendered→source position mapping)
 - Merge on backspace at block start, arrow-key navigation across blocks, IME-safe (composition events respected)
 - **GFM**: tables, task lists (clickable checkboxes), strikethrough, fenced code with highlight.js (same highlighting on screen and in export)
+- **Native menu bar** (Typora-style: File, Edit, Paragraph, Format, View, Themes, Window, Help) — every item dispatches through one frontend command bus shared with the keyboard shortcuts
+- **Find & replace** (`Cmd/Ctrl+F`, replace one or all) and **Open Quickly** fuzzy finder (`Shift+Cmd/Ctrl+P`)
 - **Sidebar**: file tree (open a folder, browse `.md` files) and live outline (click a heading to jump)
-- **Source mode** (`Cmd/Ctrl+/`) as an escape hatch to the full raw document
-- **Themes**: Paper (ivory + teal ink) and Graphite (charcoal + sea glass), pure CSS variables — add your own in `src/styles/app.css`
-- **Export to HTML** with the same prose styles; **save is atomic** (temp file + rename)
-- Word/character count, dirty indicator, keyboard-first
+- **Source mode** (`Cmd/Ctrl+/`) as an escape hatch to the full raw document; **Focus** (`F8`) and **Typewriter** (`F9`) modes
+- **Paragraph tools**: heading levels, pipe-table editing (insert/rows/columns/alignment), lists and task toggles, quotes, math/code blocks, `[TOC]`, footnotes, GFM alerts
+- **Themes**: Paper, Graphite, GitHub, Night, Newsprint, Whitey — pure CSS variables, add your own in `src/styles/app.css`
+- **Export**: HTML (with or without styles), PDF via print, and docx/odt/rtf/epub/LaTeX/MediaWiki/rst/Textile/OPML through [Pandoc](https://pandoc.org) when installed; Import via Pandoc too
+- **Recent files**, settings persisted to disk, smart punctuation, LF/CRLF line endings, image insert with copy-to-assets rule; **save is atomic** (temp file + rename)
+- Word/character count, dirty indicator (window title shows *— Edited*), confirm-on-close, keyboard-first
 
 ## Shortcuts
 
+Most items live in the native menus with their accelerators shown inline; the core set:
+
 | Keys | Action |
 | --- | --- |
-| `Cmd/Ctrl+S` | Save |
-| `Cmd/Ctrl+O` | Open file |
-| `Cmd/Ctrl+Shift+O` | Open folder |
+| `Cmd/Ctrl+S` / `Shift+Cmd/Ctrl+S` | Save / Save As |
+| `Cmd/Ctrl+O` / `Shift+Cmd/Ctrl+O` | Open file / Open folder |
+| `Shift+Cmd/Ctrl+P` | Open Quickly |
+| `Cmd/Ctrl+F` / `Cmd/Ctrl+G` / `Alt+Cmd/Ctrl+F` | Find / Find next / Replace |
 | `Cmd/Ctrl+/` | Toggle source mode |
-| `Cmd/Ctrl+\` | Toggle sidebar |
-| `Cmd/Ctrl+Shift+E` | Export HTML |
-| `Cmd/Ctrl+B / I / E / K` | Bold / italic / code / link (in a block) |
+| `Shift+Cmd/Ctrl+L` | Toggle sidebar |
+| `F8` / `F9` | Focus mode / Typewriter mode |
+| `Cmd/Ctrl+B / I / U / K` | Bold / italic / underline / link |
+| `` Ctrl+` `` / ``Ctrl+Shift+` `` | Inline code / strike |
 | `Cmd/Ctrl+1…6`, `0` | Heading level / paragraph |
+| `Cmd/Ctrl+=` / `Cmd/Ctrl+-` | Increase / decrease heading level |
+| `Alt+Cmd/Ctrl+T / C / Q / O / U / X` | Table / fences / quote / ordered / bullet / task list |
+| `Alt+Up` / `Alt+Down` | Move block up / down |
+| `Shift+Cmd/Ctrl+0 / = / -` | Actual size / zoom in / zoom out |
+| `Cmd/Ctrl+P` | Print (also: Export ▸ PDF) |
 | `Esc` | Render the current block |
 
 ## Run it
@@ -37,12 +50,12 @@ Prereqs: Node 18+, Rust stable, and Tauri's platform dependencies
 (<https://tauri.app/start/prerequisites/> — on Linux that's `webkit2gtk-4.1`, etc.).
 
 ```bash
-npm install
-npm run tauri dev      # desktop app
-npm run tauri build    # installers in src-tauri/target/release/bundle
+pnpm install
+pnpm tauri dev      # desktop app
+pnpm tauri build    # installers in src-tauri/target/release/bundle
 ```
 
-The frontend also runs standalone in a browser (`npm run dev`) with an in-memory
+The frontend also runs standalone in a browser (`pnpm dev`) with an in-memory
 demo document — file dialogs are desktop-only, and Save downloads the file instead.
 
 ## Architecture
@@ -52,6 +65,9 @@ src/
   markdown.ts        parser config, block splitter (fence/front-matter aware),
                      outline extraction, word count, task toggling
   store.ts           reactive document model: blocks, split/merge, dirty state
+  commands.ts        command bus: every menu id / shortcut maps to one action
+  settings.ts        persisted settings (recent files, theme, zoom, toggles)
+  tabletools.ts      pipe-table parse/serialize + caret-positioned edits
   platform.ts        Tauri invoke bridge with graceful browser fallback
   components/
     Editor.tsx       block list + click-to-append behavior
@@ -62,9 +78,14 @@ src/
     Sidebar.tsx      file tree + outline tabs
     SourceView.tsx   whole-document raw mode
     StatusBar.tsx    counts, theme + mode toggles
+    FindBar.tsx      find / replace across blocks
+    QuickOpen.tsx    fuzzy file finder overlay
 src-tauri/
   src/main.rs        list_dir (md-aware recursive walk), read_file,
-                     save_file (atomic write), dialog & opener plugins
+                     save_file (atomic write), settings, pandoc bridge,
+                     dialog / opener / clipboard plugins
+  src/menu.rs        native menu tree; forwards item ids as one "menu"
+                     event — no editing logic in Rust
 ```
 
 ### Design notes
@@ -75,4 +96,4 @@ src-tauri/
 
 ## Roadmap (from the PRD)
 
-Math (KaTeX), Mermaid fences, focus/typewriter modes, find & replace, autosave + crash recovery, file watching, Pandoc export, image paste-to-folder rules, custom CSS theme folder.
+Math (KaTeX), Mermaid fences, autosave + crash recovery, file watching, custom CSS theme folder.

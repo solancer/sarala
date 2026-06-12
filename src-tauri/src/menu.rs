@@ -655,11 +655,7 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
 fn find_check_item(items: Vec<MenuItemKind<Wry>>, id: &str) -> Option<CheckMenuItem<Wry>> {
     for item in items {
         match item {
-            MenuItemKind::Check(c) => {
-                if c.id().as_ref() == id {
-                    return Some(c);
-                }
-            }
+            MenuItemKind::Check(c) if c.id().as_ref() == id => return Some(c),
             MenuItemKind::Submenu(s) => {
                 if let Ok(children) = s.items() {
                     if let Some(found) = find_check_item(children, id) {

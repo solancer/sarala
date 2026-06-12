@@ -13,7 +13,7 @@ import {
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
   focusMode, typewriterMode, alwaysOnTop, zoom,
 } from "./store";
-import { isTauri, setMenuChecked, IMAGE_EXTS } from "./platform";
+import { isTauri, setMenuChecked, confirmDialog, IMAGE_EXTS } from "./platform";
 import {
   executeCommand, openFile, openFolder, save, exportHtml, insertImageFromPath,
 } from "./commands";
@@ -64,10 +64,34 @@ export default function App() {
           }
         });
       });
-      onCleanup(() => { unlisten?.(); undrop?.(); });
+      // Confirm before closing a window with unsaved changes.
+      let unclose: (() => void) | undefined;
+      import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
+        const win = getCurrentWindow();
+        unclose = await win.onCloseRequested(async (event) => {
+          if (!doc.dirty) return;
+          event.preventDefault();
+          if (await confirmDialog(`Discard unsaved changes to ${fileName()}?`)) {
+            await win.destroy();
+          }
+        });
+      });
+      onCleanup(() => { unlisten?.(); undrop?.(); unclose?.(); });
     } else {
       window.addEventListener("keydown", onKey);
       onCleanup(() => window.removeEventListener("keydown", onKey));
+    }
+  });
+
+  // Typora-style window title: "Notes.md — Edited".
+  createEffect(() => {
+    const title = `${fileName()}${doc.dirty ? " — Edited" : ""}`;
+    if (isTauri) {
+      import("@tauri-apps/api/window").then(({ getCurrentWindow }) =>
+        getCurrentWindow().setTitle(`${title} — Inkdown`).catch(() => {})
+      );
+    } else {
+      document.title = `${title} — Inkdown`;
     }
   });
 

@@ -23,13 +23,19 @@ const STORAGE_KEY = "inkdown.settings";
 
 let data: SettingsData = { ...DEFAULTS };
 
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Debounced write-behind: rapid toggles coalesce into one disk write. */
 async function persist(): Promise<void> {
-  if (isTauri) {
-    const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("save_settings", { value: data }).catch(() => {});
-  } else {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    if (isTauri) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("save_settings", { value: data }).catch(() => {});
+    } else {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+  }, 300);
 }
 
 async function syncRecentMenu(): Promise<void> {
