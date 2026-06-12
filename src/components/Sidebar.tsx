@@ -81,6 +81,7 @@ export default function Sidebar(props: Props) {
               {(h) => (
                 <button
                   class="tree-item heading"
+                  classList={{ h1: h.level === 1 }}
                   style={{ "padding-left": `${10 + (h.level - 1) * 14}px` }}
                   onClick={() => props.onJump(h.blockIndex)}
                 >
