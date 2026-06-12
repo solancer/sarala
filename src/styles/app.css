@@ -478,3 +478,16 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 /* ---- Zoom (View > Actual Size / Zoom In / Zoom Out) ---- */
 
 .page { font-size: var(--zoom, 100%); }
+
+/* ---- Caret-scoped marker reveal (Typora behavior) ----
+   Markers inside an .md-tok are hidden until applyMarkerVisibility() flags
+   the token with .md-on (caret inside the token / on the heading line).
+   Hiding is display:none only — the text stays in the DOM so contenteditable
+   textContent remains byte-identical to the markdown source. */
+
+.source .md-tok > .md-mark { display: none; }
+.source .md-tok.md-on > .md-mark { display: inline; }
+
+/* Fence blocks keep every marker visible — hiding fence syntax collapses
+   the layout and they are not caret-scoped tokens. */
+.source.code-block .md-tok > .md-mark { display: inline; }

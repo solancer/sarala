@@ -2,7 +2,7 @@ import { Show, createEffect, on, onCleanup } from "solid-js";
 import { renderMarkdown, hasOpenFence } from "../markdown";
 import {
   styleSource, getCaretOffset, getSelectionOffsets, setCaret, setSelection,
-  mapRenderedPrefixToSource,
+  applyMarkerVisibility, mapRenderedPrefixToSource,
 } from "../livesource";
 import { isTauri, openExternal } from "../platform";
 import {
@@ -28,6 +28,13 @@ export default function Block(props: Props) {
   let el: HTMLDivElement | undefined;
   let pendingCaret: number | null = null;
   let composing = false;
+  let lastRevealCaret = -1;
+
+  const reveal = (caret: number) => {
+    if (!el) return;
+    lastRevealCaret = caret;
+    applyMarkerVisibility(el, props.text, caret);
+  };
 
   const isFence = () => /^\s*(`{3,}|~{3,})/.test(props.text) || props.text.startsWith("---\n");
 
@@ -44,11 +51,29 @@ export default function Block(props: Props) {
       if (selection) {
         setSelection(el, selection.start, selection.end);
         el.scrollIntoView({ block: "nearest" });
+        reveal(selection.start);
       } else {
         setCaret(el, caret);
+        reveal(caret);
       }
     })
   );
+
+  // Pure caret movement (arrows, clicks) must update marker reveal without
+  // resetting innerHTML — re-styling would interrupt selection drags.
+  createEffect(() => {
+    if (!props.active) return;
+    const onSelectionChange = () => {
+      if (!el || composing) return;
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) return;
+      const offset = getCaretOffset(el);
+      if (offset === lastRevealCaret) return;
+      reveal(offset);
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    onCleanup(() => document.removeEventListener("selectionchange", onSelectionChange));
+  });
 
   const commit = (next: string, caret: number) => {
     pendingCaret = caret;

@@ -14,6 +14,14 @@ function esc(s: string): string {
 
 const mark = (s: string) => `<span class="md-mark">${s}</span>`;
 
+/**
+ * Caret-scoped reveal container: markers inside a .md-tok are hidden by CSS
+ * unless the token carries .md-on (toggled by applyMarkerVisibility based on
+ * the caret position). Hiding is CSS-only (display:none) so textContent stays
+ * byte-identical to the source — the caret-offset invariant.
+ */
+const tok = (html: string) => `<span class="md-tok">${html}</span>`;
+
 /** Style inline markdown inside one already-escaped line. */
 function inline(text: string): string {
   const tokens: string[] = [];
@@ -25,27 +33,27 @@ function inline(text: string): string {
   let t = text;
   // code spans first — their content must stay literal
   t = t.replace(/`([^`\n]+)`/g, (_, c) =>
-    stash(`${mark("`")}<span class="md-codespan">${c}</span>${mark("`")}`)
+    stash(tok(`${mark("`")}<span class="md-codespan">${c}</span>${mark("`")}`))
   );
-  // images
+  // images — the URL span is also an md-mark so it hides with the brackets
   t = t.replace(/!\[([^\]\n]*)\]\(([^)\n]*)\)/g, (_, alt, url) =>
-    stash(`${mark("![")}<span class="md-link">${alt}</span>${mark("](")}<span class="md-url">${url}</span>${mark(")")}`)
+    stash(tok(`${mark("![")}<span class="md-link">${alt}</span>${mark("](")}<span class="md-mark md-url">${url}</span>${mark(")")}`))
   );
   // links
   t = t.replace(/\[([^\]\n]+)\]\(([^)\n]*)\)/g, (_, label, url) =>
-    stash(`${mark("[")}<span class="md-link">${label}</span>${mark("](")}<span class="md-url">${url}</span>${mark(")")}`)
+    stash(tok(`${mark("[")}<span class="md-link">${label}</span>${mark("](")}<span class="md-mark md-url">${url}</span>${mark(")")}`))
   );
   // bold
   t = t.replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, (_, m, body) =>
-    stash(`${mark(m)}<strong>${body}</strong>${mark(m)}`)
+    stash(tok(`${mark(m)}<strong>${body}</strong>${mark(m)}`))
   );
   // italic
   t = t.replace(/(\*|_)(?=\S)([^*_\n]*?\S)\1/g, (_, m, body) =>
-    stash(`${mark(m)}<em>${body}</em>${mark(m)}`)
+    stash(tok(`${mark(m)}<em>${body}</em>${mark(m)}`))
   );
   // strikethrough
   t = t.replace(/~~(?=\S)([\s\S]*?\S)~~/g, (_, body) =>
-    stash(`${mark("~~")}<del>${body}</del>${mark("~~")}`)
+    stash(tok(`${mark("~~")}<del>${body}</del>${mark("~~")}`))
   );
 
   // restore (tokens may nest one level via bold-inside-link etc.)
@@ -63,7 +71,9 @@ function styleLine(raw: string): string {
   const h = line.match(/^(#{1,6})(\s+)(.*)$/);
   if (h) {
     const lvl = h[1].length;
-    return `<span class="md-h${lvl}">${mark(h[1])}${h[2]}${inline(h[3])}</span>`;
+    // .md-line: revealed while the caret is anywhere on this LINE, not just
+    // inside the hashes. The space hides with them so the title stays flush.
+    return `<span class="md-h${lvl}"><span class="md-tok md-line">${mark(h[1] + h[2])}</span>${inline(h[3])}</span>`;
   }
   const hr = line.match(/^\s*((?:-\s*){3,}|(?:\*\s*){3,}|(?:_\s*){3,})$/);
   if (hr) return mark(line);
@@ -106,6 +116,43 @@ export function styleSource(src: string): string {
     out.push(styleLine(raw));
   }
   return out.join("\n");
+}
+
+/**
+ * Typora-style caret-scoped reveal: toggle .md-on on every .md-tok in a
+ * live-styled block. Inline tokens reveal while the caret sits inside their
+ * source range (edges inclusive — completing `**bold**` leaves the caret on
+ * the end edge, so the pair stays revealed until the caret moves away).
+ * .md-line tokens (heading hashes) reveal while the caret is anywhere on
+ * their source line. Pure class toggling: the DOM text is never altered, so
+ * textContent stays byte-identical to the source.
+ */
+export function applyMarkerVisibility(el: HTMLElement, source: string, caret: number) {
+  const c = Math.max(0, Math.min(caret, source.length));
+  const lineStart = source.lastIndexOf("\n", c - 1) + 1;
+  const lineEndIdx = source.indexOf("\n", c);
+  const lineEnd = lineEndIdx === -1 ? source.length : lineEndIdx;
+
+  // One DFS accumulating text length; an element's source range spans from
+  // the offset before its children to the offset after them. Nested tokens
+  // (a link inside bold) get independent ranges for free.
+  let pos = 0;
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      pos += (node as Text).data.length;
+      return;
+    }
+    const start = pos;
+    for (let child = node.firstChild; child; child = child.nextSibling) walk(child);
+    const end = pos;
+    if (node instanceof HTMLElement && node.classList.contains("md-tok")) {
+      const revealed = node.classList.contains("md-line")
+        ? start <= lineEnd && end >= lineStart
+        : c >= start && c <= end;
+      node.classList.toggle("md-on", revealed);
+    }
+  };
+  walk(el);
 }
 
 /* ---------- caret utilities for contenteditable ---------- */
