@@ -245,6 +245,7 @@ fn main() {
             pandoc_import,
             pandoc_export,
             menu::set_menu_checked,
+            menu::set_menu_enabled,
             menu::update_recent_menu
         ])
         .run(tauri::generate_context!())

@@ -717,6 +717,48 @@ pub fn update_recent_menu(app: AppHandle, paths: Vec<String>) -> Result<(), Stri
     Ok(())
 }
 
+fn set_enabled_deep(
+    items: Vec<MenuItemKind<Wry>>,
+    id: &str,
+    enabled: bool,
+) -> Result<bool, String> {
+    let err = |e: tauri::Error| e.to_string();
+    for item in items {
+        match item {
+            MenuItemKind::MenuItem(m) if m.id().as_ref() == id => {
+                m.set_enabled(enabled).map_err(err)?;
+                return Ok(true);
+            }
+            MenuItemKind::Check(c) if c.id().as_ref() == id => {
+                c.set_enabled(enabled).map_err(err)?;
+                return Ok(true);
+            }
+            MenuItemKind::Submenu(s) => {
+                if s.id().as_ref() == id {
+                    s.set_enabled(enabled).map_err(err)?;
+                    return Ok(true);
+                }
+                if let Ok(children) = s.items() {
+                    if set_enabled_deep(children, id, enabled)? {
+                        return Ok(true);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(false)
+}
+
+/// Enable/disable a menu item (selection-dependent items like Format ▸ Strong).
+#[tauri::command]
+pub fn set_menu_enabled(app: AppHandle, id: String, enabled: bool) -> Result<(), String> {
+    let menu = app.menu().ok_or("application menu not set")?;
+    let items = menu.items().map_err(|e| e.to_string())?;
+    set_enabled_deep(items, &id, enabled)?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn set_menu_checked(app: AppHandle, id: String, checked: bool) -> Result<(), String> {
     let menu = app.menu().ok_or("application menu not set")?;

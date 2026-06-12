@@ -9,11 +9,11 @@ import TableDialog from "./components/TableDialog";
 import { initSettings } from "./settings";
 import {
   doc, theme, sourceMode, sidebarOpen, setSidebarOpen,
-  fileName, setActive, fileTree, folderName, THEMES,
+  fileName, setActive, fileTree, folderName, THEMES, targetBlockIndex,
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
   focusMode, typewriterMode, alwaysOnTop, zoom,
 } from "./store";
-import { isTauri, setMenuChecked, confirmDialog, IMAGE_EXTS } from "./platform";
+import { isTauri, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS } from "./platform";
 import {
   executeCommand, openFile, openFolder, save, exportHtml, insertImageFromPath,
 } from "./commands";
@@ -107,6 +107,30 @@ export default function App() {
   createEffect(() => setMenuChecked("view.focus_mode", focusMode()));
   createEffect(() => setMenuChecked("view.typewriter_mode", typewriterMode()));
   createEffect(() => setMenuChecked("view.always_on_top", alwaysOnTop()));
+
+  // Selection-dependent enabling: block-targeted items are disabled until
+  // some block has held the caret (then targetBlockIndex keeps them valid).
+  const BLOCK_TARGETED_IDS = [
+    "format.strong", "format.emphasis", "format.underline", "format.code",
+    "format.strike", "format.comment", "format.inline_math", "format.hyperlink",
+    "format.link", "format.image.insert", "format.clear",
+    "paragraph.heading.0", "paragraph.heading.1", "paragraph.heading.2",
+    "paragraph.heading.3", "paragraph.heading.4", "paragraph.heading.5",
+    "paragraph.heading.6", "paragraph.heading_up", "paragraph.heading_down",
+    "paragraph.table", "paragraph.math_block", "paragraph.code_fences",
+    "paragraph.quote", "paragraph.ordered_list", "paragraph.unordered_list",
+    "paragraph.task_list", "paragraph.task_status", "paragraph.indentation",
+    "paragraph.insert_before", "paragraph.insert_after", "paragraph.footnote",
+    "edit.move_row_up", "edit.move_row_down", "edit.delete_range", "edit.selection",
+  ];
+  let lastBlockEnabled: boolean | null = null;
+  createEffect(() => {
+    void doc.activeIndex;
+    const enabled = targetBlockIndex() >= 0;
+    if (enabled === lastBlockEnabled) return;
+    lastBlockEnabled = enabled;
+    for (const id of BLOCK_TARGETED_IDS) void setMenuEnabled(id, enabled);
+  });
 
   // Typewriter mode: keep the line being edited vertically centered.
   createEffect(() => {

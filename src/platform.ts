@@ -178,6 +178,13 @@ export async function setMenuChecked(id: string, checked: boolean): Promise<void
   await invoke("set_menu_checked", { id, checked }).catch(() => {});
 }
 
+/** Enable/disable a native menu item. No-op in browser. */
+export async function setMenuEnabled(id: string, enabled: boolean): Promise<void> {
+  if (!isTauri) return;
+  const { invoke } = await tauriCore();
+  await invoke("set_menu_enabled", { id, enabled }).catch(() => {});
+}
+
 export async function openExternal(url: string): Promise<void> {
   if (!isTauri) {
     window.open(url, "_blank", "noopener");
