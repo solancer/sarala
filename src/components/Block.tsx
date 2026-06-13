@@ -234,6 +234,14 @@ export default function Block(props: Props) {
       if (/^[0-6]$/.test(k)) return e.preventDefault(), executeCommand(`paragraph.heading.${k}`);
       return;
     }
+    // Dead-key layouts (many international / "ABC Extended" macOS layouts)
+    // treat the backtick/tilde key as a composing dead key, so ``` and ~~~
+    // code fences can't be typed. Insert the literal character instead.
+    if (e.code === "Backquote" && (e.key === "Dead" || e.key === "Process") && !e.altKey) {
+      e.preventDefault();
+      insertAtCaret(e.shiftKey ? "~" : "`");
+      return;
+    }
     // Browser fallback for Alt+Up/Down (native menu accelerator in Tauri).
     if (!isTauri && e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
       e.preventDefault();

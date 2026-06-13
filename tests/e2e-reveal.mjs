@@ -436,6 +436,39 @@ check(hashCaret.text === "# " && hashCaret.caret === 2,
 await page.keyboard.press("Escape");
 await page.waitForTimeout(80);
 
+// Dead-key layouts: the backtick/tilde key composes (key="Dead",
+// code="Backquote") instead of inserting, so code fences can't be typed.
+// The handler must insert a literal backtick so ``` forms a code block.
+await page.locator(".block").last().locator(".rendered").click();
+await page.waitForSelector(".block.active .source");
+await page.evaluate(() => {
+  const el = document.querySelector(".block.active .source");
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  r.collapse(false);
+  const s = getSelection();
+  s.removeAllRanges();
+  s.addRange(r);
+});
+await page.keyboard.press("Enter");
+await page.waitForTimeout(120);
+for (let i = 0; i < 3; i++) {
+  await page.evaluate(() =>
+    document.querySelector(".block.active .source").dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Dead", code: "Backquote", bubbles: true, cancelable: true })
+    )
+  );
+  await page.waitForTimeout(80);
+}
+const deadKeyFence = await page.evaluate(() => {
+  const el = document.querySelector(".block.active .source");
+  return { text: el?.textContent, code: el?.classList.contains("code-block") };
+});
+check(deadKeyFence.text === "```" && deadKeyFence.code,
+  `dead-key backtick inserts a literal backtick → code fence (text=${JSON.stringify(deadKeyFence.text)})`);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(80);
+
 // Undo / redo: typing coalesces into one step; Cmd/Ctrl+Z round-trips.
 await page.locator(".block .rendered", { hasText: "Split panes duplicate" }).first().click();
 await page.waitForSelector(".block.active .source");
