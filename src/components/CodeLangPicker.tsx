@@ -55,7 +55,16 @@ export default function CodeLangPicker(props: Props) {
   };
 
   return (
-    <div class="code-lang">
+    <div
+      class="code-lang"
+      onMouseDown={(e) => {
+        // Keep the block's contenteditable focused: on WebKit clicking a
+        // <button> doesn't focus it, so without this the mousedown blurs the
+        // editor, deactivates the block, and unmounts the picker mid-click.
+        // The input is exempt so it can still receive the caret.
+        if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
+      }}
+    >
       <Show
         when={open()}
         fallback={
