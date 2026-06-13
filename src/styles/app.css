@@ -28,6 +28,60 @@
   --rule: #ece8e0;
   --code-bg: #f0ede6;
   --shadow: 0 1px 2px rgba(60, 50, 40, 0.05), 0 10px 34px rgba(60, 50, 40, 0.07);
+  --marker: var(--accent);
+  --marker-opacity: 0.85;
+  --link: var(--select);
+}
+
+/* ---- Monokai Pro filter set: coral (#ff6188-ish) markers, cyan links,
+   shared bright palette over varied dark surfaces. ---- */
+[data-theme="pro"] {
+  --mermaid-theme: dark; --bg: #221f22; --bg-panel: #2d2a2e; --bg-page: #2d2a2e;
+  --ink: #fcfcfa; --ink-soft: #727072; --accent: #ff6188; --accent-soft: rgba(255, 97, 136, 0.14);
+  --select: #78dce8; --select-soft: rgba(120, 220, 232, 0.16); --rule: #403e41; --code-bg: #363438;
+  --quote-bar: #5b595c; --tint: rgba(255, 255, 255, 0.04);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
+  --marker: var(--accent); --marker-opacity: 0.9; --link: var(--select);
+}
+[data-theme="octagon"] {
+  --mermaid-theme: dark; --bg: #1d1f28; --bg-panel: #282a3a; --bg-page: #282a3a;
+  --ink: #eaf2f1; --ink-soft: #696d77; --accent: #ff657a; --accent-soft: rgba(255, 101, 122, 0.14);
+  --select: #9cd1bb; --select-soft: rgba(156, 209, 187, 0.16); --rule: #3a3d4b; --code-bg: #2f3243;
+  --quote-bar: #535763; --tint: rgba(255, 255, 255, 0.04);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
+  --marker: var(--accent); --marker-opacity: 0.9; --link: var(--select);
+}
+[data-theme="machine"] {
+  --mermaid-theme: dark; --bg: #1d2528; --bg-panel: #273136; --bg-page: #273136;
+  --ink: #f2fffc; --ink-soft: #6b7678; --accent: #ff6d7e; --accent-soft: rgba(255, 109, 126, 0.14);
+  --select: #79cec4; --select-soft: rgba(121, 206, 196, 0.16); --rule: #3a4449; --code-bg: #2e3c41;
+  --quote-bar: #54605f; --tint: rgba(255, 255, 255, 0.04);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
+  --marker: var(--accent); --marker-opacity: 0.9; --link: var(--select);
+}
+[data-theme="ristretto"] {
+  --mermaid-theme: dark; --bg: #211c1c; --bg-panel: #2c2525; --bg-page: #2c2525;
+  --ink: #fff1f3; --ink-soft: #72696a; --accent: #fd6883; --accent-soft: rgba(253, 104, 131, 0.14);
+  --select: #85dacc; --select-soft: rgba(133, 218, 204, 0.16); --rule: #403838; --code-bg: #392f2f;
+  --quote-bar: #5a5151; --tint: rgba(255, 255, 255, 0.04);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
+  --marker: var(--accent); --marker-opacity: 0.9; --link: var(--select);
+}
+[data-theme="spectrum"] {
+  --mermaid-theme: dark; --bg: #191919; --bg-panel: #222222; --bg-page: #222222;
+  --ink: #f7f1ff; --ink-soft: #69676c; --accent: #fc618d; --accent-soft: rgba(252, 97, 141, 0.14);
+  --select: #5ad4e6; --select-soft: rgba(90, 212, 230, 0.16); --rule: #363537; --code-bg: #2d2c2d;
+  --quote-bar: #545256; --tint: rgba(255, 255, 255, 0.04);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.45), 0 10px 30px rgba(0, 0, 0, 0.4);
+  --marker: var(--accent); --marker-opacity: 0.9; --link: var(--select);
+}
+[data-theme="classic"] {
+  --mermaid-theme: dark; --bg: #1d1e19; --bg-panel: #272822; --bg-page: #272822;
+  --ink: #fdfff1; --ink-soft: #6e7066; --accent: #f92672; --accent-soft: rgba(249, 38, 114, 0.14);
+  --select: #66d9ef; --select-soft: rgba(102, 217, 239, 0.16); --rule: #393a32; --code-bg: #2f302a;
+  --quote-bar: #57584e; --tint: rgba(255, 255, 255, 0.04);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.35);
+  --marker: var(--accent); --marker-opacity: 0.9; --link: var(--select);
 }
 
 [data-theme="paper"] {
@@ -255,7 +309,7 @@ body { font-family: var(--font-ui); }
   padding: 14px 16px;
   margin: 10.5px 0; /* rendered: 2px wrapper pad + 8.5px pre margin */
 }
-.md-mark { color: var(--ink-soft); opacity: 0.55; }
+.md-mark { color: var(--marker, var(--ink-soft)); opacity: var(--marker-opacity, 0.55); }
 .md-h1, .md-h2, .md-h3, .md-h4 { letter-spacing: -0.012em; }
 .md-h1 { font-size: 2em;   font-weight: 700; line-height: 1.25; }
 .md-h2 { font-size: 1.5em; font-weight: 700; line-height: 1.25; }
@@ -263,7 +317,7 @@ body { font-family: var(--font-ui); }
 .md-h4 { font-weight: 700; }
 .md-h5 { font-weight: 700; font-size: 0.95em; }
 .md-h6 { font-weight: 700; font-size: 0.9em; color: var(--ink-soft); }
-.md-link { color: var(--accent); }
+.md-link { color: var(--link, var(--accent)); }
 .md-url { color: var(--ink-soft); }
 .md-quote { color: var(--ink-soft); }
 .md-codespan { font: 0.85em var(--font-mono); background: var(--code-bg); border-radius: 4px; padding: 2px 5px; }
@@ -339,10 +393,14 @@ body { font-family: var(--font-ui); }
   font: 13.5px/1.6 var(--font-mono);
 }
 .rendered pre.shiki code { font-size: 13.5px; }
-[data-theme="graphite"] .shiki,
-[data-theme="graphite"] .shiki span,
-[data-theme="night"] .shiki,
-[data-theme="night"] .shiki span {
+[data-theme="graphite"] .shiki, [data-theme="graphite"] .shiki span,
+[data-theme="night"] .shiki, [data-theme="night"] .shiki span,
+[data-theme="pro"] .shiki, [data-theme="pro"] .shiki span,
+[data-theme="octagon"] .shiki, [data-theme="octagon"] .shiki span,
+[data-theme="machine"] .shiki, [data-theme="machine"] .shiki span,
+[data-theme="ristretto"] .shiki, [data-theme="ristretto"] .shiki span,
+[data-theme="spectrum"] .shiki, [data-theme="spectrum"] .shiki span,
+[data-theme="classic"] .shiki, [data-theme="classic"] .shiki span {
   color: var(--shiki-dark) !important;
 }
 /* Typora's list rhythm: items sit ~2.06 line-height apart. Spacing lives in
@@ -919,12 +977,6 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 .palette-dot:hover { transform: scale(1.18); }
 .palette-dot.on { box-shadow: 0 0 0 2px var(--bg-panel), 0 0 0 3.5px var(--ink-soft); }
 
-/* Sarala: markdown markers in the coral accent (warm, on-page pop). */
-[data-theme="sarala"] .md-mark { color: var(--accent); opacity: 0.85; }
-[data-theme="sarala"] .md-h1 .md-mark,
-[data-theme="sarala"] .md-h2 .md-mark,
-[data-theme="sarala"] .md-h3 .md-mark { color: var(--accent); opacity: 1; }
-[data-theme="sarala"] .md-link { color: var(--select); }
 
 
 /* ---- Math (KaTeX) & diagrams (Mermaid) ---- */
