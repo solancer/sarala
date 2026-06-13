@@ -1,0 +1,194 @@
+/**
+ * Export logic: HTML document assembly (with an outline sidebar), PDF page CSS
+ * with header/footer variables, per-document YAML overrides, named presets, and
+ * pandoc flag defaults. Pure functions here are unit-tested; the side-effecting
+ * orchestration lives in commands.ts.
+ */
+
+export type ExportFormat =
+  | "html" | "html_plain" | "pdf"
+  | "docx" | "odt" | "rtf" | "epub" | "latex" | "mediawiki" | "rst" | "textile" | "opml";
+
+export type AfterExport = "none" | "reveal" | "open" | "run";
+
+export interface ExportPreset {
+  name: string;
+  format: ExportFormat;
+  /** Fixed output path; supports ${dir}, ${name}, ${ext}. Empty → prompt. */
+  outputPath?: string;
+  after?: AfterExport;
+  /** Shell command for `after: "run"`; supports ${output}. */
+  command?: string;
+  /** Extra pandoc flags (merged after the format defaults). */
+  pandocFlags?: string[];
+}
+
+export interface PdfOptions {
+  pageSize: string; // A4 | Letter | Legal | A3 …
+  margin: string; // CSS margin shorthand, e.g. "20mm" or "20mm 18mm"
+  header?: string; // template: ${pageNo} ${totalPages} ${title} ${date}
+  footer?: string;
+}
+
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const escapeCss = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+
+/* ---------- heading anchors + outline ---------- */
+
+/** Slugify heading text into a stable, deduped anchor id. */
+function slugify(text: string, seen: Set<string>): string {
+  const base =
+    text.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-") ||
+    "section";
+  let id = base;
+  let n = 1;
+  while (seen.has(id)) id = `${base}-${++n}`;
+  seen.add(id);
+  return id;
+}
+
+export interface OutlineEntry {
+  level: number;
+  text: string;
+  id: string;
+}
+
+/**
+ * Add `id` attributes to the headings in rendered HTML and return the matching
+ * outline, so the exported TOC links resolve.
+ */
+export function addHeadingIds(html: string): { html: string; outline: OutlineEntry[] } {
+  const seen = new Set<string>();
+  const outline: OutlineEntry[] = [];
+  const decode = (s: string) =>
+    s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  const out = html.replace(/<h([1-6])(\s[^>]*)?>([\s\S]*?)<\/h\1>/g, (_, lvl, attrs, inner) => {
+    const text = decode(inner.replace(/<[^>]+>/g, "")).trim();
+    const id = slugify(text, seen);
+    outline.push({ level: Number(lvl), text, id });
+    return `<h${lvl}${attrs || ""} id="${id}">${inner}</h${lvl}>`;
+  });
+  return { html: out, outline };
+}
+
+/* ---------- PDF page CSS ---------- */
+
+/**
+ * A @page margin-box `content` value: ${title}/${date} become literals,
+ * ${pageNo}/${totalPages} become CSS page counters.
+ */
+export function headerFooterContent(template: string, ctx: { title: string; date: string }): string {
+  const parts: string[] = [];
+  const lit = (s: string) => { if (s) parts.push(`"${escapeCss(s)}"`); };
+  const re = /\$\{(pageNo|totalPages|title|date)\}/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(template))) {
+    lit(template.slice(last, m.index));
+    if (m[1] === "pageNo") parts.push("counter(page)");
+    else if (m[1] === "totalPages") parts.push("counter(pages)");
+    else lit(m[1] === "title" ? ctx.title : ctx.date);
+    last = m.index + m[0].length;
+  }
+  lit(template.slice(last));
+  return parts.length ? parts.join(" ") : '""';
+}
+
+export function pageCss(opts: PdfOptions, ctx: { title: string; date: string }): string {
+  const rules = [`size: ${opts.pageSize}; margin: ${opts.margin};`];
+  if (opts.header)
+    rules.push(`@top-center { content: ${headerFooterContent(opts.header, ctx)}; font: 9pt var(--font-ui, sans-serif); color: #888; }`);
+  if (opts.footer)
+    rules.push(`@bottom-center { content: ${headerFooterContent(opts.footer, ctx)}; font: 9pt var(--font-ui, sans-serif); color: #888; }`);
+  return `@page { ${rules.join(" ")} }`;
+}
+
+/* ---------- HTML document assembly ---------- */
+
+const TOC_CSS = `
+body.has-toc { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 32px; max-width: 1100px; margin: 0 auto; }
+body.has-toc .doc-toc { position: sticky; top: 24px; align-self: start; font: 13px/1.6 var(--font-ui, sans-serif); padding-top: 8px; }
+body.has-toc .doc-toc .doc-toc-title { font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; font-size: 11px; color: #888; margin-bottom: 8px; }
+body.has-toc .doc-toc ul { list-style: none; margin: 0; padding: 0; }
+body.has-toc .doc-toc li { margin: 2px 0; }
+body.has-toc .doc-toc li.toc-l2 { padding-left: 12px; }
+body.has-toc .doc-toc li.toc-l3 { padding-left: 24px; }
+body.has-toc .doc-toc li.toc-l4 { padding-left: 36px; }
+body.has-toc .doc-toc a { color: inherit; text-decoration: none; }
+body.has-toc .doc-toc a:hover { text-decoration: underline; }
+@media print { body.has-toc { display: block; } body.has-toc .doc-toc { display: none; } }
+`;
+
+export interface BuildHtmlOptions {
+  title: string;
+  body: string; // rendered HTML
+  css: string; // base export stylesheet
+  theme: string;
+  withOutline: boolean;
+  pageCss?: string; // PDF @page rules
+}
+
+/** Assemble a standalone HTML document; adds heading ids + an outline sidebar. */
+export function buildExportHtml(o: BuildHtmlOptions): string {
+  const { html: body, outline } = addHeadingIds(o.body);
+  const showToc = o.withOutline && outline.length > 1;
+  const toc = showToc
+    ? `<nav class="doc-toc"><div class="doc-toc-title">Contents</div><ul>${outline
+        .map((h) => `<li class="toc-l${h.level}"><a href="#${h.id}">${escapeHtml(h.text)}</a></li>`)
+        .join("")}</ul></nav>`
+    : "";
+  const style = `<style>${o.css}${showToc ? TOC_CSS : ""}${o.pageCss ?? ""}</style>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(o.title)}</title>${style}</head><body data-theme="${o.theme}" class="${showToc ? "has-toc" : ""}">${toc}<article class="rendered">${body}</article></body></html>`;
+}
+
+/* ---------- per-document YAML export overrides ---------- */
+
+export interface ExportOverrides {
+  filename?: string;
+  pdfMargin?: string;
+  pdfPageSize?: string;
+  pdfHeader?: string;
+  pdfFooter?: string;
+}
+
+/** Read export_* keys from parsed front matter. */
+export function readExportOverrides(fm: Record<string, string>): ExportOverrides {
+  const o: ExportOverrides = {};
+  if (fm["export_filename"]) o.filename = fm["export_filename"];
+  if (fm["export_pdf_margin"]) o.pdfMargin = fm["export_pdf_margin"];
+  if (fm["export_pdf_page_size"]) o.pdfPageSize = fm["export_pdf_page_size"];
+  if (fm["export_pdf_header"]) o.pdfHeader = fm["export_pdf_header"];
+  if (fm["export_pdf_footer"]) o.pdfFooter = fm["export_pdf_footer"];
+  return o;
+}
+
+/* ---------- pandoc flags ---------- */
+
+/** Default pandoc flags per format (docx reference doc, epub toc/title, etc.). */
+export function pandocFlagsFor(format: string, refDoc?: string): string[] {
+  const flags: string[] = [];
+  if (format === "docx" || format === "odt") {
+    flags.push("--standalone");
+    if (refDoc) flags.push(`--reference-doc=${refDoc}`);
+  } else if (format === "epub") {
+    flags.push("--standalone", "--toc", "--epub-chapter-level=2", "--split-level=2");
+  } else if (format === "latex") {
+    flags.push("--standalone", "--toc");
+  }
+  return flags;
+}
+
+/* ---------- presets ---------- */
+
+/** Expand an output-path template against the document path parts. */
+export function resolveOutputPath(
+  template: string,
+  parts: { dir: string; name: string; ext: string },
+): string {
+  return template
+    .replace(/\$\{dir\}/g, parts.dir)
+    .replace(/\$\{name\}/g, parts.name)
+    .replace(/\$\{ext\}/g, parts.ext);
+}

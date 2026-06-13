@@ -7,20 +7,42 @@ import {
   setMathAltDelimitersSig, setMathFenceSig,
 } from "./store";
 import { setPreserveBreaksOption, setMathAltDelimiters, setMathFence } from "./markdown";
+import type { ExportPreset, PdfOptions } from "./export";
 
 export interface ExportMemo {
   /** Menu id of the export command, e.g. "file.export.docx". */
   id: string;
   path: string;
+  /** Set when the last export was a named preset (Export with Previous re-runs it). */
+  presetName?: string;
 }
 
 interface SettingsData {
   recentFiles: string[];
   lastExport: ExportMemo | null;
+  exportPresets: ExportPreset[];
+  pdfExport: PdfOptions;
   [key: string]: unknown;
 }
 
-const DEFAULTS: SettingsData = { recentFiles: [], lastExport: null };
+const DEFAULT_PDF: PdfOptions = {
+  pageSize: "A4",
+  margin: "20mm",
+  header: "",
+  footer: "${title}    ${pageNo} / ${totalPages}",
+};
+
+const DEFAULT_PRESETS: ExportPreset[] = [
+  { name: "PDF (reveal)", format: "pdf", after: "reveal" },
+  { name: "Word + open", format: "docx", after: "open" },
+];
+
+const DEFAULTS: SettingsData = {
+  recentFiles: [],
+  lastExport: null,
+  exportPresets: DEFAULT_PRESETS,
+  pdfExport: DEFAULT_PDF,
+};
 const STORAGE_KEY = "sarala.settings";
 
 let data: SettingsData = { ...DEFAULTS };
@@ -46,6 +68,13 @@ async function syncRecentMenu(): Promise<void> {
   await invoke("update_recent_menu", { paths: data.recentFiles }).catch(() => {});
 }
 
+async function syncExportMenu(): Promise<void> {
+  if (!isTauri) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  const names = (data.exportPresets ?? []).map((p) => p.name);
+  await invoke("update_export_menu", { names }).catch(() => {});
+}
+
 export async function initSettings(): Promise<void> {
   if (isTauri) {
     const { invoke } = await import("@tauri-apps/api/core");
@@ -59,6 +88,7 @@ export async function initSettings(): Promise<void> {
     }
   }
   await syncRecentMenu();
+  await syncExportMenu();
   hydrateStore();
 }
 
@@ -118,4 +148,12 @@ export function lastExport(): ExportMemo | null {
 export async function setLastExport(memo: ExportMemo): Promise<void> {
   data.lastExport = memo;
   await persist();
+}
+
+export function exportPresets(): ExportPreset[] {
+  return data.exportPresets ?? [];
+}
+
+export function pdfOptions(): PdfOptions {
+  return { ...DEFAULT_PDF, ...data.pdfExport };
 }

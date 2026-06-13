@@ -250,15 +250,103 @@ fn pandoc_import(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn pandoc_export(markdown: String, output: String, format: String) -> Result<(), String> {
+fn pandoc_export(
+    markdown: String,
+    output: String,
+    format: String,
+    flags: Vec<String>,
+) -> Result<(), String> {
     let tmp = std::env::temp_dir().join("sarala-export.md");
     fs::write(&tmp, &markdown).map_err(|e| e.to_string())?;
     let out = Command::new("pandoc")
         .arg(&tmp)
         .args(["-f", "gfm", "-t", &format, "-o", &output])
+        .args(&flags)
         .output()
         .map_err(|e| format!("Could not run pandoc: {e}"))?;
     let _ = fs::remove_file(&tmp);
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).into_owned());
+    }
+    Ok(())
+}
+
+/// A Chrome/Chromium/Edge binary usable for headless PDF printing.
+fn find_chromium() -> Option<String> {
+    let mac = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    ];
+    for c in mac {
+        if Path::new(c).exists() {
+            return Some(c.to_string());
+        }
+    }
+    for c in [
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium",
+        "chromium-browser",
+        "msedge",
+    ] {
+        if Command::new(c)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            return Some(c.to_string());
+        }
+    }
+    None
+}
+
+/// Render a standalone HTML string to a PDF via headless Chromium. Page size and
+/// margins come from the HTML's @page CSS. Returns an error (so the caller can
+/// fall back to the print dialog) when no Chromium is found.
+#[tauri::command]
+fn export_pdf(html: String, output: String) -> Result<(), String> {
+    let chrome = find_chromium().ok_or("no_chromium")?;
+    let tmp = std::env::temp_dir().join("sarala-print.html");
+    fs::write(&tmp, &html).map_err(|e| e.to_string())?;
+    let url = format!("file://{}", tmp.display());
+    let out = Command::new(&chrome)
+        .args([
+            "--headless=new",
+            "--disable-gpu",
+            "--no-pdf-header-footer",
+            &format!("--print-to-pdf={output}"),
+            &url,
+        ])
+        .output()
+        .map_err(|e| format!("Could not run {chrome}: {e}"))?;
+    let _ = fs::remove_file(&tmp);
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).into_owned());
+    }
+    Ok(())
+}
+
+/// Run a user-configured shell command (export preset "run" after-action).
+#[tauri::command]
+fn run_command(command: String) -> Result<(), String> {
+    if command.trim().is_empty() {
+        return Ok(());
+    }
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        let mut c = Command::new("cmd");
+        c.args(["/C", &command]);
+        c
+    };
+    #[cfg(not(target_os = "windows"))]
+    let mut cmd = {
+        let mut c = Command::new("sh");
+        c.args(["-c", &command]);
+        c
+    };
+    let out = cmd.output().map_err(|e| e.to_string())?;
     if !out.status.success() {
         return Err(String::from_utf8_lossy(&out.stderr).into_owned());
     }
@@ -295,9 +383,12 @@ fn main() {
             has_pandoc,
             pandoc_import,
             pandoc_export,
+            export_pdf,
+            run_command,
             menu::set_menu_checked,
             menu::set_menu_enabled,
-            menu::update_recent_menu
+            menu::update_recent_menu,
+            menu::update_export_menu
         ])
         .run(tauri::generate_context!())
         .expect("error while running Sarala");

@@ -162,9 +162,27 @@ export async function pandocImport(path: string): Promise<string> {
   return await invoke<string>("pandoc_import", { path });
 }
 
-export async function pandocExport(markdown: string, output: string, format: string): Promise<void> {
+export async function pandocExport(
+  markdown: string,
+  output: string,
+  format: string,
+  flags: string[] = [],
+): Promise<void> {
   const { invoke } = await tauriCore();
-  await invoke("pandoc_export", { markdown, output, format });
+  await invoke("pandoc_export", { markdown, output, format, flags });
+}
+
+/** Render standalone HTML to a PDF via headless Chromium. Throws if unavailable. */
+export async function exportPdf(html: string, output: string): Promise<void> {
+  const { invoke } = await tauriCore();
+  await invoke("export_pdf", { html, output });
+}
+
+/** Run a user-configured shell command (export preset after-action). */
+export async function runCommand(command: string): Promise<void> {
+  if (!isTauri) return;
+  const { invoke } = await tauriCore();
+  await invoke("run_command", { command });
 }
 
 export async function setWindowAlwaysOnTop(onTop: boolean): Promise<void> {

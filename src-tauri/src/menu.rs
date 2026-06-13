@@ -78,7 +78,7 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             None,
         )?)
         .separator()
-        .item(&mi(app, "file.export.pdf", "PDF (via Print…)", None)?)
+        .item(&mi(app, "file.export.pdf", "PDF", None)?)
         .item(&mi_disabled(app, "file.export.image", "Image")?)
         .separator()
         .item(&mi(app, "file.export.docx", "Word (.docx)", None)?)
@@ -91,6 +91,15 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .item(&mi(app, "file.export.textile", "Textile", None)?)
         .item(&mi(app, "file.export.opml", "OPML", None)?)
         .separator()
+        .item(
+            &SubmenuBuilder::with_id(app, "file.export.presets", "Presets")
+                .item(&mi_disabled(
+                    app,
+                    "file.export.presets.empty",
+                    "No Presets",
+                )?)
+                .build()?,
+        )
         .item(&mi(
             app,
             "file.export.previous",
@@ -741,6 +750,31 @@ pub fn update_recent_menu(app: AppHandle, paths: Vec<String>) -> Result<(), Stri
     submenu
         .append(&mi(&app, "file.open_recent.clear", "Clear Menu", None).map_err(err)?)
         .map_err(err)?;
+    Ok(())
+}
+
+/// Rebuild the File ▸ Export ▸ Presets submenu from preset names. Item ids carry
+/// the index into the frontend's preset list ("file.export.preset.<n>").
+#[tauri::command]
+pub fn update_export_menu(app: AppHandle, names: Vec<String>) -> Result<(), String> {
+    let menu = app.menu().ok_or("application menu not set")?;
+    let items = menu.items().map_err(|e| e.to_string())?;
+    let submenu = find_submenu(items, "file.export.presets").ok_or("Presets submenu missing")?;
+
+    while !submenu.items().map_err(|e| e.to_string())?.is_empty() {
+        submenu.remove_at(0).map_err(|e| e.to_string())?;
+    }
+    let err = |e: tauri::Error| e.to_string();
+    if names.is_empty() {
+        submenu
+            .append(&mi_disabled(&app, "file.export.presets.empty", "No Presets").map_err(err)?)
+            .map_err(err)?;
+    } else {
+        for (i, name) in names.iter().take(20).enumerate() {
+            let item = mi(&app, &format!("file.export.preset.{i}"), name, None).map_err(err)?;
+            submenu.append(&item).map_err(err)?;
+        }
+    }
     Ok(())
 }
 

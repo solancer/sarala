@@ -17,7 +17,7 @@ import {
   isTauri, pickFolder, pickMarkdownFile, pickSavePath, pickImportFile,
   readTextFile, writeTextFile, listDirectory, openExternal,
   confirmDialog, alertDialog, renameFile, deleteFile, openNewWindow,
-  hasPandoc, pandocImport, pandocExport,
+  hasPandoc, pandocImport, pandocExport, exportPdf, runCommand, revealInDir,
   clipboardWriteText, clipboardReadText,
   pickImageFile, copyAsset,
   setWindowAlwaysOnTop, toggleFullscreen,
@@ -29,8 +29,12 @@ import {
 } from "./markdown";
 import {
   recentFiles, addRecentFile, clearRecentFiles, lastExport, setLastExport,
-  setSetting,
+  exportPresets, pdfOptions, setSetting,
 } from "./settings";
+import {
+  buildExportHtml, pageCss, readExportOverrides, pandocFlagsFor, resolveOutputPath,
+  type ExportPreset, type ExportFormat,
+} from "./export";
 import { docDir, currentFrontMatter, docBaseName } from "./images";
 import { openFind, findNext } from "./components/FindBar";
 import { openTableDialog } from "./components/TableDialog";
@@ -190,63 +194,135 @@ async function importViaPandoc() {
 
 // ---------- Export ----------
 
-const htmlBaseName = () => fileName().replace(/\.(md|markdown|txt)$/i, "");
+const EXT: Record<ExportFormat, string> = {
+  html: "html", html_plain: "html", pdf: "pdf", docx: "docx", odt: "odt",
+  rtf: "rtf", epub: "epub", latex: "tex", mediawiki: "wiki", rst: "rst",
+  textile: "textile", opml: "opml",
+};
+const PANDOC_FORMATS: Partial<Record<ExportFormat, string>> = {
+  docx: "docx", odt: "odt", rtf: "rtf", epub: "epub", latex: "latex",
+  mediawiki: "mediawiki", rst: "rst", textile: "textile", opml: "opml",
+};
 
-async function exportHtmlTo(path: string | null, withStyles: boolean): Promise<string | null> {
-  const css = withStyles
-    ? await fetch(new URL("./styles/export.css", import.meta.url))
-        .then((r) => r.text())
-        .catch(() => "")
-    : "";
-  const body = renderMarkdown(fullText());
-  const style = css ? `<style>${css}</style>` : "";
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${fileName()}</title>${style}</head><body data-theme="${theme()}"><article class="rendered">${body}</article></body></html>`;
-  const out = path ?? (await pickSavePath(htmlBaseName() + ".html"));
-  if (!out && isTauri) return null;
-  await writeTextFile(out ?? htmlBaseName() + ".html", html);
-  return out;
+/** export_filename YAML override wins; else the document's base name. */
+function exportBaseName(): string {
+  return readExportOverrides(currentFrontMatter()).filename ?? docBaseName();
+}
+
+async function loadExportCss(): Promise<string> {
+  return fetch(new URL("./styles/export.css", import.meta.url))
+    .then((r) => r.text())
+    .catch(() => "");
+}
+
+/** Build the exported HTML document (outline sidebar when there are headings). */
+async function htmlDocument(withStyles: boolean, withOutline: boolean, pdf?: string): Promise<string> {
+  return buildExportHtml({
+    title: exportBaseName(),
+    body: renderMarkdown(fullText()),
+    css: withStyles ? await loadExportCss() : "",
+    theme: theme(),
+    withOutline,
+    pageCss: pdf,
+  });
+}
+
+/** Current PDF @page CSS from settings + per-document overrides. */
+function currentPdfCss(): string {
+  const base = pdfOptions();
+  const o = readExportOverrides(currentFrontMatter());
+  const opts = {
+    pageSize: o.pdfPageSize ?? base.pageSize,
+    margin: o.pdfMargin ?? base.margin,
+    header: o.pdfHeader ?? base.header,
+    footer: o.pdfFooter ?? base.footer,
+  };
+  const date = new Date().toISOString().slice(0, 10);
+  return pageCss(opts, { title: exportBaseName(), date });
+}
+
+/** Run one export to `out`; returns the path written, or null if cancelled. */
+async function runExport(format: ExportFormat, out: string, pandocFlags: string[] = []): Promise<string | null> {
+  if (format === "html" || format === "html_plain") {
+    await writeTextFile(out, await htmlDocument(format === "html", true));
+    return out;
+  }
+  if (format === "pdf") {
+    const html = await htmlDocument(true, false, currentPdfCss());
+    try {
+      await exportPdf(html, out);
+      return out;
+    } catch (e) {
+      if (String(e).includes("no_chromium")) {
+        await alertDialog("PDF export needs Chrome/Chromium installed. Falling back to the print dialog.");
+        window.print();
+        return null;
+      }
+      await alertDialog(`PDF export failed:\n${String(e)}`);
+      return null;
+    }
+  }
+  const pf = PANDOC_FORMATS[format];
+  if (!pf) return null;
+  if (!(await hasPandoc())) {
+    await alertDialog("This export format requires Pandoc. Install it from pandoc.org and try again.");
+    return null;
+  }
+  try {
+    await pandocExport(fullText(), out, pf, [...pandocFlagsFor(pf), ...pandocFlags]);
+    return out;
+  } catch (e) {
+    await alertDialog(`Pandoc export failed:\n${String(e)}`);
+    return null;
+  }
+}
+
+/** Menu export (HTML / PDF / a pandoc format): prompt for path, export, remember. */
+async function doExport(format: ExportFormat, id: string, presetPath: string | null = null) {
+  const out = presetPath ?? (await pickSavePath(`${exportBaseName()}.${EXT[format]}`));
+  if (!out && isTauri) return;
+  const written = await runExport(format, out ?? `${exportBaseName()}.${EXT[format]}`);
+  if (written) await setLastExport({ id, path: written });
 }
 
 export async function exportHtml() {
-  await doExport("file.export.html");
+  await doExport("html", "file.export.html");
 }
 
-// Pandoc-backed export formats: menu id suffix → pandoc writer + extension.
-const PANDOC_EXPORTS: Record<string, { format: string; ext: string }> = {
-  "file.export.docx": { format: "docx", ext: "docx" },
-  "file.export.odt": { format: "odt", ext: "odt" },
-  "file.export.rtf": { format: "rtf", ext: "rtf" },
-  "file.export.epub": { format: "epub", ext: "epub" },
-  "file.export.latex": { format: "latex", ext: "tex" },
-  "file.export.mediawiki": { format: "mediawiki", ext: "wiki" },
-  "file.export.rst": { format: "rst", ext: "rst" },
-  "file.export.textile": { format: "textile", ext: "textile" },
-  "file.export.opml": { format: "opml", ext: "opml" },
-};
+// ---------- presets ----------
 
-async function doExport(id: string, previousPath: string | null = null) {
-  if (id === "file.export.pdf") {
-    window.print();
-    return;
+/** Run a named preset: resolve its output path, export, run the after-action. */
+export async function runPreset(preset: ExportPreset) {
+  const dir = docDir() ?? "";
+  const base = exportBaseName();
+  const ext = EXT[preset.format];
+  let out: string | null;
+  if (preset.outputPath) {
+    out = resolveOutputPath(preset.outputPath, { dir, name: base, ext });
+  } else {
+    out = await pickSavePath(`${base}.${ext}`);
+    if (!out) return;
   }
-  if (id === "file.export.html" || id === "file.export.html_plain") {
-    const out = await exportHtmlTo(previousPath, id === "file.export.html");
-    if (out) await setLastExport({ id, path: out });
-    return;
-  }
-  const spec = PANDOC_EXPORTS[id];
-  if (!spec) return;
-  if (!(await hasPandoc())) {
-    await alertDialog("This export format requires Pandoc. Install it from pandoc.org and try again.");
-    return;
-  }
-  const out = previousPath ?? (await pickSavePath(`${htmlBaseName()}.${spec.ext}`));
-  if (!out) return;
-  try {
-    await pandocExport(fullText(), out, spec.format);
-    await setLastExport({ id, path: out });
-  } catch (e) {
-    await alertDialog(`Pandoc export failed:\n${String(e)}`);
+  const written = await runExport(preset.format, out, preset.pandocFlags ?? []);
+  if (!written) return;
+  await setLastExport({ id: `preset:${preset.name}`, path: written, presetName: preset.name });
+
+  switch (preset.after) {
+    case "reveal":
+      await revealInDir(written);
+      break;
+    case "open":
+      await openExternal(written);
+      break;
+    case "run":
+      if (preset.command) {
+        try {
+          await runCommand(preset.command.replace(/\$\{output\}/g, written));
+        } catch (e) {
+          await alertDialog(`Post-export command failed:\n${String(e)}`);
+        }
+      }
+      break;
   }
 }
 
@@ -256,7 +332,12 @@ async function exportPrevious() {
     await alertDialog("No previous export to repeat.");
     return;
   }
-  await doExport(memo.id, memo.path);
+  if (memo.presetName) {
+    const preset = exportPresets().find((p) => p.name === memo.presetName);
+    if (preset) return runPreset(preset);
+  }
+  const format = memo.id.replace("file.export.", "") as ExportFormat;
+  await doExport(format in EXT ? format : "html", memo.id, memo.path);
 }
 
 // ---------- Paragraph ----------
@@ -697,8 +778,16 @@ for (const id of THEMES) {
     await setSetting("theme", id);
   };
 }
-for (const id of Object.keys(PANDOC_EXPORTS).concat("file.export.html", "file.export.html_plain", "file.export.pdf")) {
-  registry[id] = () => doExport(id);
+// Map each export menu id to its format.
+const EXPORT_MENU: Record<string, ExportFormat> = {
+  "file.export.html": "html", "file.export.html_plain": "html_plain",
+  "file.export.pdf": "pdf", "file.export.docx": "docx", "file.export.odt": "odt",
+  "file.export.rtf": "rtf", "file.export.epub": "epub", "file.export.latex": "latex",
+  "file.export.mediawiki": "mediawiki", "file.export.rst": "rst",
+  "file.export.textile": "textile", "file.export.opml": "opml",
+};
+for (const [id, format] of Object.entries(EXPORT_MENU)) {
+  registry[id] = () => doExport(format, id);
 }
 
 export function executeCommand(id: string) {
@@ -706,6 +795,12 @@ export function executeCommand(id: string) {
   if (recent) {
     const path = recentFiles()[Number(recent[1])];
     if (path) void openFile(path);
+    return;
+  }
+  const preset = id.match(/^file\.export\.preset\.(\d+)$/);
+  if (preset) {
+    const p = exportPresets()[Number(preset[1])];
+    if (p) void runPreset(p);
     return;
   }
   const command = registry[id];

@@ -436,5 +436,59 @@ assert(!styleSource("| lone | row |").includes("md-table"),
     "rendered image keeps alt text");
 }
 
+/* ---------- export ---------- */
+{
+  const out = path.join(here, ".build", "export.mjs");
+  await build({
+    entryPoints: [path.join(here, "..", "src", "export.ts")],
+    bundle: true,
+    format: "esm",
+    outfile: out,
+  });
+  const ex = await import(out);
+
+  // Heading ids + outline.
+  const { html, outline } = ex.addHeadingIds("<h1>Intro</h1><p>x</p><h2>Setup &amp; Run</h2><h2>Intro</h2>");
+  assert(html.includes('<h1 id="intro">Intro</h1>'), "addHeadingIds slugs an h1");
+  assert(outline.length === 3 && outline[1].id === "setup-run", "outline strips punctuation in slugs");
+  assert(outline[2].id === "intro-2", "duplicate heading slugs are deduped");
+
+  // Header/footer var substitution → CSS content with counters.
+  const hf = ex.headerFooterContent("${title}  ${pageNo} / ${totalPages}", { title: "Doc", date: "2026-06-14" });
+  assert(hf.includes('"Doc"') && hf.includes("counter(page)") && hf.includes("counter(pages)"),
+    `header maps title to literal and page vars to counters (${hf})`);
+  assert(ex.headerFooterContent("${date}", { title: "T", date: "2026-06-14" }) === '"2026-06-14"',
+    "date var becomes a literal");
+
+  // @page CSS.
+  const css = ex.pageCss({ pageSize: "A4", margin: "20mm", footer: "${pageNo}" }, { title: "T", date: "D" });
+  assert(css.includes("size: A4; margin: 20mm;") && css.includes("@bottom-center"),
+    `pageCss emits size/margin + footer box (${css})`);
+
+  // HTML with outline sidebar.
+  const doc = ex.buildExportHtml({
+    title: "T", theme: "sarala", css: "", withOutline: true,
+    body: "<h1>A</h1><p>x</p><h2>B</h2>",
+  });
+  assert(doc.includes('class="has-toc"') && doc.includes('<nav class="doc-toc"') && doc.includes('href="#a"'),
+    "buildExportHtml adds the outline sidebar with anchors");
+  const noToc = ex.buildExportHtml({ title: "T", theme: "x", css: "", withOutline: false, body: "<p>x</p>" });
+  assert(!noToc.includes("doc-toc"), "no outline when disabled");
+
+  // YAML export overrides.
+  const ov = ex.readExportOverrides({ export_filename: "report", export_pdf_margin: "15mm", title: "x" });
+  assert(ov.filename === "report" && ov.pdfMargin === "15mm", "readExportOverrides picks export_* keys");
+
+  // Pandoc default flags.
+  assert(ex.pandocFlagsFor("docx", "ref.docx").includes("--reference-doc=ref.docx"),
+    "docx flags include the reference-doc");
+  assert(ex.pandocFlagsFor("epub").includes("--toc") && ex.pandocFlagsFor("epub").includes("--epub-chapter-level=2"),
+    "epub flags include toc + chapter level");
+
+  // Output path template.
+  assert(ex.resolveOutputPath("${dir}/${name}.${ext}", { dir: "/d", name: "doc", ext: "pdf" }) === "/d/doc.pdf",
+    "resolveOutputPath expands dir/name/ext");
+}
+
 console.log(`${passes} passed, ${failures} failed`);
 if (failures) process.exit(1);
