@@ -35,6 +35,19 @@ const check = (cond, label) => {
   if (!cond) failures++;
 };
 
+// Syntax highlighting: the welcome doc's rust code block highlights via Shiki
+// (loads async; re-renders on ready). Colored token spans must appear.
+let shikiSpans = 0;
+for (let i = 0; i < 40; i++) {
+  shikiSpans = await page.evaluate(() => {
+    const pre = document.querySelector(".rendered pre.shiki");
+    return pre ? pre.querySelectorAll("span[style*='color']").length : 0;
+  });
+  if (shikiSpans > 0) break;
+  await page.waitForTimeout(250);
+}
+check(shikiSpans > 5, `Shiki highlights the code block (${shikiSpans} colored tokens)`);
+
 // Activate the paragraph containing "*is*" by clicking its rendered view
 // near the start of the text (away from the italic token at the end).
 const para = page.locator(".block .rendered", { hasText: "Split panes duplicate" });

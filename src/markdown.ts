@@ -1,5 +1,4 @@
 import { Marked, type Tokens } from "marked";
-import hljs from "highlight.js/lib/common";
 import DOMPurify from "dompurify";
 import katex from "katex";
 
@@ -29,6 +28,7 @@ export function setMathFence(on: boolean) {
 let mathStash: string[] = [];
 let mermaidStash: string[] = [];
 let imgStash: string[] = [];
+let shikiStash: string[] = [];
 let mathErrored = false;
 
 // Resolve a markdown image src to a loadable URL (relative→doc dir, Tauri
@@ -36,6 +36,13 @@ let mathErrored = false;
 let imageResolver: (src: string) => string = (s) => s;
 export function setImageResolver(fn: (src: string) => string) {
   imageResolver = fn;
+}
+
+// Syntax-highlight a code block to HTML (Shiki). Injected by highlighter.ts;
+// returns null until Shiki has loaded, falling back to plain escaped code.
+let codeHighlighter: (code: string, lang: string) => string | null = () => null;
+export function setCodeHighlighter(fn: (code: string, lang: string) => string | null) {
+  codeHighlighter = fn;
 }
 
 function renderMathHtml(tex: string, display: boolean): string {
@@ -110,8 +117,10 @@ marked.use({
     },
   ],
   renderer: {
-    // Own the code renderer (replacing marked-highlight) so ```mermaid and
-    // ```math fences are intercepted; everything else is hljs-highlighted.
+    // Own the code renderer so ```mermaid and ```math fences are intercepted;
+    // everything else is Shiki-highlighted (stashed past DOMPurify, which would
+    // strip Shiki's inline-style color spans), with a plain fallback until
+    // Shiki has loaded.
     code(token: Tokens.Code) {
       const lang = (token.lang || "").split(/\s+/)[0].toLowerCase();
       if (lang === "mermaid") {
@@ -121,9 +130,12 @@ marked.use({
       if (lang === "math" && mathFence) {
         return stashMath(token.text, true);
       }
-      const language = hljs.getLanguage(lang) ? lang : "plaintext";
-      const html = hljs.highlight(token.text, { language }).value;
-      return `<pre><code class="hljs${lang ? ` language-${lang}` : ""}">${html}</code></pre>`;
+      const hl = codeHighlighter(token.text, lang);
+      if (hl) {
+        shikiStash.push(hl);
+        return `<div data-shiki="${shikiStash.length - 1}"></div>`;
+      }
+      return `<pre class="code-plain"><code${lang ? ` class="language-${lang}"` : ""}>${escapeHtml(token.text)}</code></pre>`;
     },
     // Resolve the src through the injected resolver and stash it, so the
     // (possibly asset-protocol) URL is re-injected after DOMPurify.
@@ -136,11 +148,6 @@ marked.use({
     },
   },
 });
-
-/** Languages the bundled highlighter knows, for the code-block picker. */
-export function listCodeLanguages(): string[] {
-  return hljs.listLanguages().sort();
-}
 
 /** Edit ▸ Whitespace: render single newlines as <br> when enabled. */
 export function setPreserveBreaksOption(on: boolean) {
@@ -174,6 +181,7 @@ export function renderMarkdown(md: string, blockKey?: string): string {
   mathStash = [];
   mermaidStash = [];
   imgStash = [];
+  shikiStash = [];
   mathErrored = false;
   const raw = marked.parse(md, { async: false }) as string;
   let html = DOMPurify.sanitize(raw, { ADD_ATTR: ["target"] });
@@ -185,7 +193,8 @@ export function renderMarkdown(md: string, blockKey?: string): string {
     .replace(/<span data-math="(\d+)">\s*<\/span>/g, (_, i) => mathStash[Number(i)] ?? "")
     .replace(/<div data-math="(\d+)">\s*<\/div>/g, (_, i) => mathStash[Number(i)] ?? "")
     .replace(/data-mmd="(\d+)"/g, (_, i) => `data-mermaid="${escapeAttr(mermaidStash[Number(i)] ?? "")}"`)
-    .replace(/data-img="(\d+)"/g, (_, i) => `src="${escapeAttr(imgStash[Number(i)] ?? "")}"`);
+    .replace(/data-img="(\d+)"/g, (_, i) => `src="${escapeAttr(imgStash[Number(i)] ?? "")}"`)
+    .replace(/<div data-shiki="(\d+)">\s*<\/div>/g, (_, i) => shikiStash[Number(i)] ?? "");
   // Resolve srcs of raw HTML <img> tags (markdown images were already handled
   // above; their resolved asset URLs pass the resolver through unchanged).
   html = html.replace(/<img\b[^>]*>/gi, (tag) => {

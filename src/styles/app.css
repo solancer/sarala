@@ -270,7 +270,22 @@ body { font-family: var(--font-ui); }
   margin: 8.5px 0; /* = .source.code-block total, see jank notes */
 }
 .rendered pre code { background: transparent; padding: 0; font-size: 13.5px; line-height: 1.6; }
-[data-theme="graphite"] .hljs { color: var(--ink); background: transparent; }
+
+/* Shiki output (.shiki) carries the same box as plain code blocks; its own
+   background is overridden with the theme's code-bg for consistency. Dual
+   light/dark themes ship as CSS vars: light is the default `color`, dark
+   themes switch to the --shiki-dark var (no re-highlight on theme change). */
+.rendered pre.shiki {
+  background: var(--code-bg) !important;
+  font: 13.5px/1.6 var(--font-mono);
+}
+.rendered pre.shiki code { font-size: 13.5px; }
+[data-theme="graphite"] .shiki,
+[data-theme="graphite"] .shiki span,
+[data-theme="night"] .shiki,
+[data-theme="night"] .shiki span {
+  color: var(--shiki-dark) !important;
+}
 /* Typora's list rhythm: items sit ~2.06 line-height apart. Spacing lives in
    line-height (not li margins) so the live view — where items are bare text
    lines — can match it exactly and activation stays shift-free. */

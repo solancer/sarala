@@ -1,5 +1,5 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
-import { listCodeLanguages } from "../markdown";
+import { codeLanguages } from "../highlighter";
 
 interface Props {
   /** Current fence language (may be ""). */
@@ -24,7 +24,7 @@ export default function CodeLangPicker(props: Props) {
 
   const matches = createMemo(() => {
     const q = query().toLowerCase().trim();
-    const all = listCodeLanguages();
+    const all = codeLanguages();
     return q ? all.filter((l) => l.includes(q)) : all;
   });
 
