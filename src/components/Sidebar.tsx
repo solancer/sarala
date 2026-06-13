@@ -1,6 +1,10 @@
 import { For, Show, createSignal } from "solid-js";
 import type { FileNode } from "../platform";
-import { outline, doc, sidebarTab, setSidebarTab } from "../store";
+import {
+  outline, doc, sidebarTab, setSidebarTab,
+  sidebarWidth, setSidebarWidth, clampSidebar,
+} from "../store";
+import { setSetting } from "../settings";
 
 interface Props {
   tree: FileNode[];
@@ -50,8 +54,31 @@ export default function Sidebar(props: Props) {
   // Lifted to the store so View > File Tree / Outline can switch it.
   const tab = sidebarTab;
   const setTab = setSidebarTab;
+
+  // Drag-to-resize (Typora-style). The sidebar hugs the left edge, so the
+  // pointer's clientX is the width directly; persist on release.
+  const startResize = (e: PointerEvent) => {
+    e.preventDefault();
+    const handle = e.currentTarget as HTMLElement;
+    handle.setPointerCapture(e.pointerId);
+    const onMove = (m: PointerEvent) => setSidebarWidth(clampSidebar(m.clientX));
+    const onUp = () => {
+      handle.removeEventListener("pointermove", onMove);
+      handle.removeEventListener("pointerup", onUp);
+      void setSetting("sidebarWidth", sidebarWidth());
+    };
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onUp);
+  };
+
   return (
-    <aside class="sidebar">
+    <aside class="sidebar" style={{ width: `${sidebarWidth()}px` }}>
+      <div
+        class="sidebar-resize"
+        title="Drag to resize"
+        onPointerDown={startResize}
+        onDblClick={() => { setSidebarWidth(240); void setSetting("sidebarWidth", 240); }}
+      />
       <div class="sidebar-tabs" role="tablist">
         <button role="tab" classList={{ on: tab() === "files" }} onClick={() => setTab("files")}>Files</button>
         <button role="tab" classList={{ on: tab() === "outline" }} onClick={() => setTab("outline")}>Outline</button>

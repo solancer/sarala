@@ -343,6 +343,28 @@ await page.waitForTimeout(100);
 check((await page.evaluate(() => CSS.highlights?.get("inkdown-find")?.size ?? 0)) === 0,
   "closing the find bar clears the highlights");
 
+// Sidebar resize: dragging the handle changes the width within clamps.
+await page.reload();
+await page.waitForSelector(".sidebar");
+const sidebarW = () => page.evaluate(() => document.querySelector(".sidebar").getBoundingClientRect().width);
+const startW = await sidebarW();
+const handle = await page.locator(".sidebar-resize").boundingBox();
+await page.mouse.move(handle.x + 3, handle.y + 200);
+await page.mouse.down();
+await page.mouse.move(handle.x + 90, handle.y + 200, { steps: 6 });
+await page.mouse.up();
+await page.waitForTimeout(80);
+const widerW = await sidebarW();
+check(Math.abs(widerW - (startW + 90)) < 8, `drag widens the sidebar (${startW} → ${widerW})`);
+// Clamp: dragging far left stops at the 180px minimum.
+const h2 = await page.locator(".sidebar-resize").boundingBox();
+await page.mouse.move(h2.x + 3, h2.y + 200);
+await page.mouse.down();
+await page.mouse.move(20, h2.y + 200, { steps: 6 });
+await page.mouse.up();
+await page.waitForTimeout(80);
+check((await sidebarW()) === 180, `drag clamps to the 180px minimum (${await sidebarW()})`);
+
 // Clicking the gutter beside a line activates THAT line and never jumps the
 // viewport to the bottom (regression: empty-space clicks targeted the last
 // block and scrolled the page away).

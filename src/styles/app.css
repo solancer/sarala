@@ -54,14 +54,25 @@ body { font-family: var(--font-ui); }
 
 /* ---------- sidebar ---------- */
 .sidebar {
-  width: 240px;
+  /* width set inline from the sidebarWidth signal; drag handle resizes it */
   flex: none;
+  position: relative;
   background: var(--bg-panel);
   border-right: 1px solid var(--rule);
   display: flex;
   flex-direction: column;
   font-size: 13px;
 }
+.sidebar-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+}
+.sidebar-resize:hover { background: var(--accent); opacity: 0.35; }
 /* Typora-style: plain centered labels, no pill backgrounds — the active
    tab is just darker text. */
 .sidebar-tabs {

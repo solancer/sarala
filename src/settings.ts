@@ -3,6 +3,7 @@ import {
   setSpellcheckOn, setSmartPunctuation, setPreserveBreaks, setLineEnding,
   setCopyImageToAssets, setTableFullWidth, bumpRenderEpoch,
   setTheme, setZoom, clampZoom, THEMES, type ThemeId,
+  setSidebarWidth, clampSidebar,
 } from "./store";
 import { setPreserveBreaksOption } from "./markdown";
 
@@ -70,6 +71,7 @@ function hydrateStore() {
   const savedTheme = getSetting<string>("theme", "github");
   if ((THEMES as readonly string[]).includes(savedTheme)) setTheme(savedTheme as ThemeId);
   setZoom(clampZoom(getSetting("zoom", 100)));
+  setSidebarWidth(clampSidebar(getSetting("sidebarWidth", 240)));
   const breaks = getSetting("preserveBreaks", false);
   setPreserveBreaks(breaks);
   setPreserveBreaksOption(breaks);

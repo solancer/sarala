@@ -73,6 +73,9 @@ export const [theme, setTheme] = createSignal<ThemeId>("github");
 export const [sourceMode, setSourceMode] = createSignal(false);
 export const [sidebarOpen, setSidebarOpen] = createSignal(true);
 export const [sidebarTab, setSidebarTab] = createSignal<"files" | "outline">("files");
+/** Sidebar width in px, clamped to 180–480 (Typora-style drag resize). */
+export const [sidebarWidth, setSidebarWidth] = createSignal(240);
+export const clampSidebar = (w: number) => Math.max(180, Math.min(480, Math.round(w)));
 export const [focusMode, setFocusMode] = createSignal(false);
 export const [typewriterMode, setTypewriterMode] = createSignal(false);
 export const [alwaysOnTop, setAlwaysOnTop] = createSignal(false);
