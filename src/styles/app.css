@@ -270,6 +270,8 @@ body { font-family: var(--font-ui); }
 .md-code-line, .md-meta { font-family: var(--font-mono); }
 .md-meta { color: var(--ink-soft); }
 
+/* Full-document Source view: a flat textarea filling the same .page column
+   as the rendered editor (no card), so toggling Live/Source keeps the layout. */
 .source-full {
   display: block;
   width: 100%;
@@ -277,21 +279,12 @@ body { font-family: var(--font-ui); }
   resize: none;
   background: transparent;
   color: var(--ink);
-  font: 15px/1.7 var(--font-mono);
-  border-radius: 6px;
+  font: 14px/1.7 var(--font-mono);
+  padding: 0;
+  min-height: 70vh;
+  caret-color: var(--accent);
 }
 .source-full:focus { outline: none; }
-.source-full {
-  max-width: 760px;
-  margin: 0 auto;
-  min-height: 80vh;
-  background: var(--bg-page);
-  border: 1px solid var(--rule);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
-  padding: 48px 56px;
-  overflow: auto;
-}
 
 /* ---------- rendered prose ---------- */
 .rendered {
