@@ -281,7 +281,9 @@ body { font-family: var(--font-ui); }
   color: var(--ink);
   font: 14px/1.7 var(--font-mono);
   padding: 0;
-  min-height: 70vh;
+  /* Height is set to scrollHeight in JS; hidden overflow prevents the
+     textarea's own scrollbar — only the page scrolls. */
+  overflow: hidden;
   caret-color: var(--accent);
 }
 .source-full:focus { outline: none; }
