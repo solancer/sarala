@@ -96,8 +96,11 @@ export const [smartPunctuation, setSmartPunctuation] = createSignal(false);
 export const [preserveBreaks, setPreserveBreaks] = createSignal(false);
 export const [lineEnding, setLineEnding] = createSignal<"lf" | "crlf">("lf");
 
-// Format ▸ Image: copy inserted local images into ./assets next to the doc.
+// Format ▸ Image: copy inserted local images next to the doc. The folder is a
+// template supporting ${filename} (the doc's base name); a per-document
+// `typora-copy-images-to` front-matter key overrides it.
 export const [copyImageToAssets, setCopyImageToAssets] = createSignal(false);
+export const [copyImagesToFolder, setCopyImagesToFolder] = createSignal("assets");
 
 // Tables stretch to the page column instead of sizing to their content.
 export const [tableFullWidth, setTableFullWidth] = createSignal(false);
@@ -229,13 +232,16 @@ export function targetBlockIndex(): number {
 /** Point the document at a new path (rename/move) without touching dirty state. */
 export function setFilePath(path: string) {
   setState("filePath", path);
+  bumpRenderEpoch(); // doc dir changed → re-resolve relative image paths
 }
 
 export function markSaved(path: string) {
+  const dirChanged = path !== state.filePath;
   setState(produce((s) => {
     s.filePath = path;
     s.dirty = false;
   }));
+  if (dirChanged) bumpRenderEpoch();
 }
 
 /**

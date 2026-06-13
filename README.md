@@ -20,7 +20,8 @@ The editing surface *is* the preview: every paragraph, heading, list, quote, tab
 - **Paragraph tools**: heading levels, pipe-table editing (insert/rows/columns/alignment), lists and task toggles, quotes, math/code blocks, `[TOC]`, footnotes, GFM alerts
 - **Themes**: Paper, Graphite, GitHub, Night, Newsprint, Whitey — pure CSS variables, add your own in `src/styles/app.css`
 - **Export**: HTML (with or without styles), PDF via print, and docx/odt/rtf/epub/LaTeX/MediaWiki/rst/Textile/OPML through [Pandoc](https://pandoc.org) when installed; Import via Pandoc too
-- **Recent files**, settings persisted to disk, smart punctuation, LF/CRLF line endings, image insert with copy-to-assets rule; **save is atomic** (temp file + rename)
+- **Local images**: relative `src` paths resolve against the document's folder (via Tauri's asset protocol) and render inline; inserting an image can copy it into a configurable folder (with a `${filename}` variable), and the per-document `typora-copy-images-to` / `typora-root-url` YAML keys override the copy folder and image root
+- **Recent files**, settings persisted to disk, smart punctuation, LF/CRLF line endings; **save is atomic** (temp file + rename)
 - Word/character count, dirty indicator (window title shows *— Edited*), confirm-on-close, keyboard-first
 
 ## Shortcuts

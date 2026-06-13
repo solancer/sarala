@@ -7,7 +7,7 @@ import {
   targetBlockIndex, requestCaret, undo, redo, setCaretProvider,
   spellcheckOn, setSpellcheckOn, smartPunctuation, setSmartPunctuation,
   preserveBreaks, setPreserveBreaks, lineEnding, setLineEnding,
-  copyImageToAssets, setCopyImageToAssets, tableFullWidth, setTableFullWidth,
+  copyImageToAssets, setCopyImageToAssets, copyImagesToFolder, tableFullWidth, setTableFullWidth,
   mathAltDelimiters, setMathAltDelimitersSig, mathFence, setMathFenceSig,
   setSidebarTab, focusMode, setFocusMode, typewriterMode, setTypewriterMode,
   alwaysOnTop, setAlwaysOnTop, zoom, setZoom, clampZoom,
@@ -31,6 +31,7 @@ import {
   recentFiles, addRecentFile, clearRecentFiles, lastExport, setLastExport,
   setSetting,
 } from "./settings";
+import { docDir, currentFrontMatter, docBaseName } from "./images";
 import { openFind, findNext } from "./components/FindBar";
 import { openTableDialog } from "./components/TableDialog";
 import { skeletonTable, editTable, resizeTable, type TableEdit, type Align } from "./tabletools";
@@ -500,27 +501,35 @@ function clearFormat() {
   }
 }
 
-const docDir = (): string | null => {
-  const path = doc.filePath;
-  if (!path) return null;
-  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
-  return cut > 0 ? path.slice(0, cut) : null;
-};
-
-/** Insert an image reference, honoring the copy-to-assets setting. */
-export async function insertImageFromPath(absPath: string) {
-  let ref = absPath;
+/**
+ * Markdown ref for an inserted image. Copies it next to the document when
+ * enabled — the folder template (global setting or the per-document
+ * `typora-copy-images-to` front-matter override) expands ${filename} to the
+ * doc's base name. Otherwise the path is relativized against the doc dir.
+ */
+async function imageInsertRef(absPath: string): Promise<string> {
   const dir = docDir();
-  if (dir && copyImageToAssets()) {
+  if (!dir) return absPath;
+  const fm = currentFrontMatter();
+  // typora-copy-images-to enables copy for the document even if the global
+  // toggle is off.
+  const template = fm["typora-copy-images-to"] ?? (copyImageToAssets() ? copyImagesToFolder() : null);
+  if (template) {
+    const folder = template.replace(/\$\{filename\}/g, docBaseName());
     try {
-      ref = await copyAsset(absPath, dir, "assets");
+      return await copyAsset(absPath, dir, folder);
     } catch (e) {
       await alertDialog(String(e));
     }
-  } else if (dir) {
-    const norm = (p: string) => p.replace(/\\/g, "/");
-    if (norm(absPath).startsWith(norm(dir) + "/")) ref = norm(absPath).slice(norm(dir).length + 1);
   }
+  const norm = (p: string) => p.replace(/\\/g, "/");
+  if (norm(absPath).startsWith(norm(dir) + "/")) return norm(absPath).slice(norm(dir).length + 1);
+  return absPath;
+}
+
+/** Insert an image reference, honoring the copy-to-folder rules. */
+export async function insertImageFromPath(absPath: string) {
+  const ref = await imageInsertRef(absPath);
   const md = `![](${ref})`;
   if (blockApi) blockApi.insertAtCaret(md, md.length - 1);
   else insertBlock(md, md.length - 1);

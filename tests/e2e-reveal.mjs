@@ -495,6 +495,29 @@ check((await page.locator(".block.active .source").textContent())?.includes("$E=
   "active block shows the raw math source");
 await page.keyboard.press("Escape");
 await page.waitForTimeout(100);
+
+// Image render path (stash → DOMPurify → src re-injection). A data-URI image
+// passes the resolver through and must appear as a loaded <img>.
+const DATA_URI = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+await page.locator(".block .rendered", { hasText: "Split panes duplicate" }).first().click();
+await page.waitForSelector(".block.active .source");
+await page.keyboard.press("End");
+await page.evaluate((uri) => {
+  const el = document.querySelector(".block.active .source");
+  const dt = new DataTransfer();
+  dt.setData("text/plain", ` ![dot](${uri})`);
+  el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+}, DATA_URI);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(150);
+const imgInfo = await page.evaluate(() => {
+  const img = document.querySelector(".block .rendered img");
+  return img ? { src: img.getAttribute("src"), alt: img.getAttribute("alt") } : null;
+});
+check(imgInfo?.src?.startsWith("data:image/gif"), `image renders with its src re-injected (${imgInfo?.src?.slice(0, 20)})`);
+check(imgInfo?.alt === "dot", "image keeps its alt text");
+await page.keyboard.press("Escape");
+await page.waitForTimeout(100);
 // (Mermaid's async rendering is covered deterministically in e2e-mermaid.mjs,
 // which drives src/mermaid.ts directly — the editor's fast-typing choreography
 // is too racy to build a fenced diagram reliably.)

@@ -375,5 +375,54 @@ assert(!styleSource("| lone | row |").includes("md-table"),
     "broken math keeps the last good render + an error banner");
 }
 
+/* ---------- image src resolution ---------- */
+{
+  const out = path.join(here, ".build", "images.mjs");
+  await build({
+    entryPoints: [path.join(here, "..", "src", "images.ts")],
+    bundle: true,
+    format: "esm",
+    outfile: out,
+  });
+  const img = await import(out);
+
+  // Front matter parsing.
+  const fm = img.parseFrontMatter("---\ntypora-root-url: /img/root\ntypora-copy-images-to: ./a/${filename}\ntitle: \"Hi\"\n---\nbody");
+  assert(fm["typora-root-url"] === "/img/root", "front matter parses typora-root-url");
+  assert(fm["typora-copy-images-to"] === "./a/${filename}", "front matter parses copy-images-to");
+  assert(fm["title"] === "Hi", "front matter strips quotes");
+  assert(Object.keys(img.parseFrontMatter("no front matter")).length === 0, "no front matter → empty");
+
+  // Pure resolver.
+  const conv = (p) => `asset://localhost/${p}`;
+  const ctx = { dir: "/Users/me/notes", convert: conv };
+  assert(img.resolveImagePath("https://x.com/a.png", ctx) === "https://x.com/a.png",
+    "remote URLs pass through");
+  assert(img.resolveImagePath("data:image/png;base64,AAA", ctx) === "data:image/png;base64,AAA",
+    "data URIs pass through");
+  assert(img.resolveImagePath("assets/pic.png", ctx) === "asset://localhost//Users/me/notes/assets/pic.png",
+    "relative path resolves against the doc dir");
+  assert(img.resolveImagePath("./a/b/../pic.png", ctx) === "asset://localhost//Users/me/notes/a/pic.png",
+    "relative path normalizes . and ..");
+  assert(img.resolveImagePath("/Users/me/abs.png", ctx) === "asset://localhost//Users/me/abs.png",
+    "absolute path used directly (no root-url)");
+  assert(img.resolveImagePath("nope.png", { dir: null, convert: conv }) === "nope.png",
+    "unsaved doc (no dir) leaves relative src unchanged");
+
+  // typora-root-url for root-relative paths.
+  const rooted = { dir: "/Users/me/notes", rootUrl: "/Users/me/images", convert: conv };
+  assert(img.resolveImagePath("/logos/x.png", rooted) === "asset://localhost//Users/me/images/logos/x.png",
+    "root-relative path resolves against typora-root-url");
+  assert(img.resolveImagePath("rel.png", rooted) === "asset://localhost//Users/me/notes/rel.png",
+    "non-root-relative still resolves against doc dir even with root-url set");
+
+  // renderMarkdown image path (resolver is identity in node → src preserved).
+  const mdMod = await import(path.join(here, ".build", "markdown.mjs"));
+  assert(mdMod.renderMarkdown("![alt text](pic.png)").includes('src="pic.png"'),
+    "rendered image keeps its src");
+  assert(mdMod.renderMarkdown("![a](pic.png)").includes('alt="a"'),
+    "rendered image keeps alt text");
+}
+
 console.log(`${passes} passed, ${failures} failed`);
 if (failures) process.exit(1);

@@ -28,7 +28,15 @@ export function setMathFence(on: boolean) {
 // sanitizer otherwise — the latter reads as a comment-close mXSS vector).
 let mathStash: string[] = [];
 let mermaidStash: string[] = [];
+let imgStash: string[] = [];
 let mathErrored = false;
+
+// Resolve a markdown image src to a loadable URL (relative→doc dir, Tauri
+// asset protocol). Injected by images.ts; identity until then / in browser.
+let imageResolver: (src: string) => string = (s) => s;
+export function setImageResolver(fn: (src: string) => string) {
+  imageResolver = fn;
+}
 
 function renderMathHtml(tex: string, display: boolean): string {
   const t = tex.trim();
@@ -117,6 +125,15 @@ marked.use({
       const html = hljs.highlight(token.text, { language }).value;
       return `<pre><code class="hljs${lang ? ` language-${lang}` : ""}">${html}</code></pre>`;
     },
+    // Resolve the src through the injected resolver and stash it, so the
+    // (possibly asset-protocol) URL is re-injected after DOMPurify.
+    image(token: Tokens.Image) {
+      imgStash.push(imageResolver(token.href || ""));
+      const i = imgStash.length - 1;
+      const alt = escapeAttr(token.text || "");
+      const title = token.title ? ` title="${escapeAttr(token.title)}"` : "";
+      return `<img data-img="${i}" alt="${alt}"${title}>`;
+    },
   },
 });
 
@@ -156,16 +173,19 @@ export function renderMarkdown(md: string, blockKey?: string): string {
 
   mathStash = [];
   mermaidStash = [];
+  imgStash = [];
   mathErrored = false;
   const raw = marked.parse(md, { async: false }) as string;
   let html = DOMPurify.sanitize(raw, { ADD_ATTR: ["target"] });
-  // Re-inject the KaTeX markup the sanitizer left as empty placeholders, and
-  // swap each mermaid placeholder's numeric key for its real source (which
-  // DOMPurify would otherwise strip for containing "-->").
+  // Re-inject the KaTeX markup the sanitizer left as empty placeholders, swap
+  // each mermaid placeholder's numeric key for its real source (DOMPurify
+  // strips it for containing "-->"), and the resolved image src (which may use
+  // an asset-protocol scheme the sanitizer would otherwise drop).
   html = html
     .replace(/<span data-math="(\d+)">\s*<\/span>/g, (_, i) => mathStash[Number(i)] ?? "")
     .replace(/<div data-math="(\d+)">\s*<\/div>/g, (_, i) => mathStash[Number(i)] ?? "")
-    .replace(/data-mmd="(\d+)"/g, (_, i) => `data-mermaid="${escapeAttr(mermaidStash[Number(i)] ?? "")}"`);
+    .replace(/data-mmd="(\d+)"/g, (_, i) => `data-mermaid="${escapeAttr(mermaidStash[Number(i)] ?? "")}"`)
+    .replace(/data-img="(\d+)"/g, (_, i) => `src="${escapeAttr(imgStash[Number(i)] ?? "")}"`);
 
   if (blockKey != null) {
     const hasMath = mathStash.length > 0;
