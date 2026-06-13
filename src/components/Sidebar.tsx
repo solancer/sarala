@@ -1,7 +1,7 @@
 import { For, Show, createSignal } from "solid-js";
 import type { FileNode } from "../platform";
 import {
-  outline, doc, sidebarTab, setSidebarTab,
+  outline, doc,
   sidebarWidth, setSidebarWidth, clampSidebar,
 } from "../store";
 import { setSetting } from "../settings";
@@ -13,6 +13,13 @@ interface Props {
   onOpenFile: (path: string) => void;
   onJump: (blockIndex: number) => void;
 }
+
+const FileIcon = () => (
+  <svg class="file-icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+    <path fill="none" stroke="currentColor" stroke-width="1.1"
+      d="M4 1.6h5L12.4 5v9.4H4z M9 1.6V5h3.4" />
+  </svg>
+);
 
 function Tree(props: { nodes: FileNode[]; depth: number; onOpenFile: (p: string) => void; current: string | null }) {
   return (
@@ -29,7 +36,7 @@ function Tree(props: { nodes: FileNode[]; depth: number; onOpenFile: (p: string)
                 style={{ "padding-left": `${10 + props.depth * 14}px` }}
                 onClick={() => props.onOpenFile(node.path)}
               >
-                {node.name}
+                <FileIcon /> {node.name}
               </button>
             }
           >
@@ -51,10 +58,6 @@ function Tree(props: { nodes: FileNode[]; depth: number; onOpenFile: (p: string)
 }
 
 export default function Sidebar(props: Props) {
-  // Lifted to the store so View > File Tree / Outline can switch it.
-  const tab = sidebarTab;
-  const setTab = setSidebarTab;
-
   // Drag-to-resize (Typora-style). The sidebar hugs the left edge, so the
   // pointer's clientX is the width directly; persist on release.
   const startResize = (e: PointerEvent) => {
@@ -73,52 +76,38 @@ export default function Sidebar(props: Props) {
 
   return (
     <aside class="sidebar" style={{ width: `${sidebarWidth()}px` }}>
-      <div
-        class="sidebar-resize"
-        title="Drag to resize"
-        onPointerDown={startResize}
-        onDblClick={() => { setSidebarWidth(240); void setSetting("sidebarWidth", 240); }}
-      />
-      <div class="sidebar-tabs" role="tablist">
-        <button role="tab" classList={{ on: tab() === "files" }} onClick={() => setTab("files")}>Files</button>
-        <button role="tab" classList={{ on: tab() === "outline" }} onClick={() => setTab("outline")}>Outline</button>
+      <div class="sidebar-resize" title="Drag to resize" onPointerDown={startResize} />
+
+      <div class="sidebar-body">
+        <div class="side-section-head">Workspace</div>
+        <Show
+          when={props.tree.length > 0}
+          fallback={
+            <div class="sidebar-empty">
+              <p>No folder open.</p>
+              <button class="ghost-btn" onClick={props.onOpenFolder}>Open folder…</button>
+            </div>
+          }
+        >
+          <Tree nodes={props.tree} depth={0} onOpenFile={props.onOpenFile} current={doc.filePath} />
+        </Show>
+
+        <div class="side-section-head">Outline</div>
+        <Show when={outline().length > 0} fallback={<div class="side-outline-empty">No headings yet.</div>}>
+          <For each={outline()}>
+            {(h) => (
+              <button
+                class="tree-item heading"
+                classList={{ h1: h.level === 1 }}
+                style={{ "padding-left": `${10 + (h.level - 1) * 14}px` }}
+                onClick={() => props.onJump(h.blockIndex)}
+              >
+                <span class="out-mark">{"›"}</span> {h.text}
+              </button>
+            )}
+          </For>
+        </Show>
       </div>
-
-      <Show when={tab() === "files"}>
-        <div class="sidebar-body">
-          <Show
-            when={props.tree.length > 0}
-            fallback={
-              <div class="sidebar-empty">
-                <p>No folder open.</p>
-                <button class="ghost-btn" onClick={props.onOpenFolder}>Open folder…</button>
-              </div>
-            }
-          >
-            <div class="folder-name">{props.folderName}</div>
-            <Tree nodes={props.tree} depth={0} onOpenFile={props.onOpenFile} current={doc.filePath} />
-          </Show>
-        </div>
-      </Show>
-
-      <Show when={tab() === "outline"}>
-        <div class="sidebar-body">
-          <Show when={outline().length > 0} fallback={<div class="sidebar-empty"><p>No headings yet.</p></div>}>
-            <For each={outline()}>
-              {(h) => (
-                <button
-                  class="tree-item heading"
-                  classList={{ h1: h.level === 1 }}
-                  style={{ "padding-left": `${10 + (h.level - 1) * 14}px` }}
-                  onClick={() => props.onJump(h.blockIndex)}
-                >
-                  {h.text}
-                </button>
-              )}
-            </For>
-          </Show>
-        </div>
-      </Show>
     </aside>
   );
 }

@@ -11,6 +11,25 @@
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
 }
 
+/* Sarala — warm parchment chrome, white page, coral marker accent */
+[data-theme="sarala"] {
+  --mermaid-theme: default;
+  --quote-bar: #b9c4d6;
+  --tint: rgba(0, 0, 0, 0.035);
+  --bg: #e6e2d9;
+  --bg-panel: #ece9e1;
+  --bg-page: #ffffff;
+  --ink: #2c2a26;
+  --ink-soft: #9b958a;
+  --accent: #e0566a;
+  --accent-soft: rgba(224, 86, 106, 0.1);
+  --select: #4a90e2;
+  --select-soft: rgba(74, 144, 226, 0.12);
+  --rule: #ece8e0;
+  --code-bg: #f0ede6;
+  --shadow: 0 1px 2px rgba(60, 50, 40, 0.05), 0 10px 34px rgba(60, 50, 40, 0.07);
+}
+
 [data-theme="paper"] {
   --mermaid-theme: default;
   --quote-bar: var(--accent);
@@ -49,10 +68,73 @@ body { font-family: var(--font-ui); }
 
 .app {
   display: flex;
+  flex-direction: column;
   height: 100%;
   background: var(--bg);
   color: var(--ink);
 }
+.spacer { flex: 1; }
+
+/* ---------- top bar (full width) ---------- */
+.topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 14px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--rule);
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* Clear the macOS traffic lights when the native bar is hidden (overlay). */
+.app.is-tauri .topbar { padding-left: 84px; }
+.topbar > * { pointer-events: auto; }
+.topbar-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 15px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.topbar-toggle:hover { color: var(--accent); background: var(--accent-soft); }
+.topbar-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 13px/1 var(--font-ui);
+  color: var(--ink);
+}
+.topbar-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--select, var(--accent));
+}
+.topbar-dot.dirty { background: var(--accent); }
+.view-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--tint);
+  border-radius: 7px;
+}
+.view-toggle button {
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: 600 12px/1 var(--font-ui);
+  padding: 5px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.view-toggle button.on { background: var(--bg-page); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+
+/* ---------- body row (sidebar + main) ---------- */
+.body { display: flex; flex: 1; min-height: 0; }
 
 /* ---------- sidebar ---------- */
 .sidebar {
@@ -75,70 +157,52 @@ body { font-family: var(--font-ui); }
   z-index: 5;
 }
 .sidebar-resize:hover { background: var(--accent); opacity: 0.35; }
-/* Typora-style: plain centered labels, no pill backgrounds — the active
-   tab is just darker text. */
-.sidebar-tabs {
-  display: flex;
-  justify-content: center;
-  gap: 18px;
-  padding: 16px 10px 10px;
-}
-.sidebar-tabs button {
-  border: 0;
-  background: transparent;
-  color: var(--ink-soft);
-  opacity: 0.65;
-  font: 600 11px/1 var(--font-ui);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding: 4px 0;
-  cursor: pointer;
-}
-.sidebar-tabs button.on { color: var(--ink); opacity: 1; }
-.sidebar-body { overflow-y: auto; padding: 4px 0 16px; flex: 1; }
-.folder-name {
-  padding: 6px 12px;
-  font: 600 11px/1.4 var(--font-ui);
-  letter-spacing: 0.06em;
+.sidebar-body { overflow-y: auto; padding: 6px 8px 16px; flex: 1; }
+.side-section-head {
+  padding: 14px 8px 6px;
+  font: 600 10px/1 var(--font-ui);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-soft);
 }
 .tree-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 7px;
   width: 100%;
   text-align: left;
   border: 0;
   background: transparent;
   color: var(--ink);
   font: 13px/1.5 var(--font-ui);
-  padding: 4px 10px;
+  padding: 5px 10px;
+  border-radius: 7px;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.tree-item .file-icon { flex: none; color: var(--ink-soft); }
 .tree-item:hover { background: rgba(0, 0, 0, 0.045); }
-.tree-item.heading.h1 { font-weight: 600; }
+.tree-item.heading.h1 { font-weight: 600; color: var(--accent); }
+.tree-item.heading { color: var(--ink-soft); }
+.tree-item.heading .out-mark { color: var(--accent); opacity: 0.7; }
 .tree-item.dir { color: var(--ink-soft); }
-.tree-item.file.current { color: var(--accent); font-weight: 600; }
+/* Active file: tinted rounded pill with a left accent bar. */
+.tree-item.file.current {
+  color: var(--ink);
+  font-weight: 600;
+  background: var(--select-soft, var(--accent-soft));
+  box-shadow: inset 2px 0 0 var(--select, var(--accent));
+}
+.tree-item.file.current .file-icon { color: var(--select, var(--accent)); }
 .tree-item .twist { display: inline-block; width: 12px; color: var(--ink-soft); }
-.sidebar-empty { padding: 18px 14px; color: var(--ink-soft); }
+.sidebar-empty { padding: 12px 10px; color: var(--ink-soft); }
 .sidebar-empty p { margin: 0 0 10px; }
+.side-outline-empty { padding: 4px 10px; color: var(--ink-soft); font-size: 12px; }
 
 /* ---------- main column ---------- */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-
-.titlebar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--rule);
-  background: var(--bg);
-}
-.title { font: 600 13px/1 var(--font-ui); color: var(--ink); }
-.dirty { color: var(--accent); margin-left: 6px; font-size: 10px; }
-.spacer { flex: 1; }
 
 .ghost-btn {
   border: 0;
@@ -395,12 +459,13 @@ body { font-family: var(--font-ui); }
 
 @media print {
   .sidebar,
-  .titlebar,
+  .topbar,
   .statusbar,
+  .palette,
   .quick-open-backdrop {
     display: none !important;
   }
-  .app, .main, .scroll { display: block; overflow: visible; height: auto; }
+  .app, .body, .main, .scroll { display: block; overflow: visible; height: auto; }
   .editor { padding: 0; }
   .page {
     max-width: none;
@@ -827,29 +892,44 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 ::highlight(inkdown-find-current) { background-color: #4183c4; color: #ffffff; }
 
 
-/* ---- Desktop overlay title bar (Typora layout) ----
-   The native bar is hidden (titleBarStyle Overlay); the filename renders
-   centered in-app, and the sidebar's own background runs to the window top
-   behind the traffic lights. */
-
-.desktop-titlebar {
-  flex: none;
-  height: 38px;
+/* ---- Palette switcher (floating bottom-right) ---- */
+.palette {
+  position: fixed;
+  right: 18px;
+  bottom: 16px;
+  z-index: 60;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font: 600 13px var(--font-ui);
-  color: var(--ink);
-  user-select: none;
-  -webkit-user-select: none;
+  gap: 7px;
+  padding: 7px 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
 }
-/* Children must not capture the mousedown, or the Tauri drag region (which
-   only fires when the moused-down element itself carries the attribute)
-   won't start a window drag over them. */
-.desktop-titlebar * { pointer-events: none; }
-.desktop-titlebar .t-edited { color: var(--ink-soft); font-weight: 400; }
-.app.is-tauri .sidebar-tabs { padding-top: 42px; }
+.palette-label {
+  font: 11px var(--font-ui);
+  color: var(--ink-soft);
+  margin-right: 2px;
+}
+.palette-dot {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.palette-dot:hover { transform: scale(1.18); }
+.palette-dot.on { box-shadow: 0 0 0 2px var(--bg-panel), 0 0 0 3.5px var(--ink-soft); }
+
+/* Sarala: markdown markers in the coral accent (warm, on-page pop). */
+[data-theme="sarala"] .md-mark { color: var(--accent); opacity: 0.85; }
+[data-theme="sarala"] .md-h1 .md-mark,
+[data-theme="sarala"] .md-h2 .md-mark,
+[data-theme="sarala"] .md-h3 .md-mark { color: var(--accent); opacity: 1; }
+[data-theme="sarala"] .md-link { color: var(--select); }
 
 
 /* ---- Math (KaTeX) & diagrams (Mermaid) ---- */

@@ -647,9 +647,10 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
 
     // ---- Themes ----
     let themes = SubmenuBuilder::new(app, "Themes")
+        .item(&ci(app, "themes.set.sarala", "Sarala", true, None)?)
         .item(&ci(app, "themes.set.paper", "Paper", false, None)?)
         .item(&ci(app, "themes.set.graphite", "Graphite", false, None)?)
-        .item(&ci(app, "themes.set.github", "GitHub", true, None)?)
+        .item(&ci(app, "themes.set.github", "GitHub", false, None)?)
         .item(&ci(app, "themes.set.night", "Night", false, None)?)
         .item(&ci(app, "themes.set.newsprint", "Newsprint", false, None)?)
         .item(&ci(app, "themes.set.whitey", "Whitey", false, None)?)

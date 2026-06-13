@@ -66,10 +66,10 @@ const [state, setState] = createStore({
 // eslint-disable-next-line solid/reactivity -- store proxy re-export; consumers read it in tracked scopes
 export const doc = state;
 
-export const THEMES = ["paper", "graphite", "github", "night", "newsprint", "whitey"] as const;
+export const THEMES = ["sarala", "paper", "graphite", "github", "night", "newsprint", "whitey"] as const;
 export type ThemeId = (typeof THEMES)[number];
 
-export const [theme, setTheme] = createSignal<ThemeId>("github");
+export const [theme, setTheme] = createSignal<ThemeId>("sarala");
 export const [sourceMode, setSourceMode] = createSignal(false);
 export const [sidebarOpen, setSidebarOpen] = createSignal(true);
 export const [sidebarTab, setSidebarTab] = createSignal<"files" | "outline">("files");

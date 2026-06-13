@@ -7,9 +7,10 @@ import QuickOpen from "./components/QuickOpen";
 import FindBar from "./components/FindBar";
 import TableDialog from "./components/TableDialog";
 import ImageContextMenu from "./components/ImageContextMenu";
+import PaletteSwitcher from "./components/PaletteSwitcher";
 import { initSettings } from "./settings";
 import {
-  doc, theme, sourceMode, sidebarOpen, setSidebarOpen,
+  doc, theme, sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
   fileName, setActive, fileTree, folderName, THEMES, targetBlockIndex,
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
   focusMode, typewriterMode, alwaysOnTop, zoom, tableFullWidth,
@@ -17,7 +18,7 @@ import {
 } from "./store";
 import { isTauri, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS } from "./platform";
 import {
-  executeCommand, openFile, openFolder, save, exportHtml, insertImageFromPath,
+  executeCommand, openFile, openFolder, insertImageFromPath,
 } from "./commands";
 
 export default function App() {
@@ -164,47 +165,44 @@ export default function App() {
       classList={{ "focus-mode": focusMode(), "tables-full": tableFullWidth(), "is-tauri": isTauri }}
       style={{ "--zoom": `${zoom()}%` }}
     >
-      <Show when={sidebarOpen()}>
-        <Sidebar
-          tree={fileTree()}
-          folderName={folderName()}
-          onOpenFolder={openFolder}
-          onOpenFile={openFile}
-          onJump={jumpTo}
-        />
-      </Show>
-      <main class="main">
-        {/* Desktop: native title bar hidden (overlay), filename centered in-app
-            like Typora; the in-app toolbar is the browser fallback only. */}
-        <Show
-          when={!isTauri}
-          fallback={
-            <header class="desktop-titlebar" data-tauri-drag-region>
-              {fileName()}
-              <Show when={doc.dirty}><span class="t-edited">— Edited</span></Show>
-            </header>
-          }
-        >
-          <header class="titlebar">
-            <button class="ghost-btn" title="Toggle sidebar (Shift+Cmd/Ctrl+L)" onClick={() => setSidebarOpen(!sidebarOpen())}>☰</button>
-            <span class="title">
-              {fileName()}
-              <Show when={doc.dirty}><span class="dirty" title="Unsaved changes">●</span></Show>
-            </span>
-            <span class="spacer" />
-            <button class="ghost-btn" onClick={() => openFile()}>Open</button>
-            <button class="ghost-btn" onClick={save}>Save</button>
-            <button class="ghost-btn" onClick={exportHtml}>Export HTML</button>
-          </header>
-        </Show>
-        <FindBar />
-        <div class="scroll" ref={editorEl}>
-          <Show when={!sourceMode()} fallback={<SourceView />}>
-            <Editor />
-          </Show>
+      {/* Full-width top bar: filename + status dot left, Live/Source right. */}
+      <header class="topbar" data-tauri-drag-region>
+        <button
+          class="topbar-toggle"
+          title="Toggle sidebar (Shift+Cmd/Ctrl+L)"
+          onClick={() => setSidebarOpen(!sidebarOpen())}
+        >☰</button>
+        <span class="topbar-file">
+          <span class="topbar-dot" classList={{ dirty: doc.dirty }} />
+          {fileName()}
+        </span>
+        <span class="spacer" />
+        <div class="view-toggle">
+          <button classList={{ on: !sourceMode() }} onClick={() => setSourceMode(false)}>Live</button>
+          <button classList={{ on: sourceMode() }} onClick={() => setSourceMode(true)}>Source</button>
         </div>
-        <StatusBar />
-      </main>
+      </header>
+      <div class="body">
+        <Show when={sidebarOpen()}>
+          <Sidebar
+            tree={fileTree()}
+            folderName={folderName()}
+            onOpenFolder={openFolder}
+            onOpenFile={openFile}
+            onJump={jumpTo}
+          />
+        </Show>
+        <main class="main">
+          <FindBar />
+          <div class="scroll" ref={editorEl}>
+            <Show when={!sourceMode()} fallback={<SourceView />}>
+              <Editor />
+            </Show>
+          </div>
+          <StatusBar />
+        </main>
+      </div>
+      <PaletteSwitcher />
       <QuickOpen />
       <TableDialog />
       <ImageContextMenu />

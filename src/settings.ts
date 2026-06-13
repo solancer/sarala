@@ -70,7 +70,7 @@ function hydrateStore() {
   setCopyImageToAssets(getSetting("copyImageToAssets", false));
   setCopyImagesToFolder(getSetting("copyImagesToFolder", "assets"));
   setTableFullWidth(getSetting("tableFullWidth", false));
-  const savedTheme = getSetting<string>("theme", "github");
+  const savedTheme = getSetting<string>("theme", "sarala");
   if ((THEMES as readonly string[]).includes(savedTheme)) setTheme(savedTheme as ThemeId);
   setZoom(clampZoom(getSetting("zoom", 100)));
   setSidebarWidth(clampSidebar(getSetting("sidebarWidth", 240)));
