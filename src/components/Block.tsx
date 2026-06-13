@@ -12,6 +12,8 @@ import {
 import { renderMermaidIn } from "../mermaid";
 import { executeCommand, registerBlockApi, unregisterBlockApi, type BlockApi } from "../commands";
 import { parseTable, cellRanges } from "../tabletools";
+import { findImages } from "../images";
+import { openImageMenu } from "./ImageContextMenu";
 import TableToolbar from "./TableToolbar";
 import CodeLangPicker from "./CodeLangPicker";
 
@@ -324,6 +326,20 @@ export default function Block(props: Props) {
     insertAtCaret(e.clipboardData?.getData("text/plain") ?? "");
   };
 
+  // Right-click an image in the rendered view → Typora-style image menu. The
+  // nth <img> maps to the nth image occurrence in this block's source.
+  const onRenderedContextMenu = (e: MouseEvent) => {
+    const host = e.currentTarget as HTMLElement;
+    const img = (e.target as HTMLElement).closest("img");
+    if (!img || !host.contains(img)) return;
+    const imgs = findImages(props.text);
+    const ordinal = [...host.querySelectorAll("img")].indexOf(img as HTMLImageElement);
+    const ref = imgs[ordinal];
+    if (!ref) return;
+    e.preventDefault();
+    openImageMenu({ ...ref, blockId: props.id }, e.clientX, e.clientY);
+  };
+
   const onRenderedClick = (e: MouseEvent) => {
     const t = e.target as HTMLElement;
     if (t instanceof HTMLInputElement && t.type === "checkbox") {
@@ -377,6 +393,7 @@ export default function Block(props: Props) {
             class="rendered"
             ref={renderedEl}
             onMouseDown={onRenderedClick}
+            onContextMenu={onRenderedContextMenu}
             // eslint-disable-next-line solid/no-innerhtml -- renderMarkdown output is DOMPurify-sanitized
             innerHTML={(renderEpoch(), mermaidEpoch(), renderMarkdown(props.text, String(props.id)))}
           />

@@ -178,6 +178,55 @@ fn copy_asset(src: String, doc_dir: String, subfolder: String) -> Result<String,
     Ok(format!("{subfolder}/{name}"))
 }
 
+/// Reveal a file in the OS file manager (Finder / Explorer / default).
+#[tauri::command]
+fn reveal_in_dir(path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let spawned = Command::new("open").args(["-R", &path]).spawn();
+    #[cfg(target_os = "windows")]
+    let spawned = Command::new("explorer")
+        .arg(format!("/select,{path}"))
+        .spawn();
+    #[cfg(target_os = "linux")]
+    let spawned = {
+        let p = Path::new(&path);
+        Command::new("xdg-open")
+            .arg(p.parent().unwrap_or(p))
+            .spawn()
+    };
+    spawned.map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Copy a file into `dest_dir` (deduplicating the name); return the new path.
+#[tauri::command]
+fn copy_file_to(src: String, dest_dir: String) -> Result<String, String> {
+    let src_path = Path::new(&src);
+    let stem = src_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| format!("Bad source path: {src}"))?;
+    let ext = src_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+
+    let mut name = if ext.is_empty() {
+        stem.to_string()
+    } else {
+        format!("{stem}.{ext}")
+    };
+    let mut k = 1;
+    while Path::new(&dest_dir).join(&name).exists() {
+        name = if ext.is_empty() {
+            format!("{stem}-{k}")
+        } else {
+            format!("{stem}-{k}.{ext}")
+        };
+        k += 1;
+    }
+    let target = Path::new(&dest_dir).join(&name);
+    fs::copy(src_path, &target).map_err(|e| format!("Could not copy {src}: {e}"))?;
+    Ok(target.to_string_lossy().to_string())
+}
+
 #[tauri::command]
 fn has_pandoc() -> bool {
     Command::new("pandoc")
@@ -241,6 +290,8 @@ fn main() {
             rename_file,
             delete_file,
             copy_asset,
+            reveal_in_dir,
+            copy_file_to,
             has_pandoc,
             pandoc_import,
             pandoc_export,

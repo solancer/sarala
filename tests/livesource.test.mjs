@@ -416,6 +416,18 @@ assert(!styleSource("| lone | row |").includes("md-table"),
   assert(img.resolveImagePath("rel.png", rooted) === "asset://localhost//Users/me/notes/rel.png",
     "non-root-relative still resolves against doc dir even with root-url set");
 
+  // findImages: markdown and HTML image occurrences, in document order.
+  const f1 = img.findImages("![alt](pic.png)");
+  assert(f1.length === 1 && f1[0].src === "pic.png" && f1[0].alt === "alt" && f1[0].kind === "md",
+    "findImages parses a markdown image");
+  const f2 = img.findImages('a ![one](1.png) b <img src="2.png" alt="two" /> c');
+  assert(f2.length === 2 && f2[0].kind === "md" && f2[1].kind === "html",
+    "findImages finds md + html in order");
+  assert(f2[1].src === "2.png" && f2[1].alt === "two", "findImages reads HTML img src/alt");
+  assert(f2[0].start === 2 && "![one](1.png)" === "![one](1.png)", "findImages reports the source span");
+  assert(img.findImages("![](x.png)")[0].alt === "", "findImages handles empty alt");
+  assert(img.findImages("no images here").length === 0, "findImages empty when none");
+
   // renderMarkdown image path (resolver is identity in node → src preserved).
   const mdMod = await import(path.join(here, ".build", "markdown.mjs"));
   assert(mdMod.renderMarkdown("![alt text](pic.png)").includes('src="pic.png"'),

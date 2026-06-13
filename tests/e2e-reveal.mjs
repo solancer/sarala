@@ -516,6 +516,50 @@ const imgInfo = await page.evaluate(() => {
 });
 check(imgInfo?.src?.startsWith("data:image/gif"), `image renders with its src re-injected (${imgInfo?.src?.slice(0, 20)})`);
 check(imgInfo?.alt === "dot", "image keeps its alt text");
+// Image context menu: right-click the rendered image → Switch Syntax + Zoom
+// rewrite the source (file ops need Tauri, so only these are exercised here).
+const rightClickImage = async () => {
+  // Dispatch contextmenu directly (a 1x1 data-URI image is too small for a
+  // reliable pointer right-click); fixed on-screen coords keep the menu in view.
+  await page.locator(".block .rendered img").first().scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    const img = document.querySelector(".block .rendered img");
+    img.dispatchEvent(new MouseEvent("contextmenu", {
+      bubbles: true, cancelable: true, clientX: 400, clientY: 300,
+    }));
+  });
+  await page.waitForSelector(".img-menu");
+};
+await rightClickImage();
+check(await page.locator(".img-menu").isVisible(), "right-click an image opens the context menu");
+// Read a block's raw source by briefly activating it.
+const blockSource = async (needle) => {
+  await page.locator(".block .rendered", { hasText: needle }).first().click();
+  await page.waitForSelector(".block.active .source");
+  const src = (await page.locator(".block.active .source").textContent()) ?? "";
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(80);
+  return src;
+};
+// Switch to HTML.
+await page.locator(".im-parent", { hasText: "Switch Image Syntax" }).hover();
+await page.locator(".im-item", { hasText: "HTML" }).click();
+await page.waitForTimeout(150);
+check((await blockSource("Split panes")).includes("<img"), "Switch to HTML rewrites the image to an <img> tag");
+// Zoom 50% (re-open menu on the now-HTML image).
+await rightClickImage();
+await page.locator(".im-parent", { hasText: "Zoom Image" }).hover();
+await page.locator(".im-item", { hasText: /^50%$/ }).click();
+await page.waitForTimeout(150);
+check((await blockSource("Split panes")).includes("zoom: 50%"), "Zoom 50% adds a zoom style to the image");
+// Switch back to Markdown.
+await rightClickImage();
+await page.locator(".im-parent", { hasText: "Switch Image Syntax" }).hover();
+await page.locator(".im-item", { hasText: "Markdown" }).click();
+await page.waitForTimeout(150);
+const back = await blockSource("Split panes");
+check(back.includes("![dot](") && !back.includes("<img"), "Switch back to Markdown restores ![](…)");
+
 await page.keyboard.press("Escape");
 await page.waitForTimeout(100);
 // (Mermaid's async rendering is covered deterministically in e2e-mermaid.mjs,

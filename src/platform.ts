@@ -124,6 +124,19 @@ export async function renameFile(from: string, to: string): Promise<void> {
   await invoke("rename_file", { from, to });
 }
 
+/** Reveal a file in the OS file manager. */
+export async function revealInDir(path: string): Promise<void> {
+  if (!isTauri) return;
+  const { invoke } = await tauriCore();
+  await invoke("reveal_in_dir", { path });
+}
+
+/** Copy a file into a destination folder; returns the new absolute path. */
+export async function copyFileTo(src: string, destDir: string): Promise<string> {
+  const { invoke } = await tauriCore();
+  return await invoke<string>("copy_file_to", { src, destDir });
+}
+
 export async function deleteFile(path: string): Promise<void> {
   const { invoke } = await tauriCore();
   await invoke("delete_file", { path });

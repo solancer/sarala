@@ -186,6 +186,14 @@ export function renderMarkdown(md: string, blockKey?: string): string {
     .replace(/<div data-math="(\d+)">\s*<\/div>/g, (_, i) => mathStash[Number(i)] ?? "")
     .replace(/data-mmd="(\d+)"/g, (_, i) => `data-mermaid="${escapeAttr(mermaidStash[Number(i)] ?? "")}"`)
     .replace(/data-img="(\d+)"/g, (_, i) => `src="${escapeAttr(imgStash[Number(i)] ?? "")}"`);
+  // Resolve srcs of raw HTML <img> tags (markdown images were already handled
+  // above; their resolved asset URLs pass the resolver through unchanged).
+  html = html.replace(/<img\b[^>]*>/gi, (tag) => {
+    const m = /\ssrc\s*=\s*"([^"]*)"/i.exec(tag);
+    if (!m) return tag;
+    const resolved = imageResolver(m[1]);
+    return resolved === m[1] ? tag : tag.replace(m[0], ` src="${escapeAttr(resolved)}"`);
+  });
 
   if (blockKey != null) {
     const hasMath = mathStash.length > 0;

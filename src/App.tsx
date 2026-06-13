@@ -6,6 +6,7 @@ import SourceView from "./components/SourceView";
 import QuickOpen from "./components/QuickOpen";
 import FindBar from "./components/FindBar";
 import TableDialog from "./components/TableDialog";
+import ImageContextMenu from "./components/ImageContextMenu";
 import { initSettings } from "./settings";
 import {
   doc, theme, sourceMode, sidebarOpen, setSidebarOpen,
@@ -206,6 +207,7 @@ export default function App() {
       </main>
       <QuickOpen />
       <TableDialog />
+      <ImageContextMenu />
     </div>
   );
 }

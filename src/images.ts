@@ -43,6 +43,38 @@ export function docBaseName(): string {
 
 const isAbsolute = (p: string) => /^([A-Za-z]:[\\/]|\/)/.test(p);
 
+/* ---------- image occurrences in block source ---------- */
+
+export interface ImageRef {
+  start: number;
+  end: number;
+  src: string;
+  alt: string;
+  kind: "md" | "html";
+}
+
+/** All image occurrences (markdown and HTML) in a block, in document order. */
+export function findImages(text: string): ImageRef[] {
+  const out: ImageRef[] = [];
+  let m: RegExpExecArray | null;
+  const md = /!\[([^\]\n]*)\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g;
+  while ((m = md.exec(text))) {
+    out.push({ start: m.index, end: m.index + m[0].length, alt: m[1], src: m[2], kind: "md" });
+  }
+  const html = /<img\s[^>]*?\/?>/gi;
+  while ((m = html.exec(text))) {
+    const tag = m[0];
+    out.push({
+      start: m.index,
+      end: m.index + tag.length,
+      src: /\bsrc\s*=\s*["']([^"']*)["']/i.exec(tag)?.[1] ?? "",
+      alt: /\balt\s*=\s*["']([^"']*)["']/i.exec(tag)?.[1] ?? "",
+      kind: "html",
+    });
+  }
+  return out.sort((a, b) => a.start - b.start);
+}
+
 /** Join a base dir and a relative path, normalizing `.` and `..`. */
 function joinPath(base: string, rel: string): string {
   const combined = base.replace(/\\/g, "/").replace(/\/+$/, "") + "/" + rel.replace(/\\/g, "/");
@@ -69,27 +101,28 @@ interface ResolveCtx {
 }
 
 /**
- * Pure image-src resolution (testable without Tauri):
- *  - remote/data/already-converted URLs pass through;
- *  - root-relative (`/x`) resolves against `typora-root-url` when set;
- *  - other relative paths resolve against the document's directory;
- *  - absolute file paths are used directly;
- * the resulting filesystem path is passed to `convert` (the asset protocol).
- * Returns the original src when it can't be resolved (no dir, etc.).
+ * Pure absolute-path resolution for a markdown image src (testable):
+ *  - remote/data URLs → null (no local file);
+ *  - root-relative (`/x`) → against `typora-root-url` when set;
+ *  - other relative paths → against the document's directory;
+ *  - absolute file paths → used directly.
+ * Returns null when the src has no local file (remote, or no doc dir).
+ */
+export function toAbsImagePath(src: string, ctx: Omit<ResolveCtx, "convert">): string | null {
+  const s = src.trim();
+  if (!s || REMOTE.test(s) || s.startsWith("//")) return null;
+  if (s.startsWith("/")) return ctx.rootUrl ? joinPath(ctx.rootUrl, s.slice(1)) : s;
+  if (isAbsolute(s)) return s.replace(/\\/g, "/");
+  return ctx.dir ? joinPath(ctx.dir, s) : null;
+}
+
+/**
+ * Pure image-src resolution: maps a src to a loadable URL via `convert` (the
+ * asset protocol), passing remote/data URLs and unresolvable srcs through.
  */
 export function resolveImagePath(src: string, ctx: ResolveCtx): string {
-  const s = src.trim();
-  if (!s || REMOTE.test(s) || s.startsWith("//")) return src;
-  let abs: string;
-  if (s.startsWith("/")) {
-    abs = ctx.rootUrl ? joinPath(ctx.rootUrl, s.slice(1)) : s;
-  } else if (isAbsolute(s)) {
-    abs = s.replace(/\\/g, "/");
-  } else {
-    if (!ctx.dir) return src;
-    abs = joinPath(ctx.dir, s);
-  }
-  return ctx.convert(abs);
+  const abs = toAbsImagePath(src, ctx);
+  return abs == null ? src : ctx.convert(abs);
 }
 
 /** Live resolver: gathers doc dir + front matter + Tauri's convertFileSrc. */
@@ -106,6 +139,11 @@ export function resolveImageSrc(src: string): string {
       }
     },
   });
+}
+
+/** Absolute filesystem path of an image src, for file operations. Null if remote. */
+export function imageFsPath(src: string): string | null {
+  return toAbsImagePath(src, { dir: docDir(), rootUrl: currentFrontMatter()["typora-root-url"] });
 }
 
 setImageResolver(resolveImageSrc);

@@ -858,3 +858,45 @@ ul.toc li.toc-l6 { padding-left: 92px; }
   text-align: left;
   white-space: pre-wrap;
 }
+
+/* ---- Image context menu (right-click a rendered image) ---- */
+
+.img-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 210px;
+  padding: 5px;
+  background: var(--bg-page);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
+  font: 13px var(--font-ui);
+  color: var(--ink);
+}
+.im-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 6px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.im-item:hover { background: var(--accent-soft); color: var(--accent); }
+.im-danger:hover { background: rgba(192, 57, 43, 0.1); color: #c0392b; }
+.im-sep { height: 1px; margin: 5px 4px; background: var(--rule); }
+.im-sub { position: relative; }
+.im-parent { justify-content: space-between; }
+.im-caret { color: var(--ink-soft); margin-left: 12px; }
+.im-check { display: inline-block; width: 16px; color: var(--accent); }
+.im-flyout {
+  position: absolute;
+  left: 100%;
+  top: -5px;
+  margin-left: 2px;
+}
