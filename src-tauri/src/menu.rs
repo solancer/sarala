@@ -44,11 +44,8 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     // macOS application menu (About / Hide / Quit).
     #[cfg(target_os = "macos")]
     {
-        let app_menu = SubmenuBuilder::new(app, "Inkdown")
-            .about(Some(tauri::menu::AboutMetadata {
-                name: Some("Inkdown".into()),
-                ..Default::default()
-            }))
+        let app_menu = SubmenuBuilder::new(app, "Sarala")
+            .item(&mi(app, "help.about", "About Sarala", None)?)
             .separator()
             .services()
             .separator()
@@ -675,7 +672,7 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
 
     // ---- Help ----
     let help = SubmenuBuilder::new(app, "Help")
-        .item(&mi(app, "help.readme", "Inkdown Help", None)?)
+        .item(&mi(app, "help.about", "About Sarala", None)?)
         .build()?;
     menu.append(&help)?;
 

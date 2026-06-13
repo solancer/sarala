@@ -1,6 +1,7 @@
 {
-  "name": "inkdown",
+  "name": "sarala",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "version": "0.1.0",
   "type": "module",
   "scripts": {

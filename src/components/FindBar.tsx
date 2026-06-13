@@ -133,8 +133,8 @@ export default function FindBar() {
     const on = visible() && q.length > 0;
     const highlights = (window.CSS as typeof CSS & { highlights?: Map<string, unknown> }).highlights;
     if (!on) {
-      highlights?.delete("inkdown-find");
-      highlights?.delete("inkdown-find-current");
+      highlights?.delete("sarala-find");
+      highlights?.delete("sarala-find-current");
       domMatches = [];
       setMatchCount(0);
       return;
@@ -144,9 +144,9 @@ export default function FindBar() {
     const current = domMatches[Math.min(idx, domMatches.length - 1)];
     if (highlights && "Highlight" in window) {
       const H = (window as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
-      highlights.set("inkdown-find", new H(...domMatches));
-      if (current) highlights.set("inkdown-find-current", new H(current));
-      else highlights.delete("inkdown-find-current");
+      highlights.set("sarala-find", new H(...domMatches));
+      if (current) highlights.set("sarala-find-current", new H(current));
+      else highlights.delete("sarala-find-current");
     }
     // Keep the current match in view without activating anything.
     if (current) {

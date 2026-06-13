@@ -21,7 +21,7 @@ interface SettingsData {
 }
 
 const DEFAULTS: SettingsData = { recentFiles: [], lastExport: null };
-const STORAGE_KEY = "inkdown.settings";
+const STORAGE_KEY = "sarala.settings";
 
 let data: SettingsData = { ...DEFAULTS };
 

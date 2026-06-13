@@ -1,7 +1,9 @@
 [package]
-name = "inkdown"
+name = "sarala"
 version = "0.1.0"
 description = "A seamless WYSIWYG Markdown editor"
+authors = ["Srinivas Gowda"]
+license = "GPL-3.0-or-later"
 edition = "2021"
 
 [build-dependencies]

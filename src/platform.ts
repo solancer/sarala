@@ -75,14 +75,14 @@ export async function clipboardReadText(): Promise<string> {
 }
 
 /** Native yes/no confirm (dialog plugin); window.confirm in the browser. */
-export async function confirmDialog(message: string, title = "Inkdown"): Promise<boolean> {
+export async function confirmDialog(message: string, title = "Sarala"): Promise<boolean> {
   if (!isTauri) return window.confirm(message);
   const { ask } = await import("@tauri-apps/plugin-dialog");
   return await ask(message, { title });
 }
 
 /** Native message box; window.alert in the browser. */
-export async function alertDialog(message: string, title = "Inkdown"): Promise<void> {
+export async function alertDialog(message: string, title = "Sarala"): Promise<void> {
   if (!isTauri) {
     window.alert(message);
     return;

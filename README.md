@@ -1,4 +1,4 @@
-# Inkdown
+# Sarala
 
 A seamless WYSIWYG Markdown editor in the spirit of Typora — no preview pane, no split view — built with **Tauri 2** (Rust) and **SolidJS**.
 
@@ -100,3 +100,7 @@ src-tauri/
 ## Roadmap (from the PRD)
 
 Autosave + crash recovery, file watching, custom CSS theme folder.
+
+## License
+
+GPL-3.0-or-later © Srinivas Gowda

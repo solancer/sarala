@@ -34,9 +34,10 @@ import {
 import { docDir, currentFrontMatter, docBaseName } from "./images";
 import { openFind, findNext } from "./components/FindBar";
 import { openTableDialog } from "./components/TableDialog";
+import { openAbout } from "./components/AboutModal";
 import { skeletonTable, editTable, resizeTable, type TableEdit, type Align } from "./tabletools";
 
-const HELP_URL = "https://github.com/inkdown/inkdown#readme";
+const HELP_URL = "https://github.com/srinivasgowda/sarala#readme";
 
 /**
  * Handle to the currently active (contenteditable) block. Blocks register
@@ -681,6 +682,7 @@ const registry: Record<string, Command> = {
 
   // Help
   "help.readme": () => openExternal(HELP_URL),
+  "help.about": () => openAbout(),
 };
 
 async function changeZoom(value: number) {

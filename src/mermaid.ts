@@ -50,7 +50,7 @@ export async function renderMermaidIn(container: HTMLElement, blockKey?: string)
     if (node.dataset.rendered === "1") continue;
     const src = node.getAttribute("data-mermaid") ?? "";
     try {
-      const { svg } = await mermaid.render(`inkdown-mmd-${++seq}`, src);
+      const { svg } = await mermaid.render(`sarala-mmd-${++seq}`, src);
       node.innerHTML = svg;
       node.dataset.rendered = "1";
       if (blockKey != null) lastGoodSvg.set(blockKey, svg);

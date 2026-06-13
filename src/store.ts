@@ -18,7 +18,7 @@ export interface Block {
 let nextId = 1;
 const mkBlock = (text: string): Block => ({ id: nextId++, text });
 
-const WELCOME = `# Welcome to Inkdown
+const WELCOME = `# Welcome to Sarala
 
 A seamless **WYSIWYG Markdown** editor built with *Tauri* and *SolidJS* — no preview pane, no split view. Click any block to edit its Markdown source; click away and it renders in place.
 

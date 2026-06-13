@@ -228,7 +228,7 @@ check(afterResize.hasOld, "existing cells survive the resize");
 await page.reload();
 await page.waitForSelector(".block");
 const JANK_TARGETS = [
-  ["h1", "Welcome to Inkdown"],
+  ["h1", "Welcome to Sarala"],
   ["paragraph", "Split panes duplicate"],
   ["h2", "Why no preview window"],
   ["h3", "highlighted the same"],
@@ -331,8 +331,8 @@ await page.waitForTimeout(150);
 const findState = () =>
   page.evaluate(() => ({
     count: document.querySelector(".findbar-count")?.textContent,
-    highlights: CSS.highlights?.get("inkdown-find")?.size ?? -1,
-    current: CSS.highlights?.get("inkdown-find-current")?.size ?? -1,
+    highlights: CSS.highlights?.get("sarala-find")?.size ?? -1,
+    current: CSS.highlights?.get("sarala-find-current")?.size ?? -1,
     inputFocused: document.activeElement === document.querySelector(".findbar input"),
     anyActive: !!document.querySelector(".block.active"),
   }));
@@ -353,7 +353,7 @@ fs = await findState();
 check(fs.count?.startsWith("1 of"), `Enter wraps around the match list (${fs.count})`);
 await page.keyboard.press("Escape");
 await page.waitForTimeout(100);
-check((await page.evaluate(() => CSS.highlights?.get("inkdown-find")?.size ?? 0)) === 0,
+check((await page.evaluate(() => CSS.highlights?.get("sarala-find")?.size ?? 0)) === 0,
   "closing the find bar clears the highlights");
 
 // Sidebar resize: dragging the handle changes the width within clamps.
@@ -388,7 +388,7 @@ await page.waitForTimeout(80);
 const scrollTop = () => page.evaluate(() => document.querySelector(".scroll").scrollTop);
 const before = await scrollTop();
 // Click in the left gutter (.page padding) at the first heading's Y.
-const welcomeBox = await page.locator(".block", { hasText: "Welcome to Inkdown" }).first().boundingBox();
+const welcomeBox = await page.locator(".block", { hasText: "Welcome to Sarala" }).first().boundingBox();
 const pageBox = await page.locator(".page").boundingBox();
 await page.mouse.click(pageBox.x + 20, welcomeBox.y + welcomeBox.height / 2);
 await page.waitForTimeout(120);
@@ -397,7 +397,7 @@ const gutter = await page.evaluate(() => ({
   scroll: document.querySelector(".scroll").scrollTop,
 }));
 check(Math.abs(gutter.scroll - before) < 5, `gutter click keeps the viewport put (${before} → ${gutter.scroll})`);
-check(gutter.active?.includes("Welcome to Inkdown"),
+check(gutter.active?.includes("Welcome to Sarala"),
   `gutter click activates the nearest block, not the last (${JSON.stringify(gutter.active?.slice(0, 20))})`);
 await page.keyboard.press("Escape");
 await page.waitForTimeout(80);

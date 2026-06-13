@@ -8,6 +8,7 @@ import FindBar from "./components/FindBar";
 import TableDialog from "./components/TableDialog";
 import ImageContextMenu from "./components/ImageContextMenu";
 import PaletteSwitcher from "./components/PaletteSwitcher";
+import AboutModal from "./components/AboutModal";
 import { initSettings } from "./settings";
 import {
   doc, theme, sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
@@ -92,10 +93,10 @@ export default function App() {
     const title = `${fileName()}${doc.dirty ? " — Edited" : ""}`;
     if (isTauri) {
       import("@tauri-apps/api/window").then(({ getCurrentWindow }) =>
-        getCurrentWindow().setTitle(`${title} — Inkdown`).catch(() => {})
+        getCurrentWindow().setTitle(`${title} — Sarala`).catch(() => {})
       );
     } else {
-      document.title = `${title} — Inkdown`;
+      document.title = `${title} — Sarala`;
     }
   });
 
@@ -206,6 +207,7 @@ export default function App() {
       <QuickOpen />
       <TableDialog />
       <ImageContextMenu />
+      <AboutModal />
     </div>
   );
 }

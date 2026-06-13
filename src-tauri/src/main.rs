@@ -92,7 +92,7 @@ fn read_file(path: String) -> Result<String, String> {
 fn save_file(path: String, contents: String) -> Result<(), String> {
     // Atomic-ish write: write to a sibling temp file, then rename over.
     let target = Path::new(&path);
-    let tmp = target.with_extension("inkdown.tmp");
+    let tmp = target.with_extension("sarala.tmp");
     fs::write(&tmp, &contents).map_err(|e| format!("Could not write {path}: {e}"))?;
     fs::rename(&tmp, target).map_err(|e| format!("Could not finalize {path}: {e}"))
 }
@@ -107,7 +107,7 @@ fn new_window(app: AppHandle) -> Result<(), String> {
             .unwrap_or_default()
     );
     tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::default())
-        .title("Inkdown")
+        .title("Sarala")
         .inner_size(1120.0, 760.0)
         .min_inner_size(520.0, 400.0)
         .build()
@@ -251,7 +251,7 @@ fn pandoc_import(path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn pandoc_export(markdown: String, output: String, format: String) -> Result<(), String> {
-    let tmp = std::env::temp_dir().join("inkdown-export.md");
+    let tmp = std::env::temp_dir().join("sarala-export.md");
     fs::write(&tmp, &markdown).map_err(|e| e.to_string())?;
     let out = Command::new("pandoc")
         .arg(&tmp)
@@ -300,5 +300,5 @@ fn main() {
             menu::update_recent_menu
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Inkdown");
+        .expect("error while running Sarala");
 }
