@@ -530,12 +530,15 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             "Underline",
             Some("CmdOrCtrl+U"),
         )?)
-        .item(&mi(app, "format.code", "Code", Some("Ctrl+Backquote"))?)
+        // Accelerators are kept OFF the Backquote key: it's the key users press
+        // to type `` ` `` and ``` code fences, so an accelerator there fires the
+        // inline-code command when they just want to type a backtick.
+        .item(&mi(app, "format.code", "Code", Some("CmdOrCtrl+E"))?)
         .item(&mi(
             app,
             "format.strike",
             "Strike",
-            Some("Ctrl+Shift+Backquote"),
+            Some("Shift+CmdOrCtrl+X"),
         )?)
         .item(&mi(app, "format.comment", "Comment", Some("Ctrl+Minus"))?)
         .item(&mi(

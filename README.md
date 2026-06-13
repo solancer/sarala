@@ -38,7 +38,7 @@ Most items live in the native menus with their accelerators shown inline; the co
 | `Shift+Cmd/Ctrl+L` | Toggle sidebar |
 | `F8` / `F9` | Focus mode / Typewriter mode |
 | `Cmd/Ctrl+B / I / U / K` | Bold / italic / underline / link |
-| `` Ctrl+` `` / ``Ctrl+Shift+` `` | Inline code / strike |
+| `Cmd/Ctrl+E` / `Shift+Cmd/Ctrl+X` | Inline code / strike |
 | `Cmd/Ctrl+1…6`, `0` | Heading level / paragraph |
 | `Cmd/Ctrl+=` / `Cmd/Ctrl+-` | Increase / decrease heading level |
 | `Alt+Cmd/Ctrl+T / C / Q / O / U / X` | Table / fences / quote / ordered / bullet / task list |
