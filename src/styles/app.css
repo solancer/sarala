@@ -458,6 +458,19 @@ body { font-family: var(--font-ui); }
   background: var(--bg);
 }
 .statusbar .sep { opacity: 0.5; }
+.palette-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  padding: 3px 5px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.palette-toggle:hover { color: var(--accent); background: var(--accent-soft); }
+.palette-toggle.on { color: var(--accent); background: var(--accent-soft); }
 
 @media (prefers-reduced-motion: no-preference) {
   .block { transition: border-color 120ms ease; }
@@ -945,11 +958,11 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 ::highlight(inkdown-find-current) { background-color: #4183c4; color: #ffffff; }
 
 
-/* ---- Palette switcher (floating bottom-right) ---- */
+/* ---- Palette popover (toggled from the status bar, floats above it) ---- */
 .palette {
   position: fixed;
-  right: 18px;
-  bottom: 16px;
+  right: 14px;
+  bottom: 42px;
   z-index: 60;
   display: flex;
   align-items: center;
