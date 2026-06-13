@@ -5,6 +5,11 @@
   "windows": ["main", "main-*"],
   "permissions": [
     "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-title",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-is-fullscreen",
     "dialog:default",
     "opener:default",
     "clipboard-manager:allow-read-text",

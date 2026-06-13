@@ -829,6 +829,10 @@ ul.toc li.toc-l6 { padding-left: 92px; }
   user-select: none;
   -webkit-user-select: none;
 }
+/* Children must not capture the mousedown, or the Tauri drag region (which
+   only fires when the moused-down element itself carries the attribute)
+   won't start a window drag over them. */
+.desktop-titlebar * { pointer-events: none; }
 .desktop-titlebar .t-edited { color: var(--ink-soft); font-weight: 400; }
 .app.is-tauri .sidebar-tabs { padding-top: 42px; }
 
