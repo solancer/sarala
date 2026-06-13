@@ -100,13 +100,16 @@ export default function Block(props: Props) {
       // view; activation should never move the viewport (find/typewriter
       // scroll deliberately below).
       el.focus({ preventScroll: true });
+      // Reveal BEFORE placing the caret: markers at the caret are display:none
+      // until revealed, and the browser drops a caret aimed into hidden text to
+      // offset 0 (e.g. typing "# " — the whole line is the hidden marker).
       if (selection) {
+        reveal(selection.start);
         setSelection(el, selection.start, selection.end);
         el.scrollIntoView({ block: "nearest" });
-        reveal(selection.start);
       } else {
-        setCaret(el, caret);
         reveal(caret);
+        setCaret(el, caret);
       }
     })
   );

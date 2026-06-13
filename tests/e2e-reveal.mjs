@@ -389,6 +389,40 @@ check(gutter.active?.includes("Welcome to Inkdown"),
 await page.keyboard.press("Escape");
 await page.waitForTimeout(80);
 
+// Regression: typing "# " must leave the caret after the space, not jump to
+// offset 0 (the whole line is a display:none marker until revealed).
+await page.reload();
+await page.waitForSelector(".block");
+await page.locator(".block").last().locator(".rendered").click();
+await page.waitForSelector(".block.active .source");
+await page.evaluate(() => {
+  const el = document.querySelector(".block.active .source");
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  r.collapse(false);
+  const s = getSelection();
+  s.removeAllRanges();
+  s.addRange(r);
+});
+await page.keyboard.press("Enter");
+await page.waitForTimeout(150);
+await page.keyboard.type("#");
+await page.waitForTimeout(80);
+await page.keyboard.type(" ");
+await page.waitForTimeout(120);
+const hashCaret = await page.evaluate(() => {
+  const el = document.querySelector(".block.active .source");
+  const sel = getSelection();
+  const pre = sel.getRangeAt(0).cloneRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset);
+  return { caret: pre.toString().length, text: el.textContent };
+});
+check(hashCaret.text === "# " && hashCaret.caret === 2,
+  `caret stays after "# " (text=${JSON.stringify(hashCaret.text)}, caret=${hashCaret.caret})`);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(80);
+
 // Undo / redo: typing coalesces into one step; Cmd/Ctrl+Z round-trips.
 await page.locator(".block .rendered", { hasText: "Split panes duplicate" }).first().click();
 await page.waitForSelector(".block.active .source");
