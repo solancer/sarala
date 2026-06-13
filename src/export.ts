@@ -121,6 +121,20 @@ body.has-toc .doc-toc a:hover { text-decoration: underline; }
 @media print { body.has-toc { display: block; } body.has-toc .doc-toc { display: none; } }
 `;
 
+/**
+ * Appended after the app stylesheet for exports: force backgrounds/colors to
+ * print (Chrome drops them otherwise), give the document a centered column
+ * (there's no .page wrapper in the export), and resolve the body theme colors.
+ */
+export const EXPORT_PRINT_CSS = `
+html, body { height: auto !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { background: var(--bg); color: var(--ink); margin: 0; }
+body:not(.has-toc) .rendered { max-width: 760px; margin: 40px auto; padding: 0 28px; }
+body.has-toc { padding: 40px 28px; box-sizing: border-box; }
+.rendered { padding: 0; }
+`;
+
 export interface BuildHtmlOptions {
   title: string;
   body: string; // rendered HTML

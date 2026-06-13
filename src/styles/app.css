@@ -361,7 +361,7 @@ body { font-family: var(--font-ui); }
 .rendered h1, .rendered h2 { padding-bottom: 0.25em; border-bottom: 1px solid var(--rule); }
 .rendered h3 { font-size: 1.2em; }
 .rendered p { margin: 0.35em 0; }
-.rendered a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-soft); }
+.rendered a { color: var(--link, var(--accent)); text-decoration: none; border-bottom: 1px solid var(--accent-soft); }
 .rendered blockquote {
   margin: 0.5em 0;
   padding: 2px 18px;

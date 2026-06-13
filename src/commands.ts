@@ -33,7 +33,7 @@ import {
 } from "./settings";
 import {
   buildExportHtml, pageCss, readExportOverrides, pandocFlagsFor, resolveOutputPath,
-  type ExportPreset, type ExportFormat,
+  EXPORT_PRINT_CSS, type ExportPreset, type ExportFormat,
 } from "./export";
 import { docDir, currentFrontMatter, docBaseName } from "./images";
 import { openFind, findNext } from "./components/FindBar";
@@ -210,9 +210,13 @@ function exportBaseName(): string {
 }
 
 async function loadExportCss(): Promise<string> {
-  return fetch(new URL("./styles/export.css", import.meta.url))
+  // The full app stylesheet (theme variables + .rendered styling + Shiki + math)
+  // so exports match the editor; EXPORT_PRINT_CSS forces colors to print and
+  // gives the standalone document a centered column.
+  const app = await fetch(new URL("./styles/app.css", import.meta.url))
     .then((r) => r.text())
     .catch(() => "");
+  return app + EXPORT_PRINT_CSS;
 }
 
 /** Build the exported HTML document (outline sidebar when there are headings). */
