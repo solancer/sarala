@@ -12,6 +12,7 @@ import {
   fileName, setActive, fileTree, folderName, THEMES, targetBlockIndex,
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
   focusMode, typewriterMode, alwaysOnTop, zoom, tableFullWidth,
+  mathAltDelimiters, mathFence, bumpMermaidEpoch,
 } from "./store";
 import { isTauri, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS } from "./platform";
 import {
@@ -145,6 +146,10 @@ export default function App() {
   });
   createEffect(() => setMenuChecked("edit.smart_punctuation", smartPunctuation()));
   createEffect(() => setMenuChecked("edit.preserve_breaks", preserveBreaks()));
+  createEffect(() => setMenuChecked("edit.math.alt_delimiters", mathAltDelimiters()));
+  createEffect(() => setMenuChecked("edit.math.fence", mathFence()));
+  // Re-render mermaid diagrams when the theme switches (dark/light).
+  createEffect(() => { theme(); bumpMermaidEpoch(); });
   createEffect(() => {
     const le = lineEnding();
     void setMenuChecked("edit.line_ending.lf", le === "lf");

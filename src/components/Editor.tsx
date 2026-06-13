@@ -59,6 +59,7 @@ export default function Editor() {
         <For each={doc.blocks}>
           {(block, i) => (
             <Block
+              id={block.id}
               text={block.text}
               active={doc.activeIndex === i()}
               onActivate={(caret) => {

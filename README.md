@@ -11,6 +11,8 @@ The editing surface *is* the preview: every paragraph, heading, list, quote, tab
 - Click anywhere in rendered text and the caret lands at that spot in the source (rendered→source position mapping)
 - Merge on backspace at block start, arrow-key navigation across blocks, IME-safe (composition events respected)
 - **GFM**: tables, task lists (clickable checkboxes), strikethrough, fenced code with highlight.js (same highlighting on screen and in export)
+- **Math** (KaTeX): inline `$…$` and block `$$…$$`, rendered in inactive blocks and shown as raw source while editing; optional `\(…\)` / `\[…\]` delimiters and a `` ```math `` block (both preference-gated, off by default); a broken formula keeps its last good render with an error rather than blanking
+- **Diagrams** (Mermaid): `` ```mermaid `` blocks render every diagram type (flowchart, sequence, gantt, class, state, pie, ER, gitGraph, mindmap, timeline, quadrant, sankey, XY, block, kanban, architecture); invalid syntax shows an inline error and keeps the last good diagram; a `--mermaid-theme` CSS var follows the app's light/dark theme
 - **Native menu bar** (Typora-style: File, Edit, Paragraph, Format, View, Themes, Window, Help) — every item dispatches through one frontend command bus shared with the keyboard shortcuts
 - **Find & replace** (`Cmd/Ctrl+F`, replace one or all) and **Open Quickly** fuzzy finder (`Shift+Cmd/Ctrl+P`)
 - **Sidebar**: file tree (open a folder, browse `.md` files) and live outline (click a heading to jump)
@@ -96,4 +98,4 @@ src-tauri/
 
 ## Roadmap (from the PRD)
 
-Math (KaTeX), Mermaid fences, autosave + crash recovery, file watching, custom CSS theme folder.
+Autosave + crash recovery, file watching, custom CSS theme folder.

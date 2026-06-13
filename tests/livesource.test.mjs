@@ -322,5 +322,58 @@ assert(!styleSource("| lone | row |").includes("md-table"),
   assert(text() === "clean", "loading a document clears history");
 }
 
+/* ---------- KaTeX math rendering ---------- */
+{
+  const out = path.join(here, ".build", "markdown.mjs");
+  await build({
+    entryPoints: [path.join(here, "..", "src", "markdown.ts")],
+    bundle: true,
+    format: "esm",
+    outfile: out,
+  });
+  const md = await import(out);
+
+  assert(md.renderMarkdown("inline $x^2$ here").includes('class="katex"'),
+    "inline $...$ renders KaTeX");
+  assert(md.renderMarkdown("$$\\int_0^1 x\\,dx$$").includes("math-block"),
+    "block $$...$$ renders a math-block");
+  assert(!md.renderMarkdown("it costs $5 and $10 total").includes('class="katex"'),
+    "currency $5 ... $10 is NOT treated as math");
+
+  // Broken math, no prior good render → visible error, never blank.
+  const broken = md.renderMarkdown("$\\frac{1}{$");
+  assert(broken.includes("math-error") && broken.replace(/<[^>]+>/g, "").trim() !== "",
+    "broken math shows an error, never blanks");
+
+  // Alt delimiters gated off by default, on when enabled.
+  assert(!md.renderMarkdown("test \\(a+b\\) end").includes('class="katex"'),
+    "\\( \\) ignored when alt delimiters off");
+  md.setMathAltDelimiters(true);
+  assert(md.renderMarkdown("test \\(a+b\\) end").includes('class="katex"'),
+    "\\( \\) renders when alt delimiters on");
+  md.setMathAltDelimiters(false);
+
+  // ```math fence gated off by default, on when enabled.
+  const fenceSrc = "```math\n\\frac{a}{b}\n```";
+  assert(!md.renderMarkdown(fenceSrc).includes('class="katex"'),
+    "```math ignored when fence pref off");
+  md.setMathFence(true);
+  assert(md.renderMarkdown(fenceSrc).includes('class="katex"'),
+    "```math renders when fence pref on");
+  md.setMathFence(false);
+
+  // Mermaid fence → placeholder div carrying the source.
+  const mmd = md.renderMarkdown("```mermaid\ngraph TD; A-->B;\n```");
+  assert(mmd.includes("mermaid-block") && mmd.includes("data-mermaid"),
+    "```mermaid emits a placeholder with its source");
+
+  // Last-good fallback: a block that rendered, then breaks, keeps its render.
+  assert(md.renderMarkdown("$y = mx + b$", "blk1").includes('class="katex"'),
+    "block renders math with a key");
+  const regressed = md.renderMarkdown("$y = \\frac{$", "blk1");
+  assert(regressed.includes('class="katex"') && regressed.includes("render-error"),
+    "broken math keeps the last good render + an error banner");
+}
+
 console.log(`${passes} passed, ${failures} failed`);
 if (failures) process.exit(1);

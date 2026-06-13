@@ -4,8 +4,9 @@ import {
   setCopyImageToAssets, setTableFullWidth, bumpRenderEpoch,
   setTheme, setZoom, clampZoom, THEMES, type ThemeId,
   setSidebarWidth, clampSidebar,
+  setMathAltDelimitersSig, setMathFenceSig,
 } from "./store";
-import { setPreserveBreaksOption } from "./markdown";
+import { setPreserveBreaksOption, setMathAltDelimiters, setMathFence } from "./markdown";
 
 export interface ExportMemo {
   /** Menu id of the export command, e.g. "file.export.docx". */
@@ -72,6 +73,12 @@ function hydrateStore() {
   if ((THEMES as readonly string[]).includes(savedTheme)) setTheme(savedTheme as ThemeId);
   setZoom(clampZoom(getSetting("zoom", 100)));
   setSidebarWidth(clampSidebar(getSetting("sidebarWidth", 240)));
+  const altDelim = getSetting("mathAltDelimiters", false);
+  setMathAltDelimitersSig(altDelim);
+  setMathAltDelimiters(altDelim);
+  const mFence = getSetting("mathFence", false);
+  setMathFenceSig(mFence);
+  setMathFence(mFence);
   const breaks = getSetting("preserveBreaks", false);
   setPreserveBreaks(breaks);
   setPreserveBreaksOption(breaks);

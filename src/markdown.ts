@@ -1,19 +1,124 @@
-import { Marked } from "marked";
-import { markedHighlight } from "marked-highlight";
+import { Marked, type Tokens } from "marked";
 import hljs from "highlight.js/lib/common";
 import DOMPurify from "dompurify";
+import katex from "katex";
 
-const marked = new Marked(
-  markedHighlight({
-    emptyLangClass: "hljs",
-    langPrefix: "hljs language-",
-    highlight(code, lang) {
-      const language = hljs.getLanguage(lang) ? lang : "plaintext";
-      return hljs.highlight(code, { language }).value;
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** Encode a string for safe use inside a double-quoted HTML attribute. */
+const escapeAttr = (s: string) =>
+  escapeHtml(s).replace(/"/g, "&quot;").replace(/\n/g, "&#10;");
+
+/* ---------- math preferences (gated, off by default) ---------- */
+
+let mathAltDelimiters = false; // \( \) and \[ \]
+let mathFence = false; //  ```math  fenced block
+export function setMathAltDelimiters(on: boolean) {
+  mathAltDelimiters = on;
+}
+export function setMathFence(on: boolean) {
+  mathFence = on;
+}
+
+/* ---------- KaTeX rendering ---------- */
+
+// Per-render scratch: math HTML and mermaid source are stashed and re-injected
+// after DOMPurify (KaTeX markup and Mermaid's "-->" arrows both trip the
+// sanitizer otherwise — the latter reads as a comment-close mXSS vector).
+let mathStash: string[] = [];
+let mermaidStash: string[] = [];
+let mathErrored = false;
+
+function renderMathHtml(tex: string, display: boolean): string {
+  const t = tex.trim();
+  try {
+    const html = katex.renderToString(t, {
+      displayMode: display,
+      throwOnError: true,
+      strict: false,
+    });
+    return display ? `<div class="math-block">${html}</div>` : html;
+  } catch (e) {
+    mathErrored = true;
+    const msg = e instanceof Error ? e.message : String(e);
+    const inner = `<span class="math-error" title="${escapeAttr(msg)}">${escapeHtml(t)}</span>`;
+    return display ? `<div class="math-block math-block-error">${inner}</div>` : inner;
+  }
+}
+
+function stashMath(tex: string, display: boolean): string {
+  mathStash.push(renderMathHtml(tex, display));
+  const i = mathStash.length - 1;
+  return display ? `<div data-math="${i}"></div>` : `<span data-math="${i}"></span>`;
+}
+
+const marked = new Marked({ gfm: true, breaks: false });
+
+marked.use({
+  extensions: [
+    {
+      name: "inlineMath",
+      level: "inline",
+      start(src: string) {
+        const m = src.match(/\$|\\\(/);
+        return m ? m.index : undefined;
+      },
+      tokenizer(src: string) {
+        // $...$ — guarded against currency ("$5 and $10"): no space just
+        // inside the delimiters, closing $ not followed by a digit.
+        let m = /^\$(?!\s)((?:\\.|[^$\n])*?[^\s\\])\$(?!\d)/.exec(src);
+        if (!m) m = /^\$(?!\s)(\S)\$(?!\d)/.exec(src); // single-char case
+        if (m) return { type: "inlineMath", raw: m[0], text: m[1] };
+        if (mathAltDelimiters) {
+          const a = /^\\\(([\s\S]+?)\\\)/.exec(src);
+          if (a) return { type: "inlineMath", raw: a[0], text: a[1] };
+        }
+        return undefined;
+      },
+      renderer(token) {
+        return stashMath((token as Tokens.Generic).text as string, false);
+      },
     },
-  })
-);
-marked.setOptions({ gfm: true, breaks: false });
+    {
+      name: "blockMath",
+      level: "block",
+      start(src: string) {
+        const m = src.match(/\$\$|\\\[/);
+        return m ? m.index : undefined;
+      },
+      tokenizer(src: string) {
+        let m = /^\$\$([\s\S]+?)\$\$/.exec(src);
+        if (m) return { type: "blockMath", raw: m[0], text: m[1] };
+        if (mathAltDelimiters) {
+          m = /^\\\[([\s\S]+?)\\\]/.exec(src);
+          if (m) return { type: "blockMath", raw: m[0], text: m[1] };
+        }
+        return undefined;
+      },
+      renderer(token) {
+        return stashMath((token as Tokens.Generic).text as string, true);
+      },
+    },
+  ],
+  renderer: {
+    // Own the code renderer (replacing marked-highlight) so ```mermaid and
+    // ```math fences are intercepted; everything else is hljs-highlighted.
+    code(token: Tokens.Code) {
+      const lang = (token.lang || "").split(/\s+/)[0].toLowerCase();
+      if (lang === "mermaid") {
+        mermaidStash.push(token.text);
+        return `<div class="mermaid-block" data-mmd="${mermaidStash.length - 1}"></div>`;
+      }
+      if (lang === "math" && mathFence) {
+        return stashMath(token.text, true);
+      }
+      const language = hljs.getLanguage(lang) ? lang : "plaintext";
+      const html = hljs.highlight(token.text, { language }).value;
+      return `<pre><code class="hljs${lang ? ` language-${lang}` : ""}">${html}</code></pre>`;
+    },
+  },
+});
 
 /** Languages the bundled highlighter knows, for the code-block picker. */
 export function listCodeLanguages(): string[] {
@@ -31,11 +136,15 @@ export function setTocProvider(fn: () => Heading[]) {
   tocProvider = fn;
 }
 
-const escapeHtml = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+// Last good rendered HTML per block, so a block whose math breaks mid-edit
+// shows its previous render plus an error rather than blanking.
+const lastGoodBlock = new Map<string, string>();
 
-/** Render a markdown string to sanitized HTML. */
-export function renderMarkdown(md: string): string {
+/**
+ * Render a markdown string to sanitized HTML. `blockKey` (a block's stable id)
+ * enables the last-good-on-math-error fallback for that block.
+ */
+export function renderMarkdown(md: string, blockKey?: string): string {
   if (!md.trim()) return `<p class="empty-block">&nbsp;</p>`;
   // A lone [TOC] paragraph renders as the document outline.
   if (md.trim() === "[TOC]" && tocProvider) {
@@ -44,8 +153,28 @@ export function renderMarkdown(md: string): string {
       .join("");
     return DOMPurify.sanitize(`<ul class="toc">${items || "<li>No headings</li>"}</ul>`);
   }
+
+  mathStash = [];
+  mermaidStash = [];
+  mathErrored = false;
   const raw = marked.parse(md, { async: false }) as string;
-  return DOMPurify.sanitize(raw, { ADD_ATTR: ["target"] });
+  let html = DOMPurify.sanitize(raw, { ADD_ATTR: ["target"] });
+  // Re-inject the KaTeX markup the sanitizer left as empty placeholders, and
+  // swap each mermaid placeholder's numeric key for its real source (which
+  // DOMPurify would otherwise strip for containing "-->").
+  html = html
+    .replace(/<span data-math="(\d+)">\s*<\/span>/g, (_, i) => mathStash[Number(i)] ?? "")
+    .replace(/<div data-math="(\d+)">\s*<\/div>/g, (_, i) => mathStash[Number(i)] ?? "")
+    .replace(/data-mmd="(\d+)"/g, (_, i) => `data-mermaid="${escapeAttr(mermaidStash[Number(i)] ?? "")}"`);
+
+  if (blockKey != null) {
+    const hasMath = mathStash.length > 0;
+    if (mathErrored && lastGoodBlock.has(blockKey)) {
+      return `${lastGoodBlock.get(blockKey)}<div class="render-error">⚠ Math error — showing last valid render</div>`;
+    }
+    if (hasMath && !mathErrored) lastGoodBlock.set(blockKey, html);
+  }
+  return html;
 }
 
 /**

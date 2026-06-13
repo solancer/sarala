@@ -8,6 +8,7 @@ import {
   spellcheckOn, setSpellcheckOn, smartPunctuation, setSmartPunctuation,
   preserveBreaks, setPreserveBreaks, lineEnding, setLineEnding,
   copyImageToAssets, setCopyImageToAssets, tableFullWidth, setTableFullWidth,
+  mathAltDelimiters, setMathAltDelimitersSig, mathFence, setMathFenceSig,
   setSidebarTab, focusMode, setFocusMode, typewriterMode, setTypewriterMode,
   alwaysOnTop, setAlwaysOnTop, zoom, setZoom, clampZoom,
   bumpRenderEpoch,
@@ -21,7 +22,11 @@ import {
   pickImageFile, copyAsset,
   setWindowAlwaysOnTop, toggleFullscreen,
 } from "./platform";
-import { renderMarkdown, setPreserveBreaksOption } from "./markdown";
+import {
+  renderMarkdown, setPreserveBreaksOption,
+  setMathAltDelimiters as setMathAltDelimitersOpt,
+  setMathFence as setMathFenceOpt,
+} from "./markdown";
 import {
   recentFiles, addRecentFile, clearRecentFiles, lastExport, setLastExport,
   setSetting,
@@ -435,6 +440,22 @@ async function chooseLineEnding(v: "lf" | "crlf") {
   await setSetting("lineEnding", v);
 }
 
+async function toggleMathAltDelimiters() {
+  const v = !mathAltDelimiters();
+  setMathAltDelimitersSig(v);
+  setMathAltDelimitersOpt(v);
+  bumpRenderEpoch();
+  await setSetting("mathAltDelimiters", v);
+}
+
+async function toggleMathFence() {
+  const v = !mathFence();
+  setMathFenceSig(v);
+  setMathFenceOpt(v);
+  bumpRenderEpoch();
+  await setSetting("mathFence", v);
+}
+
 // ---------- Format ----------
 
 /** The markdown/bare link whose source span contains the caret, if any. */
@@ -560,6 +581,8 @@ const registry: Record<string, Command> = {
   "edit.line_ending.lf": () => chooseLineEnding("lf"),
   "edit.line_ending.crlf": () => chooseLineEnding("crlf"),
   "edit.preserve_breaks": togglePreserveBreaks,
+  "edit.math.alt_delimiters": toggleMathAltDelimiters,
+  "edit.math.fence": toggleMathFence,
 
   // Paragraph — headings act on the active block
   "paragraph.heading.0": heading(0),

@@ -12,6 +12,7 @@
 }
 
 [data-theme="paper"] {
+  --mermaid-theme: default;
   --quote-bar: var(--accent);
   --tint: var(--accent-soft);
   --bg: #f6f5f0;
@@ -27,6 +28,7 @@
 }
 
 [data-theme="graphite"] {
+  --mermaid-theme: dark;
   --quote-bar: var(--accent);
   --tint: var(--accent-soft);
   --bg: #15171b;
@@ -461,6 +463,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 /* ---- Additional themes (View > Themes) ---- */
 
 [data-theme="github"] {
+  --mermaid-theme: default;
   /* Typora's default theme palette */
   --bg: #ffffff;
   --bg-panel: #fafafa;
@@ -477,6 +480,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 }
 
 [data-theme="night"] {
+  --mermaid-theme: dark;
   --quote-bar: var(--accent);
   --tint: var(--accent-soft);
   --bg: #1b212c;
@@ -492,6 +496,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 }
 
 [data-theme="newsprint"] {
+  --mermaid-theme: default;
   --quote-bar: var(--accent);
   --tint: var(--accent-soft);
   --bg: #f1ede4;
@@ -507,6 +512,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 }
 
 [data-theme="whitey"] {
+  --mermaid-theme: default;
   --quote-bar: var(--accent);
   --tint: var(--accent-soft);
   --bg: #ffffff;
@@ -825,3 +831,30 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 }
 .desktop-titlebar .t-edited { color: var(--ink-soft); font-weight: 400; }
 .app.is-tauri .sidebar-tabs { padding-top: 42px; }
+
+
+/* ---- Math (KaTeX) & diagrams (Mermaid) ---- */
+
+.rendered .math-block { margin: 0.6em 0; text-align: center; overflow-x: auto; }
+.rendered .katex { font-size: 1.05em; }
+.math-error { color: #c0392b; border-bottom: 1px dotted #c0392b; cursor: help; }
+.math-block-error { text-align: left; }
+
+.mermaid-block { margin: 0.6em 0; text-align: center; overflow-x: auto; }
+.mermaid-block svg { max-width: 100%; height: auto; }
+.mermaid-block:not(.rendered):empty::before {
+  content: "Rendering diagram…";
+  color: var(--ink-soft);
+  font: 12px var(--font-ui);
+}
+
+.render-error {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-left: 3px solid #c0392b;
+  background: rgba(192, 57, 43, 0.07);
+  color: #c0392b;
+  font: 12px var(--font-mono);
+  text-align: left;
+  white-space: pre-wrap;
+}

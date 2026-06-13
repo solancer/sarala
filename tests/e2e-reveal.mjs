@@ -478,6 +478,27 @@ nav = await caretState();
 check(nav && nav.text.startsWith("Split panes") && nav.caret === nav.text.length,
   "ArrowUp from a block's first line arrives at the END of the previous block");
 
+// Math: renders KaTeX in the inactive block, shows raw source when active.
+await page.reload();
+await page.waitForSelector(".block");
+await page.locator(".block .rendered", { hasText: "Split panes duplicate" }).first().click();
+await page.waitForSelector(".block.active .source");
+await page.keyboard.press("End");
+await page.keyboard.type(" energy $E=mc^2$ here");
+await page.keyboard.press("Escape");
+await page.waitForTimeout(150);
+const mathBlock = page.locator(".block .rendered", { hasText: "energy" }).first();
+check(await mathBlock.locator(".katex").count() > 0, "inline math renders KaTeX in the inactive block");
+await mathBlock.click();
+await page.waitForSelector(".block.active .source");
+check((await page.locator(".block.active .source").textContent())?.includes("$E=mc^2$"),
+  "active block shows the raw math source");
+await page.keyboard.press("Escape");
+await page.waitForTimeout(100);
+// (Mermaid's async rendering is covered deterministically in e2e-mermaid.mjs,
+// which drives src/mermaid.ts directly — the editor's fast-typing choreography
+// is too racy to build a fenced diagram reliably.)
+
 await browser.close();
 kill();
 console.log(failures ? `\n${failures} FAILURES` : "\nall live-app checks passed");

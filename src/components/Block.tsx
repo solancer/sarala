@@ -7,14 +7,16 @@ import {
 import { isTauri, openExternal } from "../platform";
 import {
   consumeCaretRequest, consumeSelectionRequest,
-  spellcheckOn, smartPunctuation, renderEpoch,
+  spellcheckOn, smartPunctuation, renderEpoch, mermaidEpoch,
 } from "../store";
+import { renderMermaidIn } from "../mermaid";
 import { executeCommand, registerBlockApi, unregisterBlockApi, type BlockApi } from "../commands";
 import { parseTable, cellRanges } from "../tabletools";
 import TableToolbar from "./TableToolbar";
 import CodeLangPicker from "./CodeLangPicker";
 
 interface Props {
+  id: number;
   text: string;
   active: boolean;
   onActivate: (caret?: number) => void;
@@ -30,9 +32,22 @@ interface Props {
 export default function Block(props: Props) {
   let el: HTMLDivElement | undefined;
   let rootEl: HTMLDivElement | undefined;
+  let renderedEl: HTMLDivElement | undefined;
   let pendingCaret: number | null = null;
   let composing = false;
   let lastRevealCaret = -1;
+
+  // Render mermaid diagrams into the rendered view after each (re)render of an
+  // inactive block. renderMarkdown emits empty placeholders; this fills them.
+  createEffect(() => {
+    renderEpoch();
+    mermaidEpoch();
+    void props.text;
+    if (props.active) return;
+    const host = renderedEl;
+    const key = String(props.id);
+    if (host) queueMicrotask(() => void renderMermaidIn(host, key));
+  });
 
   const reveal = (caret: number) => {
     if (!el) return;
@@ -358,8 +373,13 @@ export default function Block(props: Props) {
       <Show
         when={props.active}
         fallback={
-          // eslint-disable-next-line solid/no-innerhtml -- renderMarkdown output is DOMPurify-sanitized
-          <div class="rendered" onMouseDown={onRenderedClick} innerHTML={(renderEpoch(), renderMarkdown(props.text))} />
+          <div
+            class="rendered"
+            ref={renderedEl}
+            onMouseDown={onRenderedClick}
+            // eslint-disable-next-line solid/no-innerhtml -- renderMarkdown output is DOMPurify-sanitized
+            innerHTML={(renderEpoch(), mermaidEpoch(), renderMarkdown(props.text, String(props.id)))}
+          />
         }
       >
         <div

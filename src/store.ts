@@ -102,9 +102,17 @@ export const [copyImageToAssets, setCopyImageToAssets] = createSignal(false);
 // Tables stretch to the page column instead of sizing to their content.
 export const [tableFullWidth, setTableFullWidth] = createSignal(false);
 
+// Math rendering preferences (gated, off by default; persisted).
+export const [mathAltDelimiters, setMathAltDelimitersSig] = createSignal(false);
+export const [mathFence, setMathFenceSig] = createSignal(false);
+
 // Bumped when a global render option changes so rendered blocks re-render.
 export const [renderEpoch, setRenderEpoch] = createSignal(0);
 export const bumpRenderEpoch = () => setRenderEpoch((n) => n + 1);
+
+// Bumped when the theme changes so mermaid diagrams re-render in the new theme.
+export const [mermaidEpoch, setMermaidEpoch] = createSignal(0);
+export const bumpMermaidEpoch = () => setMermaidEpoch((n) => n + 1);
 
 export const fullText = createMemo(() => joinBlocks(state.blocks.map((b) => b.text)));
 export const outline = createMemo(() => extractOutline(state.blocks.map((b) => b.text)));
