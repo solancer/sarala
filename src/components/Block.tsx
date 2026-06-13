@@ -79,7 +79,10 @@ export default function Block(props: Props) {
       const caret = pendingCaret ?? consumeCaretRequest() ?? props.text.length;
       pendingCaret = null;
       el.innerHTML = styleSource(props.text);
-      el.focus();
+      // preventScroll: focusing a contenteditable otherwise yanks it into
+      // view; activation should never move the viewport (find/typewriter
+      // scroll deliberately below).
+      el.focus({ preventScroll: true });
       if (selection) {
         setSelection(el, selection.start, selection.end);
         el.scrollIntoView({ block: "nearest" });

@@ -24,14 +24,35 @@ export default function Editor() {
     <div
       class="editor"
       onMouseDown={(e) => {
-        // Clicking empty space (the editor gutters or the page's padding
-        // below the last block) starts writing at the end of the document.
+        // Clicks that land inside a block are the block's own concern.
         const t = e.target as HTMLElement;
-        if (e.target === e.currentTarget || t.classList?.contains("page")) {
-          const last = doc.blocks.length - 1;
-          if (doc.blocks[last].text.trim() === "") setActive(last);
-          else insertBlockAfter(last);
+        if (t.closest(".block")) return;
+
+        // Empty space — gutter beside a line, or padding below the document.
+        // Activate the block nearest the click's Y, NOT always the last one
+        // (which jumped the viewport to the bottom). Only the trailing
+        // padding, below all content, appends/lands at the end.
+        const blocks = [...(e.currentTarget as HTMLElement).querySelectorAll(".block")];
+        if (!blocks.length) return;
+        const y = e.clientY;
+        const lastIdx = doc.blocks.length - 1;
+        const belowAll = y > blocks[blocks.length - 1].getBoundingClientRect().bottom;
+        if (belowAll) {
+          e.preventDefault();
+          if (doc.blocks[lastIdx].text.trim() === "") setActive(lastIdx);
+          else insertBlockAfter(lastIdx);
+          return;
         }
+        // Beside or between blocks: pick the one vertically nearest the click.
+        let best = 0;
+        let bestDist = Infinity;
+        blocks.forEach((b, i) => {
+          const r = b.getBoundingClientRect();
+          const d = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+          if (d < bestDist) { bestDist = d; best = i; }
+        });
+        e.preventDefault();
+        setActive(best);
       }}
     >
       <div class="page">

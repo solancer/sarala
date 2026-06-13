@@ -343,6 +343,30 @@ await page.waitForTimeout(100);
 check((await page.evaluate(() => CSS.highlights?.get("inkdown-find")?.size ?? 0)) === 0,
   "closing the find bar clears the highlights");
 
+// Clicking the gutter beside a line activates THAT line and never jumps the
+// viewport to the bottom (regression: empty-space clicks targeted the last
+// block and scrolled the page away).
+await page.reload();
+await page.waitForSelector(".block");
+await page.evaluate(() => document.querySelector(".scroll").scrollTo({ top: 0 }));
+await page.waitForTimeout(80);
+const scrollTop = () => page.evaluate(() => document.querySelector(".scroll").scrollTop);
+const before = await scrollTop();
+// Click in the left gutter (.page padding) at the first heading's Y.
+const welcomeBox = await page.locator(".block", { hasText: "Welcome to Inkdown" }).first().boundingBox();
+const pageBox = await page.locator(".page").boundingBox();
+await page.mouse.click(pageBox.x + 20, welcomeBox.y + welcomeBox.height / 2);
+await page.waitForTimeout(120);
+const gutter = await page.evaluate(() => ({
+  active: document.querySelector(".block.active .source")?.textContent ?? null,
+  scroll: document.querySelector(".scroll").scrollTop,
+}));
+check(Math.abs(gutter.scroll - before) < 5, `gutter click keeps the viewport put (${before} → ${gutter.scroll})`);
+check(gutter.active?.includes("Welcome to Inkdown"),
+  `gutter click activates the nearest block, not the last (${JSON.stringify(gutter.active?.slice(0, 20))})`);
+await page.keyboard.press("Escape");
+await page.waitForTimeout(80);
+
 // Undo / redo: typing coalesces into one step; Cmd/Ctrl+Z round-trips.
 await page.locator(".block .rendered", { hasText: "Split panes duplicate" }).first().click();
 await page.waitForSelector(".block.active .source");
