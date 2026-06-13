@@ -155,7 +155,7 @@ export default function App() {
     <div
       class="app"
       data-theme={theme()}
-      classList={{ "focus-mode": focusMode(), "tables-full": tableFullWidth() }}
+      classList={{ "focus-mode": focusMode(), "tables-full": tableFullWidth(), "is-tauri": isTauri }}
       style={{ "--zoom": `${zoom()}%` }}
     >
       <Show when={sidebarOpen()}>
@@ -168,9 +168,17 @@ export default function App() {
         />
       </Show>
       <main class="main">
-        {/* Desktop gets the native title bar and menus (Typora layout); the
-            in-app toolbar only exists for the browser fallback. */}
-        <Show when={!isTauri}>
+        {/* Desktop: native title bar hidden (overlay), filename centered in-app
+            like Typora; the in-app toolbar is the browser fallback only. */}
+        <Show
+          when={!isTauri}
+          fallback={
+            <header class="desktop-titlebar" data-tauri-drag-region>
+              {fileName()}
+              <Show when={doc.dirty}><span class="t-edited">— Edited</span></Show>
+            </header>
+          }
+        >
           <header class="titlebar">
             <button class="ghost-btn" title="Toggle sidebar (Shift+Cmd/Ctrl+L)" onClick={() => setSidebarOpen(!sidebarOpen())}>☰</button>
             <span class="title">

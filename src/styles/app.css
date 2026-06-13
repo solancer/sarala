@@ -147,7 +147,7 @@ body { font-family: var(--font-ui); }
 .main { background: var(--bg-page); }
 .editor { min-height: 100%; cursor: text; }
 .page {
-  max-width: 1180px;
+  max-width: 1300px; /* 1140px text column + gutters — Typora's cap */
   margin: 0 auto;
   padding: 48px 80px 45vh;
 }
@@ -793,3 +793,24 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 
 ::highlight(inkdown-find) { background-color: rgba(255, 193, 7, 0.4); }
 ::highlight(inkdown-find-current) { background-color: #4183c4; color: #ffffff; }
+
+
+/* ---- Desktop overlay title bar (Typora layout) ----
+   The native bar is hidden (titleBarStyle Overlay); the filename renders
+   centered in-app, and the sidebar's own background runs to the window top
+   behind the traffic lights. */
+
+.desktop-titlebar {
+  flex: none;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: 600 13px var(--font-ui);
+  color: var(--ink);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.desktop-titlebar .t-edited { color: var(--ink-soft); font-weight: 400; }
+.app.is-tauri .sidebar-tabs { padding-top: 42px; }
