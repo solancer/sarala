@@ -1102,3 +1102,19 @@ body.tables-full .rendered table { width: 100%; }
 .about-meta span { display: inline-block; width: 70px; text-align: right; margin-right: 12px; color: var(--ink-soft); }
 .about-actions { display: flex; justify-content: center; gap: 8px; margin-top: 18px; }
 .about-actions .primary { color: var(--accent); font-weight: 600; }
+
+/* ---- Export HTML dialog ---- */
+.export-dialog {
+  width: 340px;
+  background: var(--bg-page);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 22px 24px 18px;
+  color: var(--ink);
+  outline: none;
+}
+.export-dialog h3 { margin: 0 0 10px; font: 600 15px var(--font-ui); }
+.export-dialog p { margin: 0; font: 13px/1.5 var(--font-ui); color: var(--ink-soft); }
+.export-dialog-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 18px; }
+.export-dialog-actions .primary { color: var(--accent); font-weight: 600; }

@@ -40,6 +40,7 @@ import { docDir, currentFrontMatter, docBaseName } from "./images";
 // reliably — a runtime fetch of a side-effect-imported CSS file is fragile in
 // packaged builds.
 import appCssText from "./styles/app.css?inline";
+import { askHtmlOutline } from "./components/ExportHtmlDialog";
 import { openFind, findNext } from "./components/FindBar";
 import { openTableDialog } from "./components/TableDialog";
 import { openAbout } from "./components/AboutModal";
@@ -259,9 +260,14 @@ function currentPdfCss(): string {
 }
 
 /** Run one export to `out`; returns the path written, or null if cancelled. */
-async function runExport(format: ExportFormat, out: string, pandocFlags: string[] = []): Promise<string | null> {
+async function runExport(
+  format: ExportFormat,
+  out: string,
+  pandocFlags: string[] = [],
+  outline = true,
+): Promise<string | null> {
   if (format === "html" || format === "html_plain") {
-    await writeTextFile(out, htmlDocument(format === "html", true));
+    await writeTextFile(out, htmlDocument(format === "html", format === "html" && outline));
     return out;
   }
   if (format === "pdf") {
@@ -296,9 +302,16 @@ async function runExport(format: ExportFormat, out: string, pandocFlags: string[
 
 /** Menu export (HTML / PDF / a pandoc format): prompt for path, export, remember. */
 async function doExport(format: ExportFormat, id: string, presetPath: string | null = null) {
+  // Styled HTML export asks whether to include the outline sidebar.
+  let outline = true;
+  if (format === "html" && !presetPath) {
+    const choice = await askHtmlOutline();
+    if (choice === null) return; // cancelled
+    outline = choice;
+  }
   const out = presetPath ?? (await pickSavePath(`${exportBaseName()}.${EXT[format]}`));
   if (!out && isTauri) return;
-  const written = await runExport(format, out ?? `${exportBaseName()}.${EXT[format]}`);
+  const written = await runExport(format, out ?? `${exportBaseName()}.${EXT[format]}`, [], outline);
   if (written) await setLastExport({ id, path: written });
 }
 

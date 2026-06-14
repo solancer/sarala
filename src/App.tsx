@@ -9,6 +9,7 @@ import TableDialog from "./components/TableDialog";
 import ImageContextMenu from "./components/ImageContextMenu";
 import PaletteSwitcher from "./components/PaletteSwitcher";
 import AboutModal from "./components/AboutModal";
+import ExportHtmlDialog from "./components/ExportHtmlDialog";
 import { initSettings } from "./settings";
 import {
   doc, theme, sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
@@ -208,6 +209,7 @@ export default function App() {
       <TableDialog />
       <ImageContextMenu />
       <AboutModal />
+      <ExportHtmlDialog />
     </div>
   );
 }
