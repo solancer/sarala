@@ -262,6 +262,14 @@ marked.use({
     },
   ],
   renderer: {
+    // Drop marked's default `disabled` on task-list checkboxes. A disabled
+    // input fires no click events, so the click would fall through to the
+    // block-activate path instead of toggling. Block.tsx's onRenderedClick
+    // owns the toggle (preventDefault + rewrite source), so the box is never
+    // edited natively.
+    checkbox(token: Tokens.Checkbox) {
+      return `<input type="checkbox"${token.checked ? " checked" : ""}>`;
+    },
     // Own the code renderer so ```mermaid and ```math fences are intercepted;
     // everything else is Shiki-highlighted (stashed past DOMPurify, which would
     // strip Shiki's inline-style color spans), with a plain fallback until

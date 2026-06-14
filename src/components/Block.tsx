@@ -361,13 +361,27 @@ export default function Block(props: Props) {
     openImageMenu({ ...ref, blockId: props.id }, e.clientX, e.clientY);
   };
 
+  // Task-list toggling lives on `click`, not `mousedown`: toggling rewrites the
+  // source and re-renders this block, and doing that during mousedown left the
+  // browser's native checkbox toggle to fire afterwards on the freshly rendered
+  // input — fighting our source-driven state (you could check but not uncheck).
+  // Here we cancel the native toggle and drive state from the markdown source.
+  const onRenderedCheckboxClick = (e: MouseEvent) => {
+    const t = e.target as HTMLElement;
+    if (!(t instanceof HTMLInputElement && t.type === "checkbox")) return;
+    e.preventDefault();
+    const host = e.currentTarget as HTMLElement;
+    const boxes = Array.from(host.querySelectorAll('input[type="checkbox"]'));
+    props.onToggleTask(boxes.indexOf(t));
+  };
+
   const onRenderedClick = (e: MouseEvent) => {
     const t = e.target as HTMLElement;
+    // A checkbox is handled on click. Do NOT preventDefault here: in WebKit (the
+    // macOS Tauri webview) preventDefault on a form control's mousedown can
+    // suppress the following click, which is where the toggle lives. The early
+    // return alone keeps the block from activating.
     if (t instanceof HTMLInputElement && t.type === "checkbox") {
-      e.preventDefault();
-      const host = e.currentTarget as HTMLElement;
-      const boxes = Array.from(host.querySelectorAll('input[type="checkbox"]'));
-      props.onToggleTask(boxes.indexOf(t));
       return;
     }
     const link = t.closest("a");
@@ -414,6 +428,7 @@ export default function Block(props: Props) {
             class="rendered"
             ref={renderedEl}
             onMouseDown={onRenderedClick}
+            onClick={onRenderedCheckboxClick}
             onContextMenu={onRenderedContextMenu}
             // eslint-disable-next-line solid/no-innerhtml -- renderMarkdown output is DOMPurify-sanitized
             innerHTML={(renderEpoch(), mermaidEpoch(), renderMarkdown(props.text, String(props.id)))}
