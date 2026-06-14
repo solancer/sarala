@@ -464,6 +464,10 @@ assert(!styleSource("| lone | row |").includes("md-table"),
   const css = ex.pageCss({ pageSize: "A4", margin: "20mm", footer: "${pageNo}" }, { title: "T", date: "D" });
   assert(css.includes("size: A4; margin: 20mm;") && css.includes("@bottom-center"),
     `pageCss emits size/margin + footer box (${css})`);
+  // Full-bleed: margin 0 drops the @page margin and insets via body padding.
+  const fb = ex.pageCss({ pageSize: "A4", margin: "0", footer: "${pageNo}" }, { title: "T", date: "D" });
+  assert(fb.includes("margin: 0;") && fb.includes("body { padding") && !fb.includes("@bottom-center"),
+    `margin 0 → full-bleed page + body padding, no footer box (${fb})`);
 
   // HTML with outline sidebar.
   const doc = ex.buildExportHtml({

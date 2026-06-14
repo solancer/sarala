@@ -26,8 +26,10 @@ interface SettingsData {
 }
 
 const DEFAULT_PDF: PdfOptions = {
+  // margin "0" → full-bleed: the theme background reaches the page edges (text
+  // inset via padding). Set a non-zero margin to get @page header/footer.
   pageSize: "A4",
-  margin: "20mm",
+  margin: "0",
   header: "",
   footer: "${title}    ${pageNo} / ${totalPages}",
 };

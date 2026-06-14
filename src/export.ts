@@ -96,7 +96,16 @@ export function headerFooterContent(template: string, ctx: { title: string; date
   return parts.length ? parts.join(" ") : '""';
 }
 
+const isZeroMargin = (m: string) => /^0(mm|cm|in|px|pt)?$/.test(m.trim());
+
 export function pageCss(opts: PdfOptions, ctx: { title: string; date: string }): string {
+  // Full-bleed (margin 0): the page margin area is paper-white and can't be
+  // colored, so to let the theme background reach the page edges we drop the
+  // @page margin and inset the text with body padding instead. The trade-off
+  // is no @page header/footer (those live in the margin area).
+  if (isZeroMargin(opts.margin)) {
+    return `@page { size: ${opts.pageSize}; margin: 0; } body { padding: 18mm 16mm; box-sizing: border-box; }`;
+  }
   const rules = [`size: ${opts.pageSize}; margin: ${opts.margin};`];
   if (opts.header)
     rules.push(`@top-center { content: ${headerFooterContent(opts.header, ctx)}; font: 9pt var(--font-ui, sans-serif); color: #888; }`);
