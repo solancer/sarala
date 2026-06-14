@@ -98,20 +98,16 @@ export function headerFooterContent(template: string, ctx: { title: string; date
 
 const isZeroMargin = (m: string) => /^0(mm|cm|in|px|pt)?$/.test(m.trim());
 
-export function pageCss(opts: PdfOptions, ctx: { title: string; date: string }): string {
-  // Full-bleed (margin 0): the page margin area is paper-white and can't be
-  // colored, so to let the theme background reach the page edges we drop the
-  // @page margin and inset the text with body padding instead. The trade-off
-  // is no @page header/footer (those live in the margin area).
-  if (isZeroMargin(opts.margin)) {
-    return `@page { size: ${opts.pageSize}; margin: 0; } body { padding: 18mm 16mm; box-sizing: border-box; }`;
-  }
-  const rules = [`size: ${opts.pageSize}; margin: ${opts.margin};`];
-  if (opts.header)
-    rules.push(`@top-center { content: ${headerFooterContent(opts.header, ctx)}; font: 9pt var(--font-ui, sans-serif); color: #888; }`);
-  if (opts.footer)
-    rules.push(`@bottom-center { content: ${headerFooterContent(opts.footer, ctx)}; font: 9pt var(--font-ui, sans-serif); color: #888; }`);
-  return `@page { ${rules.join(" ")} }`;
+/**
+ * Always full-bleed: the @page margin area is paper-white and can't be colored
+ * in CSS, so the @page margin is dropped (the theme background reaches every
+ * page edge) and the configured `margin` becomes the body's text-inset padding.
+ * (The @page header/footer can't be used in full-bleed — it lives in the margin
+ * area — so headerFooterContent stays available for a future framed mode.)
+ */
+export function pageCss(opts: PdfOptions): string {
+  const pad = isZeroMargin(opts.margin) ? "18mm 16mm" : opts.margin.trim();
+  return `@page { size: ${opts.pageSize}; margin: 0; } body { padding: ${pad}; box-sizing: border-box; }`;
 }
 
 /* ---------- HTML document assembly ---------- */

@@ -461,13 +461,14 @@ assert(!styleSource("| lone | row |").includes("md-table"),
     "date var becomes a literal");
 
   // @page CSS.
-  const css = ex.pageCss({ pageSize: "A4", margin: "20mm", footer: "${pageNo}" }, { title: "T", date: "D" });
-  assert(css.includes("size: A4; margin: 20mm;") && css.includes("@bottom-center"),
-    `pageCss emits size/margin + footer box (${css})`);
-  // Full-bleed: margin 0 drops the @page margin and insets via body padding.
-  const fb = ex.pageCss({ pageSize: "A4", margin: "0", footer: "${pageNo}" }, { title: "T", date: "D" });
-  assert(fb.includes("margin: 0;") && fb.includes("body { padding") && !fb.includes("@bottom-center"),
-    `margin 0 → full-bleed page + body padding, no footer box (${fb})`);
+  // Always full-bleed: @page margin 0 (theme fills the page), the configured
+  // margin becomes the body's text-inset padding, no @page footer.
+  const css = ex.pageCss({ pageSize: "A4", margin: "20mm", footer: "${pageNo}" });
+  assert(css.includes("@page { size: A4; margin: 0;") && css.includes("body { padding: 20mm;") && !css.includes("@bottom-center"),
+    `pageCss is full-bleed; margin becomes body padding (${css})`);
+  const fb = ex.pageCss({ pageSize: "A4", margin: "0" });
+  assert(fb.includes("margin: 0;") && fb.includes("body { padding: 18mm"),
+    `margin 0 → full-bleed with a default text inset (${fb})`);
 
   // HTML with outline sidebar.
   const doc = ex.buildExportHtml({

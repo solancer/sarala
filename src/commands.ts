@@ -253,8 +253,7 @@ function currentPdfCss(): string {
     header: o.pdfHeader ?? base.header,
     footer: o.pdfFooter ?? base.footer,
   };
-  const date = new Date().toISOString().slice(0, 10);
-  return pageCss(opts, { title: exportBaseName(), date });
+  return pageCss(opts);
 }
 
 /** Run one export to `out`; returns the path written, or null if cancelled. */
