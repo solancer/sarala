@@ -9,6 +9,8 @@ import {
   preserveBreaks, setPreserveBreaks, lineEnding, setLineEnding,
   copyImageToAssets, setCopyImageToAssets, copyImagesToFolder, tableFullWidth, setTableFullWidth,
   mathAltDelimiters, setMathAltDelimitersSig, mathFence, setMathFenceSig,
+  emojiEnabled, setEmojiEnabledSig, highlightEnabled, setHighlightEnabledSig,
+  subSupEnabled, setSubSupEnabledSig, autolinkEnabled, setAutolinkEnabledSig,
   setSidebarTab, focusMode, setFocusMode, typewriterMode, setTypewriterMode,
   alwaysOnTop, setAlwaysOnTop, zoom, setZoom, clampZoom,
   bumpRenderEpoch,
@@ -26,7 +28,12 @@ import {
   renderMarkdown, setPreserveBreaksOption,
   setMathAltDelimiters as setMathAltDelimitersOpt,
   setMathFence as setMathFenceOpt,
+  setEmojiEnabled as setEmojiEnabledOpt,
+  setHighlightEnabled as setHighlightEnabledOpt,
+  setSubSupEnabled as setSubSupEnabledOpt,
+  setAutolinkEnabled as setAutolinkEnabledOpt,
 } from "./markdown";
+import { setLiveHighlight, setLiveSubSup } from "./livesource";
 import {
   recentFiles, addRecentFile, clearRecentFiles, lastExport, setLastExport,
   exportPresets, pdfOptions, setSetting,
@@ -569,6 +576,40 @@ async function toggleMathFence() {
   await setSetting("mathFence", v);
 }
 
+async function toggleHighlightExt() {
+  const v = !highlightEnabled();
+  setHighlightEnabledSig(v);
+  setHighlightEnabledOpt(v);
+  setLiveHighlight(v);
+  bumpRenderEpoch();
+  await setSetting("highlightEnabled", v);
+}
+
+async function toggleSubSupExt() {
+  const v = !subSupEnabled();
+  setSubSupEnabledSig(v);
+  setSubSupEnabledOpt(v);
+  setLiveSubSup(v);
+  bumpRenderEpoch();
+  await setSetting("subSupEnabled", v);
+}
+
+async function toggleEmojiExt() {
+  const v = !emojiEnabled();
+  setEmojiEnabledSig(v);
+  setEmojiEnabledOpt(v);
+  bumpRenderEpoch();
+  await setSetting("emojiEnabled", v);
+}
+
+async function toggleAutolinkExt() {
+  const v = !autolinkEnabled();
+  setAutolinkEnabledSig(v);
+  setAutolinkEnabledOpt(v);
+  bumpRenderEpoch();
+  await setSetting("autolinkEnabled", v);
+}
+
 // ---------- Format ----------
 
 /** The markdown/bare link whose source span contains the caret, if any. */
@@ -704,6 +745,10 @@ const registry: Record<string, Command> = {
   "edit.preserve_breaks": togglePreserveBreaks,
   "edit.math.alt_delimiters": toggleMathAltDelimiters,
   "edit.math.fence": toggleMathFence,
+  "edit.ext.highlight": toggleHighlightExt,
+  "edit.ext.sub_sup": toggleSubSupExt,
+  "edit.ext.emoji": toggleEmojiExt,
+  "edit.ext.autolink": toggleAutolinkExt,
 
   // Paragraph — headings act on the active block
   "paragraph.heading.0": heading(0),

@@ -1118,3 +1118,69 @@ body.tables-full .rendered table { width: 100%; }
 .export-dialog p { margin: 0; font: 13px/1.5 var(--font-ui); color: var(--ink-soft); }
 .export-dialog-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 18px; }
 .export-dialog-actions .primary { color: var(--accent); font-weight: 600; }
+
+/* ---- Syntax sweep: alerts, highlight, sub/sup, footnotes, emoji ---- */
+
+/* GitHub-style alert callouts (rendered output). Colors are derived from the
+   alert kind; the bar + tinted title echo GitHub's markup. */
+.md-alert {
+  margin: 0.7em 0;
+  padding: 8px 16px;
+  border-left: 4px solid var(--alert-color, var(--accent));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--alert-color, var(--accent)) 8%, transparent);
+}
+.md-alert > p { margin: 0.25em 0; }
+.md-alert-title {
+  font-weight: 700;
+  color: var(--alert-color, var(--accent));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 0.2em !important;
+}
+.md-alert-note { --alert-color: #539bf5; }
+.md-alert-tip { --alert-color: #57ab5a; }
+.md-alert-important { --alert-color: #986ee2; }
+.md-alert-warning { --alert-color: #c69026; }
+.md-alert-caution { --alert-color: #e5534b; }
+
+/* Live block: tag the [!NOTE] marker in the source line with its kind color. */
+.md-alert-tag { font-weight: 700; color: var(--alert-color, var(--accent)); }
+.md-alert-tag.md-alert-note { --alert-color: #539bf5; }
+.md-alert-tag.md-alert-tip { --alert-color: #57ab5a; }
+.md-alert-tag.md-alert-important { --alert-color: #986ee2; }
+.md-alert-tag.md-alert-warning { --alert-color: #c69026; }
+.md-alert-tag.md-alert-caution { --alert-color: #e5534b; }
+
+.rendered mark, .source mark {
+  background: var(--highlight-bg, #fff3a3);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+.rendered sub, .rendered sup, .source sub, .source sup { font-size: 0.75em; line-height: 0; }
+.emoji { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; font-style: normal; }
+
+/* Footnotes: small superscript refs + a divided definitions list. */
+.footnote-ref { font-size: 0.75em; }
+.footnote-ref a { border-bottom: none; }
+.rendered ol.footnotes {
+  margin: 1.2em 0 0;
+  padding-top: 0.6em;
+  border-top: 1px solid var(--rule);
+  font-size: 0.9em;
+  color: var(--ink-soft);
+}
+.footnote-def { margin: 0.2em 0; }
+.footnote-label { font-weight: 600; color: var(--ink); }
+.footnote-backref { border-bottom: none !important; margin-left: 4px; }
+
+/* TOC block (live [TOC] / [[_TOC_]]). */
+.rendered ul.toc { list-style: none; margin: 0.4em 0; padding-left: 0; }
+.rendered ul.toc li { margin: 1px 0; }
+.rendered ul.toc li.toc-l2 { padding-left: 14px; }
+.rendered ul.toc li.toc-l3 { padding-left: 28px; }
+.rendered ul.toc li.toc-l4 { padding-left: 42px; }
+.rendered ul.toc li.toc-l5 { padding-left: 56px; }
+.rendered ul.toc li.toc-l6 { padding-left: 70px; }

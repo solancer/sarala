@@ -8,6 +8,14 @@
 const P_OPEN = "\uE000";
 const P_CLOSE = "\uE001";
 
+// Mirror the renderer's inline-syntax prefs so the active block styles only
+// what will actually render. textContent stays byte-identical either way \u2014
+// these only gate visual styling, never alter source text.
+let liveHighlight = true;
+let liveSubSup = true;
+export function setLiveHighlight(on: boolean) { liveHighlight = on; }
+export function setLiveSubSup(on: boolean) { liveSubSup = on; }
+
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -51,10 +59,26 @@ function inline(text: string): string {
   t = t.replace(/(\*|_)(?=\S)([^*_\n]*?\S)\1/g, (_, m, body) =>
     stash(tok(`${mark(m)}<em>${body}</em>${mark(m)}`))
   );
-  // strikethrough
+  // strikethrough (must run before single-tilde subscript so ~~ wins)
   t = t.replace(/~~(?=\S)([\s\S]*?\S)~~/g, (_, body) =>
     stash(tok(`${mark("~~")}<del>${body}</del>${mark("~~")}`))
   );
+  // highlight ==text==
+  if (liveHighlight) {
+    t = t.replace(/==(?=\S)([\s\S]*?\S)==/g, (_, body) =>
+      stash(tok(`${mark("==")}<mark>${body}</mark>${mark("==")}`))
+    );
+  }
+  if (liveSubSup) {
+    // subscript ~text~ (single tilde; ~~ already consumed above)
+    t = t.replace(/~(?![~\s])([^~\n]+?)~(?!~)/g, (_, body) =>
+      stash(tok(`${mark("~")}<sub>${body}</sub>${mark("~")}`))
+    );
+    // superscript ^text^ (no inner whitespace)
+    t = t.replace(/\^(?!\s)([^\^\s]+?)\^/g, (_, body) =>
+      stash(tok(`${mark("^")}<sup>${body}</sup>${mark("^")}`))
+    );
+  }
 
   // restore (tokens may nest one level via bold-inside-link etc.)
   for (let pass = 0; pass < 3; pass++) {
@@ -80,11 +104,17 @@ function styleLine(raw: string): string {
 
   const quote = line.match(/^((?:&gt;\s*)+)(.*)$/);
   if (quote) {
+    // A `> [!NOTE]` first line marks a GitHub-style alert; tag the label so the
+    // active block hints at the callout it will render into.
+    const alert = quote[2].match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i);
+    const body = alert
+      ? `<span class="md-alert-tag md-alert-${alert[1].toLowerCase()}">${alert[0]}</span>${inline(quote[2].slice(alert[0].length))}`
+      : inline(quote[2]);
     // Hidden `>` draws a quote bar via ::before so the line still reads as a quote.
-    return `<span class="md-tok md-pre md-quote-pre">${mark(quote[1])}</span><span class="md-quote">${inline(quote[2])}</span>`;
+    return `<span class="md-tok md-pre md-quote-pre">${mark(quote[1])}</span><span class="md-quote">${body}</span>`;
   }
 
-  const list = line.match(/^(\s*)([-*+]\s+(?:\[[ xX]\]\s+)?|\d+\.\s+)(.*)$/);
+  const list = line.match(/^(\s*)([-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)(.*)$/);
   if (list) {
     const marker = list[2];
     // Ordered markers stay visible: "1." already looks like the rendered

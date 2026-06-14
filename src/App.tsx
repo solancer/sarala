@@ -17,6 +17,7 @@ import {
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
   focusMode, typewriterMode, alwaysOnTop, zoom, tableFullWidth,
   mathAltDelimiters, mathFence, bumpMermaidEpoch,
+  emojiEnabled, highlightEnabled, subSupEnabled, autolinkEnabled,
 } from "./store";
 import { isTauri, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS } from "./platform";
 import {
@@ -152,6 +153,10 @@ export default function App() {
   createEffect(() => setMenuChecked("edit.preserve_breaks", preserveBreaks()));
   createEffect(() => setMenuChecked("edit.math.alt_delimiters", mathAltDelimiters()));
   createEffect(() => setMenuChecked("edit.math.fence", mathFence()));
+  createEffect(() => setMenuChecked("edit.ext.highlight", highlightEnabled()));
+  createEffect(() => setMenuChecked("edit.ext.sub_sup", subSupEnabled()));
+  createEffect(() => setMenuChecked("edit.ext.emoji", emojiEnabled()));
+  createEffect(() => setMenuChecked("edit.ext.autolink", autolinkEnabled()));
   // Re-render mermaid diagrams when the theme switches (dark/light).
   createEffect(() => { theme(); bumpMermaidEpoch(); });
   createEffect(() => {

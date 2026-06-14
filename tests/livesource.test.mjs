@@ -71,6 +71,12 @@ const SAMPLES = [
   "| Column 1 | Column 2 |\n| --- | --- |\n|   |   |\n|   |   |",
   "intro line\n| a | b |\n| :-- | --: |\n| 1 | 2 |",
   "| not a table without separator |",
+  "highlight ==marked== text",
+  "water H~2~O and E=mc^2^ formula",
+  "ordered 1) first\n2) second",
+  "emoji :smile: shortcode :rocket: stays literal in source",
+  "a footnote ref[^1] here",
+  "> [!NOTE]\n> an alert body",
 ];
 
 for (const src of SAMPLES) {
@@ -93,6 +99,14 @@ assert(styleSource("- [ ] t").includes("md-task"), "task marker wrapped");
 assert(styleSource("- [x] t").includes("md-task md-done"), "checked task marker flagged");
 assert(styleSource("> q").includes("md-quote-pre"), "quote marker wrapped");
 assert(!styleSource("1. x").includes("md-tok"), "ordered marker stays always-visible (no token)");
+assert(styleSource("1) x").includes("md-olnum"), "1) ordered marker styled like 1.");
+assert(styleSource("==hi==").includes("<mark>"), "highlight ==text== styled as <mark> in source");
+assert(styleSource("H~2~O").includes("<sub>"), "single tilde ~x~ styled as <sub>");
+assert(styleSource("x^2^").includes("<sup>"), "caret ^x^ styled as <sup>");
+assert(styleSource("~~gone~~").includes("<del>") && !styleSource("~~gone~~").includes("<sub>"),
+  "~~strike~~ wins over single-tilde subscript");
+assert(styleSource("> [!WARNING]\n> body").includes("md-alert-tag md-alert-warning"),
+  "alert marker tagged in the live block");
 
 /* ---------- table structure ---------- */
 {
@@ -453,6 +467,10 @@ assert(!styleSource("| lone | row |").includes("md-table"),
   assert(outline.length === 3 && outline[1].id === "setup-run", "outline strips punctuation in slugs");
   assert(outline[2].id === "intro-2", "duplicate heading slugs are deduped");
 
+  // Idempotent over the live renderer's own ids: no doubled id attribute.
+  const reid = ex.addHeadingIds('<h2 id="old">New Title</h2>').html;
+  assert(reid === '<h2 id="new-title">New Title</h2>', `existing id is replaced, not duplicated (${reid})`);
+
   // Header/footer var substitution → CSS content with counters.
   const hf = ex.headerFooterContent("${title}  ${pageNo} / ${totalPages}", { title: "Doc", date: "2026-06-14" });
   assert(hf.includes('"Doc"') && hf.includes("counter(page)") && hf.includes("counter(pages)"),
@@ -495,6 +513,91 @@ assert(!styleSource("| lone | row |").includes("md-table"),
   // Output path template.
   assert(ex.resolveOutputPath("${dir}/${name}.${ext}", { dir: "/d", name: "doc", ext: "pdf" }) === "/d/doc.pdf",
     "resolveOutputPath expands dir/name/ext");
+}
+
+/* ---------- syntax completeness sweep (renderer) ---------- */
+{
+  const md = await import(path.join(here, ".build", "markdown.mjs"));
+
+  // GitHub-style alerts.
+  const alert = md.renderMarkdown("> [!NOTE]\n> Useful info here");
+  assert(alert.includes("md-alert md-alert-note") && alert.includes("md-alert-title"),
+    "[!NOTE] blockquote becomes an alert callout");
+  assert(alert.includes("Useful info here") && !alert.includes("[!NOTE]"),
+    "alert keeps its body, drops the [!NOTE] marker");
+  assert(md.renderMarkdown("> [!CAUTION]\n> danger").includes("md-alert-caution"),
+    "[!CAUTION] maps to the caution variant");
+  assert(md.renderMarkdown("> just a quote").includes("<blockquote>"),
+    "a plain blockquote is left untouched");
+
+  // Highlight, sub/sup (gated on by default).
+  assert(md.renderMarkdown("==hi==").includes("<mark>hi</mark>"), "==text== → <mark>");
+  assert(md.renderMarkdown("H~2~O").includes("<sub>2</sub>"), "~x~ → <sub>");
+  assert(md.renderMarkdown("E=mc^2^").includes("<sup>2</sup>"), "^x^ → <sup>");
+  assert(md.renderMarkdown("~~gone~~").includes("<del>") && !md.renderMarkdown("~~gone~~").includes("<sub>"),
+    "~~strike~~ still renders as <del>, not subscript");
+  md.setHighlightEnabled(false);
+  assert(!md.renderMarkdown("==hi==").includes("<mark>"), "highlight off → ==text== left literal");
+  md.setHighlightEnabled(true);
+  md.setSubSupEnabled(false);
+  assert(!md.renderMarkdown("H~2~O").includes("<sub>"), "sub/sup off → ~x~ left literal");
+  md.setSubSupEnabled(true);
+
+  // Emoji shortcodes + \: escape.
+  assert(md.renderMarkdown("hi :smile: there").includes("😄"), ":smile: → glyph");
+  assert(md.renderMarkdown(":not_an_emoji:").includes(":not_an_emoji:"),
+    "unknown shortcode stays literal");
+  assert(md.renderMarkdown("a \\:smile\\: b").includes(":smile:") && !md.renderMarkdown("a \\:smile\\: b").includes("😄"),
+    "\\: escapes the emoji colon");
+  md.setEmojiEnabled(false);
+  assert(!md.renderMarkdown(":smile:").includes("😄"), "emoji off → shortcode left literal");
+  md.setEmojiEnabled(true);
+
+  // Footnotes: reference + definition block.
+  const ref = md.renderMarkdown("text[^1] more");
+  assert(ref.includes('class="footnote-ref"') && ref.includes('id="fnref-1"') && ref.includes('href="#fn-1"'),
+    "[^1] renders a linked footnote reference");
+  const defs = md.renderMarkdown("[^1]: first note\n[^2]: second note");
+  assert(defs.includes('class="footnotes"') && defs.includes('id="fn-1"') && defs.includes('href="#fnref-1"'),
+    "a [^id]: block renders the footnotes section with backlinks");
+
+  // Heading anchor ids.
+  assert(md.renderMarkdown("## Setup & Run").includes('<h2 id="setup-run">'),
+    "headings get a slug anchor id");
+
+  // TOC block with anchor links (needs an injected outline provider).
+  md.setTocProvider(() => [
+    { level: 1, text: "Intro", blockIndex: 0 },
+    { level: 2, text: "Setup & Run", blockIndex: 1 },
+  ]);
+  const toc = md.renderMarkdown("[TOC]");
+  assert(toc.includes('href="#intro"') && toc.includes('href="#setup-run"'),
+    "[TOC] links each entry to its heading slug");
+  assert(md.renderMarkdown("[[_TOC_]]").includes('href="#intro"'),
+    "[[_TOC_]] is an accepted TOC alias");
+
+  // Bare-URL autolink + the disable pref.
+  assert(md.renderMarkdown("see https://example.com now").includes('href="https://example.com"'),
+    "bare URLs autolink by default");
+  md.setAutolinkEnabled(false);
+  assert(!md.renderMarkdown("see https://example.com now").includes("<a "),
+    "autolink off → bare URL stays plain text");
+  assert(md.renderMarkdown("[label](https://example.com)").includes("<a "),
+    "explicit [label](url) links still work with autolink off");
+  md.setAutolinkEnabled(true);
+
+  // Expanded sanitize allowlist.
+  assert(md.renderMarkdown("press <kbd>Cmd</kbd>").includes("<kbd>"), "kbd survives sanitize");
+  assert(md.renderMarkdown("<u>under</u>").includes("<u>"), "u tag survives sanitize");
+  assert(md.renderMarkdown("<details><summary>s</summary>body</details>").includes("<details>"),
+    "details/summary survive sanitize");
+
+  // 1) ordered lists.
+  assert(md.renderMarkdown("1) one\n2) two").includes("<ol"), "1) renders an ordered list");
+
+  // Optional-pipe tables.
+  assert(md.renderMarkdown("a | b\n--- | ---\n1 | 2").includes("<table"),
+    "tables without leading/trailing pipes still render");
 }
 
 console.log(`${passes} passed, ${failures} failed`);

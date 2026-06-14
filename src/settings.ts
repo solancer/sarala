@@ -5,8 +5,13 @@ import {
   setTheme, setZoom, clampZoom, THEMES, type ThemeId,
   setSidebarWidth, clampSidebar,
   setMathAltDelimitersSig, setMathFenceSig,
+  setEmojiEnabledSig, setHighlightEnabledSig, setSubSupEnabledSig, setAutolinkEnabledSig,
 } from "./store";
-import { setPreserveBreaksOption, setMathAltDelimiters, setMathFence } from "./markdown";
+import {
+  setPreserveBreaksOption, setMathAltDelimiters, setMathFence,
+  setEmojiEnabled, setHighlightEnabled, setSubSupEnabled, setAutolinkEnabled,
+} from "./markdown";
+import { setLiveHighlight, setLiveSubSup } from "./livesource";
 import type { ExportPreset, PdfOptions } from "./export";
 
 export interface ExportMemo {
@@ -115,6 +120,20 @@ function hydrateStore() {
   const breaks = getSetting("preserveBreaks", false);
   setPreserveBreaks(breaks);
   setPreserveBreaksOption(breaks);
+  const emoji = getSetting("emojiEnabled", true);
+  setEmojiEnabledSig(emoji);
+  setEmojiEnabled(emoji);
+  const highlight = getSetting("highlightEnabled", true);
+  setHighlightEnabledSig(highlight);
+  setHighlightEnabled(highlight);
+  setLiveHighlight(highlight);
+  const subSup = getSetting("subSupEnabled", true);
+  setSubSupEnabledSig(subSup);
+  setSubSupEnabled(subSup);
+  setLiveSubSup(subSup);
+  const autolink = getSetting("autolinkEnabled", true);
+  setAutolinkEnabledSig(autolink);
+  setAutolinkEnabled(autolink);
   bumpRenderEpoch();
 }
 

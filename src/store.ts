@@ -112,6 +112,12 @@ export const [tableFullWidth, setTableFullWidth] = createSignal(false);
 export const [mathAltDelimiters, setMathAltDelimitersSig] = createSignal(false);
 export const [mathFence, setMathFenceSig] = createSignal(false);
 
+// Inline-syntax preferences (on by default; persisted).
+export const [emojiEnabled, setEmojiEnabledSig] = createSignal(true);
+export const [highlightEnabled, setHighlightEnabledSig] = createSignal(true);
+export const [subSupEnabled, setSubSupEnabledSig] = createSignal(true);
+export const [autolinkEnabled, setAutolinkEnabledSig] = createSignal(true);
+
 // Bumped when a global render option changes so rendered blocks re-render.
 export const [renderEpoch, setRenderEpoch] = createSignal(0);
 export const bumpRenderEpoch = () => setRenderEpoch((n) => n + 1);

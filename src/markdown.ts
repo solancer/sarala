@@ -1,6 +1,8 @@
 import { Marked, type Tokens } from "marked";
 import DOMPurify from "dompurify";
 import katex from "katex";
+import { slugBase } from "./slug";
+import { emojiFor } from "./emoji";
 
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -18,6 +20,25 @@ export function setMathAltDelimiters(on: boolean) {
 }
 export function setMathFence(on: boolean) {
   mathFence = on;
+}
+
+/* ---------- inline-syntax preferences ---------- */
+
+let emojiOn = true; //  :smile:  shortcodes
+let highlightOn = true; //  ==text==
+let subSupOn = true; //  ~sub~  ^sup^
+let autolinkOn = true; // bare URLs
+export function setEmojiEnabled(on: boolean) {
+  emojiOn = on;
+}
+export function setHighlightEnabled(on: boolean) {
+  highlightOn = on;
+}
+export function setSubSupEnabled(on: boolean) {
+  subSupOn = on;
+}
+export function setAutolinkEnabled(on: boolean) {
+  autolinkOn = on;
 }
 
 /* ---------- KaTeX rendering ---------- */
@@ -115,6 +136,130 @@ marked.use({
         return stashMath((token as Tokens.Generic).text as string, true);
       },
     },
+    {
+      // ==highlight== → <mark>. Inner text is inline-parsed so emphasis etc.
+      // still works inside a highlight.
+      name: "highlight",
+      level: "inline",
+      start(src: string) {
+        const i = src.indexOf("==");
+        return i === -1 ? undefined : i;
+      },
+      tokenizer(src: string) {
+        if (!highlightOn) return undefined;
+        const m = /^==(?=\S)([\s\S]*?\S)==/.exec(src);
+        if (!m) return undefined;
+        const token = { type: "highlight", raw: m[0], text: m[1], tokens: [] as Tokens.Generic[] };
+        this.lexer.inline(m[1], token.tokens);
+        return token;
+      },
+      renderer(token) {
+        return `<mark>${this.parser.parseInline((token as Tokens.Generic).tokens ?? [])}</mark>`;
+      },
+    },
+    {
+      // ~subscript~ — a single tilde, never the GFM ~~strikethrough~~ (the
+      // lookahead rejects a second tilde, leaving strikethrough to GFM).
+      name: "subscript",
+      level: "inline",
+      start(src: string) {
+        const m = /(?<!~)~(?![~\s])[^~\n]+?~(?!~)/.exec(src);
+        return m ? m.index : undefined;
+      },
+      tokenizer(src: string) {
+        if (!subSupOn) return undefined;
+        const m = /^~(?![~\s])([^~\n]+?)~(?!~)/.exec(src);
+        if (!m) return undefined;
+        const token = { type: "subscript", raw: m[0], text: m[1], tokens: [] as Tokens.Generic[] };
+        this.lexer.inline(m[1], token.tokens);
+        return token;
+      },
+      renderer(token) {
+        return `<sub>${this.parser.parseInline((token as Tokens.Generic).tokens ?? [])}</sub>`;
+      },
+    },
+    {
+      // ^superscript^ — no whitespace inside (matches CommonMark-extension
+      // convention; spaces would need backslash-escaping).
+      name: "superscript",
+      level: "inline",
+      start(src: string) {
+        const m = /\^(?!\s)[^\^\s]+?\^/.exec(src);
+        return m ? m.index : undefined;
+      },
+      tokenizer(src: string) {
+        if (!subSupOn) return undefined;
+        const m = /^\^(?!\s)([^\^\s]+?)\^/.exec(src);
+        if (!m) return undefined;
+        const token = { type: "superscript", raw: m[0], text: m[1], tokens: [] as Tokens.Generic[] };
+        this.lexer.inline(m[1], token.tokens);
+        return token;
+      },
+      renderer(token) {
+        return `<sup>${this.parser.parseInline((token as Tokens.Generic).tokens ?? [])}</sup>`;
+      },
+    },
+    {
+      // \: escapes the emoji colon so a literal ":word:" can be written.
+      name: "emojiEscape",
+      level: "inline",
+      start(src: string) {
+        const i = src.indexOf("\\:");
+        return i === -1 ? undefined : i;
+      },
+      tokenizer(src: string) {
+        const m = /^\\:/.exec(src);
+        if (!m) return undefined;
+        return { type: "emojiEscape", raw: m[0], text: ":" };
+      },
+      renderer() {
+        return ":";
+      },
+    },
+    {
+      // :shortcode: → glyph. Unknown shortcodes are left as literal text so a
+      // stray colon-word doesn't disappear.
+      name: "emoji",
+      level: "inline",
+      // Only fire on a complete :shortcode: — a bare ":" (e.g. inside an
+      // "https://" URL) must not cut the text run, or autolinking breaks.
+      start(src: string) {
+        const m = /:[a-z0-9_+-]+:/.exec(src);
+        return m ? m.index : undefined;
+      },
+      tokenizer(src: string) {
+        if (!emojiOn) return undefined;
+        const m = /^:([a-z0-9_+-]+):/.exec(src);
+        if (!m) return undefined;
+        const glyph = emojiFor(m[1]);
+        if (!glyph) return undefined;
+        return { type: "emoji", raw: m[0], text: glyph };
+      },
+      renderer(token) {
+        return `<span class="emoji">${escapeHtml((token as Tokens.Generic).text as string)}</span>`;
+      },
+    },
+    {
+      // [^id] footnote reference (not a [^id]: definition — those are handled as
+      // whole blocks in renderMarkdown). Cross-block numbering/jump is deferred;
+      // the label shown is the literal id.
+      name: "footnoteRef",
+      level: "inline",
+      start(src: string) {
+        const m = /\[\^[^\]\s]+\](?!:)/.exec(src);
+        return m ? m.index : undefined;
+      },
+      tokenizer(src: string) {
+        const m = /^\[\^([^\]\s]+)\](?!:)/.exec(src);
+        if (!m) return undefined;
+        return { type: "footnoteRef", raw: m[0], text: m[1] };
+      },
+      renderer(token) {
+        const id = escapeAttr((token as Tokens.Generic).text as string);
+        const label = escapeHtml((token as Tokens.Generic).text as string);
+        return `<sup class="footnote-ref" id="fnref-${id}"><a href="#fn-${id}">[${label}]</a></sup>`;
+      },
+    },
   ],
   renderer: {
     // Own the code renderer so ```mermaid and ```math fences are intercepted;
@@ -149,6 +294,23 @@ marked.use({
   },
 });
 
+// When bare-URL autolinking is disabled, demote GFM autolink tokens (whose raw
+// equals their text — no [label](url) brackets) back to plain text.
+marked.use({
+  walkTokens(token) {
+    if (autolinkOn) return;
+    if (
+      token.type === "link" &&
+      token.raw === token.text &&
+      /^(https?:\/\/|www\.|mailto:)/i.test(token.raw)
+    ) {
+      const t = token as Tokens.Generic;
+      t.type = "text";
+      t.tokens = undefined;
+    }
+  },
+});
+
 /** Edit ▸ Whitespace: render single newlines as <br> when enabled. */
 export function setPreserveBreaksOption(on: boolean) {
   marked.setOptions({ breaks: on });
@@ -164,27 +326,110 @@ export function setTocProvider(fn: () => Heading[]) {
 // shows its previous render plus an error rather than blanking.
 const lastGoodBlock = new Map<string, string>();
 
+// Expanded allowlist: keep the placeholder data-* attrs (default-allowed) and
+// admit the extra inline tags/attributes the sweep introduces.
+const SANITIZE_OPTS = {
+  ADD_TAGS: ["kbd", "ruby", "rt", "rp", "details", "summary", "video", "source", "u", "mark", "sub", "sup"],
+  ADD_ATTR: ["target", "style", "controls", "open", "src", "type", "id"],
+};
+
+/* ---------- GitHub-style alerts ---------- */
+
+const ALERT_LABEL: Record<string, string> = {
+  note: "Note", tip: "Tip", important: "Important", warning: "Warning", caution: "Caution",
+};
+
+/**
+ * Convert a blockquote whose first line is `[!NOTE]` (etc.) into a styled alert
+ * callout. Runs on the raw HTML before DOMPurify; `div`/`p`/`class` all survive
+ * sanitization. Non-greedy match handles only flat (non-nested) blockquotes,
+ * which is all the alert syntax produces.
+ */
+function transformAlerts(html: string): string {
+  return html.replace(/<blockquote>([\s\S]*?)<\/blockquote>/g, (full, inner: string) => {
+    const m = /^\s*<p>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:<br\s*\/?>|\n)?/i.exec(inner);
+    if (!m) return full;
+    const type = m[1].toLowerCase();
+    const body = inner.replace(m[0], "<p>").replace(/^\s*<p>\s*<\/p>\s*/, "");
+    return (
+      `<div class="md-alert md-alert-${type}">` +
+      `<p class="md-alert-title">${ALERT_LABEL[type]}</p>${body}</div>`
+    );
+  });
+}
+
+/* ---------- heading anchor ids ---------- */
+
+const decodeEntities = (s: string) =>
+  s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+
+/** Give each rendered heading an anchor id matching the TOC's slug. */
+function addHeadingIds(html: string): string {
+  return html.replace(/<h([1-6])>([\s\S]*?)<\/h\1>/g, (_, lvl, inner: string) => {
+    const text = decodeEntities(inner.replace(/<[^>]+>/g, "")).trim();
+    return `<h${lvl} id="${escapeAttr(slugBase(text))}">${inner}</h${lvl}>`;
+  });
+}
+
+/* ---------- footnote definition blocks ---------- */
+
+const FOOTNOTE_DEF = /^\[\^([^\]\s]+)\]:\s?(.*)$/;
+
+/** True if every non-blank line of the block is a `[^id]: text` definition. */
+function isFootnoteDefBlock(md: string): boolean {
+  const lines = md.split("\n").filter((l) => l.trim());
+  return lines.length > 0 && lines.every((l) => FOOTNOTE_DEF.test(l));
+}
+
+/** Render a footnote-definition block as a linked footnotes section. */
+function renderFootnoteDefs(md: string): string {
+  const items = md
+    .split("\n")
+    .filter((l) => l.trim())
+    .map((line) => {
+      const m = FOOTNOTE_DEF.exec(line)!;
+      const id = escapeAttr(m[1]);
+      const label = escapeHtml(m[1]);
+      const text = marked.parseInline(m[2], { async: false }) as string;
+      return (
+        `<li class="footnote-def" id="fn-${id}">` +
+        `<span class="footnote-label">${label}.</span> ${text} ` +
+        `<a href="#fnref-${id}" class="footnote-backref" title="Back to reference">↩</a></li>`
+      );
+    })
+    .join("");
+  return DOMPurify.sanitize(`<ol class="footnotes">${items}</ol>`, SANITIZE_OPTS);
+}
+
 /**
  * Render a markdown string to sanitized HTML. `blockKey` (a block's stable id)
  * enables the last-good-on-math-error fallback for that block.
  */
 export function renderMarkdown(md: string, blockKey?: string): string {
   if (!md.trim()) return `<p class="empty-block">&nbsp;</p>`;
-  // A lone [TOC] paragraph renders as the document outline.
-  if (md.trim() === "[TOC]" && tocProvider) {
+  const trimmed = md.trim();
+  // A lone [TOC] / [[_TOC_]] paragraph renders as the document outline, each
+  // entry linking to its heading's slug anchor.
+  if ((trimmed === "[TOC]" || trimmed === "[[_TOC_]]") && tocProvider) {
     const items = tocProvider()
-      .map((h) => `<li class="toc-l${h.level}">${escapeHtml(h.text)}</li>`)
+      .map(
+        (h) =>
+          `<li class="toc-l${h.level}"><a href="#${escapeAttr(slugBase(h.text))}">${escapeHtml(h.text)}</a></li>`,
+      )
       .join("");
-    return DOMPurify.sanitize(`<ul class="toc">${items || "<li>No headings</li>"}</ul>`);
+    return DOMPurify.sanitize(`<ul class="toc">${items || "<li>No headings</li>"}</ul>`, SANITIZE_OPTS);
   }
+  // A block of only `[^id]: text` lines renders as the footnotes section.
+  if (isFootnoteDefBlock(md)) return renderFootnoteDefs(md);
 
   mathStash = [];
   mermaidStash = [];
   imgStash = [];
   shikiStash = [];
   mathErrored = false;
-  const raw = marked.parse(md, { async: false }) as string;
-  let html = DOMPurify.sanitize(raw, { ADD_ATTR: ["target"] });
+  const raw = transformAlerts(marked.parse(md, { async: false }) as string);
+  let html = addHeadingIds(DOMPurify.sanitize(raw, SANITIZE_OPTS));
   // Re-inject the KaTeX markup the sanitizer left as empty placeholders, swap
   // each mermaid placeholder's numeric key for its real source (DOMPurify
   // strips it for containing "-->"), and the resolved image src (which may use

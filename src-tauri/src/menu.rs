@@ -212,6 +212,37 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         )?)
         .build()?;
 
+    let extensions = SubmenuBuilder::with_id(app, "edit.extensions", "Markdown Extensions")
+        .item(&ci(
+            app,
+            "edit.ext.highlight",
+            "Highlight  ==text==",
+            true,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.ext.sub_sup",
+            "Subscript and Superscript",
+            true,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.ext.emoji",
+            "Emoji Shortcodes  :smile:",
+            true,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.ext.autolink",
+            "Auto-link Bare URLs",
+            true,
+            None,
+        )?)
+        .build()?;
+
     // Undo/Redo are custom: the live styler rebuilds the DOM per keystroke,
     // so history lives in the frontend store, not the webview's undo stack.
     let edit = SubmenuBuilder::new(app, "Edit")
@@ -277,6 +308,7 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .item(&line_endings)
         .item(&whitespace)
         .item(&math)
+        .item(&extensions)
         .build()?;
     menu.append(&edit)?;
 

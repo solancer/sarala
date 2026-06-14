@@ -30,23 +30,13 @@ export interface PdfOptions {
   footer?: string;
 }
 
+import { slugify } from "./slug";
+
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const escapeCss = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 
 /* ---------- heading anchors + outline ---------- */
-
-/** Slugify heading text into a stable, deduped anchor id. */
-function slugify(text: string, seen: Set<string>): string {
-  const base =
-    text.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-") ||
-    "section";
-  let id = base;
-  let n = 1;
-  while (seen.has(id)) id = `${base}-${++n}`;
-  seen.add(id);
-  return id;
-}
 
 export interface OutlineEntry {
   level: number;
@@ -67,8 +57,11 @@ export function addHeadingIds(html: string): { html: string; outline: OutlineEnt
   const out = html.replace(/<h([1-6])(\s[^>]*)?>([\s\S]*?)<\/h\1>/g, (_, lvl, attrs, inner) => {
     const text = decode(inner.replace(/<[^>]+>/g, "")).trim();
     const id = slugify(text, seen);
+    // The live renderer already stamps a (non-deduped) id; drop it and assign a
+    // freshly deduped one so the standalone document's anchors stay unique.
+    const cleanAttrs = (attrs || "").replace(/\s+id\s*=\s*"[^"]*"/i, "");
     outline.push({ level: Number(lvl), text, id });
-    return `<h${lvl}${attrs || ""} id="${id}">${inner}</h${lvl}>`;
+    return `<h${lvl}${cleanAttrs} id="${id}">${inner}</h${lvl}>`;
   });
   return { html: out, outline };
 }
