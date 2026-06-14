@@ -36,6 +36,10 @@ import {
   EXPORT_PRINT_CSS, type ExportPreset, type ExportFormat,
 } from "./export";
 import { docDir, currentFrontMatter, docBaseName } from "./images";
+// The app stylesheet as a string (bundled at build time), so exports embed it
+// reliably — a runtime fetch of a side-effect-imported CSS file is fragile in
+// packaged builds.
+import appCssText from "./styles/app.css?inline";
 import { openFind, findNext } from "./components/FindBar";
 import { openTableDialog } from "./components/TableDialog";
 import { openAbout } from "./components/AboutModal";
@@ -209,14 +213,11 @@ function exportBaseName(): string {
   return readExportOverrides(currentFrontMatter()).filename ?? docBaseName();
 }
 
-async function loadExportCss(): Promise<string> {
-  // The full app stylesheet (theme variables + .rendered styling + Shiki + math)
-  // so exports match the editor; EXPORT_PRINT_CSS forces colors to print and
-  // gives the standalone document a centered column.
-  const app = await fetch(new URL("./styles/app.css", import.meta.url))
-    .then((r) => r.text())
-    .catch(() => "");
-  return app + EXPORT_PRINT_CSS;
+function loadExportCss(): string {
+  // Full app stylesheet (theme variables + .rendered styling + Shiki + math) so
+  // exports match the editor; EXPORT_PRINT_CSS forces colors to print and gives
+  // the standalone document a centered column.
+  return appCssText + EXPORT_PRINT_CSS;
 }
 
 /** Build the exported HTML document (outline sidebar when there are headings). */
@@ -224,7 +225,7 @@ async function htmlDocument(withStyles: boolean, withOutline: boolean, pdf?: str
   return buildExportHtml({
     title: exportBaseName(),
     body: renderMarkdown(fullText()),
-    css: withStyles ? await loadExportCss() : "",
+    css: withStyles ? loadExportCss() : "",
     theme: theme(),
     withOutline,
     pageCss: pdf,
