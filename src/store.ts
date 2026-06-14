@@ -76,7 +76,7 @@ export const [theme, setTheme] = createSignal<ThemeId>("sarala");
 export const [sourceMode, setSourceMode] = createSignal(false);
 export const [sidebarOpen, setSidebarOpen] = createSignal(true);
 export const [sidebarTab, setSidebarTab] = createSignal<"files" | "outline">("files");
-/** Sidebar width in px, clamped to 180–480 (Typora-style drag resize). */
+/** Sidebar width in px, clamped to 180–480 (drag resize). */
 export const [sidebarWidth, setSidebarWidth] = createSignal(240);
 export const clampSidebar = (w: number) => Math.max(180, Math.min(480, Math.round(w)));
 export const [focusMode, setFocusMode] = createSignal(false);
@@ -101,7 +101,7 @@ export const [lineEnding, setLineEnding] = createSignal<"lf" | "crlf">("lf");
 
 // Format ▸ Image: copy inserted local images next to the doc. The folder is a
 // template supporting ${filename} (the doc's base name); a per-document
-// `typora-copy-images-to` front-matter key overrides it.
+// `copy-images-to` front-matter key overrides it.
 export const [copyImageToAssets, setCopyImageToAssets] = createSignal(false);
 export const [copyImagesToFolder, setCopyImagesToFolder] = createSignal("assets");
 
@@ -257,7 +257,7 @@ export function markSaved(path: string) {
  * Update a block's text. If the text now contains a paragraph break
  * (blank line outside a code fence), split it into multiple blocks and
  * keep the caret in the last segment — this is what makes typing feel
- * continuous, like Typora.
+ * continuous.
  */
 export function updateBlock(index: number, text: string) {
   pushHistory(`type-${index}`);

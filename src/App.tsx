@@ -50,6 +50,7 @@ export default function App() {
     if (k === "f" && e.altKey) { e.preventDefault(); executeCommand("edit.replace"); }
     else if (k === "f" && !e.shiftKey) { e.preventDefault(); executeCommand("edit.find"); }
     if (k === "g") { e.preventDefault(); executeCommand("edit.find_next"); }
+    if (k === "v" && e.shiftKey) { e.preventDefault(); executeCommand("edit.paste_plain"); }
   };
 
   onMount(() => {
@@ -90,7 +91,7 @@ export default function App() {
     }
   });
 
-  // Typora-style window title: "Notes.md — Edited".
+  // Window title: "Notes.md — Edited".
   createEffect(() => {
     const title = `${fileName()}${doc.dirty ? " — Edited" : ""}`;
     if (isTauri) {

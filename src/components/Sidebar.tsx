@@ -1,10 +1,11 @@
 import { For, Show, createSignal } from "solid-js";
 import type { FileNode } from "../platform";
 import {
-  outline, doc,
+  outline, doc, folderPath,
   sidebarWidth, setSidebarWidth, clampSidebar,
 } from "../store";
 import { setSetting } from "../settings";
+import SearchPanel from "./SearchPanel";
 
 interface Props {
   tree: FileNode[];
@@ -58,7 +59,8 @@ function Tree(props: { nodes: FileNode[]; depth: number; onOpenFile: (p: string)
 }
 
 export default function Sidebar(props: Props) {
-  // Drag-to-resize (Typora-style). The sidebar hugs the left edge, so the
+  const [searchOpen, setSearchOpen] = createSignal(false);
+  // Drag-to-resize. The sidebar hugs the left edge, so the
   // pointer's clientX is the width directly; persist on release.
   const startResize = (e: PointerEvent) => {
     e.preventDefault();
@@ -79,6 +81,15 @@ export default function Sidebar(props: Props) {
       <div class="sidebar-resize" title="Drag to resize" onPointerDown={startResize} />
 
       <div class="sidebar-body">
+        <Show when={folderPath()}>
+          <button class="side-section-head toggle" onClick={() => setSearchOpen(!searchOpen())}>
+            <span class="twist">{searchOpen() ? "▾" : "▸"}</span> Search
+          </button>
+          <Show when={searchOpen()}>
+            <SearchPanel onOpenFile={props.onOpenFile} />
+          </Show>
+        </Show>
+
         <div class="side-section-head">Workspace</div>
         <Show
           when={props.tree.length > 0}

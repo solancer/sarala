@@ -1,5 +1,16 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { codeLanguages } from "../highlighter";
+import { langIcon, readableText } from "../langicons";
+
+/** A brand-colored monogram chip for a language. */
+function LangChip(props: { lang: string }) {
+  const icon = () => langIcon(props.lang);
+  return (
+    <span class="cl-icon" style={{ background: icon().color, color: readableText(icon().color) }}>
+      {icon().label}
+    </span>
+  );
+}
 
 interface Props {
   /** Current fence language (may be ""). */
@@ -72,6 +83,7 @@ export default function CodeLangPicker(props: Props) {
             <Show when={props.current} fallback={
               <svg viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M5.7 3.2 1.2 8l4.5 4.8 1.2-1.1L3.4 8l3.5-3.7zM10.3 3.2 9.1 4.3 12.6 8l-3.5 3.7 1.2 1.1L14.8 8z"/></svg>
             }>
+              <LangChip lang={props.current} />
               {props.current}
             </Show>
           </button>
@@ -95,6 +107,7 @@ export default function CodeLangPicker(props: Props) {
                   onMouseMove={() => setCursor(i())}
                   onClick={() => pick(lang)}
                 >
+                  <LangChip lang={lang} />
                   {lang}
                 </li>
               )}

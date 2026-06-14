@@ -34,6 +34,7 @@ import {
   setAutolinkEnabled as setAutolinkEnabledOpt,
 } from "./markdown";
 import { setLiveHighlight, setLiveSubSup } from "./livesource";
+import { stripControlChars } from "./richpaste";
 import {
   recentFiles, addRecentFile, clearRecentFiles, lastExport, setLastExport,
   exportPresets, pdfOptions, setSetting,
@@ -512,7 +513,7 @@ async function copyAsMarkdown() {
 }
 
 async function pastePlain() {
-  const text = await clipboardReadText();
+  const text = stripControlChars(await clipboardReadText());
   if (text && blockApi) blockApi.insertAtCaret(text);
 }
 
@@ -657,16 +658,16 @@ function clearFormat() {
 /**
  * Markdown ref for an inserted image. Copies it next to the document when
  * enabled — the folder template (global setting or the per-document
- * `typora-copy-images-to` front-matter override) expands ${filename} to the
+ * `copy-images-to` front-matter override) expands ${filename} to the
  * doc's base name. Otherwise the path is relativized against the doc dir.
  */
 async function imageInsertRef(absPath: string): Promise<string> {
   const dir = docDir();
   if (!dir) return absPath;
   const fm = currentFrontMatter();
-  // typora-copy-images-to enables copy for the document even if the global
-  // toggle is off.
-  const template = fm["typora-copy-images-to"] ?? (copyImageToAssets() ? copyImagesToFolder() : null);
+  // copy-images-to enables copy for the document even if the global toggle
+  // is off.
+  const template = fm["copy-images-to"] ?? (copyImageToAssets() ? copyImagesToFolder() : null);
   if (template) {
     const folder = template.replace(/\$\{filename\}/g, docBaseName());
     try {

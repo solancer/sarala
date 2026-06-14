@@ -40,17 +40,29 @@ function currentTheme(): string {
 export async function renderMermaidIn(container: HTMLElement, blockKey?: string): Promise<void> {
   const nodes = [...container.querySelectorAll<HTMLElement>(".mermaid-block[data-mermaid]")];
   if (!nodes.length) return;
+  // Clear any orphaned Mermaid measuring/error nodes left on <body> by a prior
+  // failed render (these are the stray full-page "bomb" graphics).
+  document.querySelectorAll('body > [id^="sarala-mmd-"], body > [id^="dsarala-mmd-"]')
+    .forEach((n) => n.remove());
   const mermaid = await getMermaid();
   const theme = currentTheme();
   if (initializedTheme !== theme) {
-    mermaid.initialize({ startOnLoad: false, theme, securityLevel: "strict" });
+    // suppressErrorRendering: don't inject Mermaid's full-page "bomb" error
+    // graphic on a parse failure — we show our own inline error instead.
+    mermaid.initialize({
+      startOnLoad: false,
+      theme,
+      securityLevel: "strict",
+      suppressErrorRendering: true,
+    });
     initializedTheme = theme;
   }
   for (const node of nodes) {
     if (node.dataset.rendered === "1") continue;
     const src = node.getAttribute("data-mermaid") ?? "";
+    const id = `sarala-mmd-${++seq}`;
     try {
-      const { svg } = await mermaid.render(`sarala-mmd-${++seq}`, src);
+      const { svg } = await mermaid.render(id, src);
       node.innerHTML = svg;
       node.dataset.rendered = "1";
       if (blockKey != null) lastGoodSvg.set(blockKey, svg);
@@ -61,6 +73,14 @@ export async function renderMermaidIn(container: HTMLElement, blockKey?: string)
         (last ?? "") +
         `<div class="render-error">⚠ Mermaid error: ${escapeHtml(msg)}</div>`;
       node.dataset.rendered = "1";
+    } finally {
+      // Mermaid appends a temporary measuring node to <body>; on a parse error
+      // it can be orphaned (the stray bomb SVGs). Remove it — but only if it's
+      // still loose on <body>, never the SVG we just injected into `node`
+      // (Mermaid gives the rendered SVG this same id).
+      document.getElementById(`d${id}`)?.remove();
+      const stray = document.getElementById(id);
+      if (stray && stray.parentElement === document.body) stray.remove();
     }
   }
 }

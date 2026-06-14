@@ -4,11 +4,17 @@ use tauri::menu::{
 };
 use tauri::{AppHandle, Wry};
 
-// Typora-style chords that are Ctrl+Cmd on macOS get a Ctrl+Alt equivalent elsewhere.
+// Chords that are Ctrl+Cmd on macOS get a Ctrl+Alt equivalent elsewhere.
 #[cfg(target_os = "macos")]
 const CTRL_CMD: &str = "Ctrl+Cmd";
 #[cfg(not(target_os = "macos"))]
 const CTRL_CMD: &str = "Ctrl+Alt";
+
+// Paste and Match Style: Cmd+Opt+Shift+V on macOS, Ctrl+Shift+V elsewhere.
+#[cfg(target_os = "macos")]
+const PASTE_MATCH_STYLE: &str = "Cmd+Alt+Shift+V";
+#[cfg(not(target_os = "macos"))]
+const PASTE_MATCH_STYLE: &str = "Ctrl+Shift+V";
 
 fn mi(app: &AppHandle, id: &str, label: &str, accel: Option<&str>) -> tauri::Result<MenuItem<Wry>> {
     let mut b = MenuItemBuilder::with_id(id, label);
@@ -264,8 +270,8 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .item(&mi(
             app,
             "edit.paste_plain",
-            "Paste as Plain Text",
-            Some("Shift+CmdOrCtrl+V"),
+            "Paste and Match Style",
+            Some(PASTE_MATCH_STYLE),
         )?)
         .separator()
         .item(&mi(app, "edit.move_row_up", "Move Row Up", Some("Alt+Up"))?)

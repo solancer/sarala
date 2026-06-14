@@ -1,26 +1,26 @@
 # Sarala
 
-A seamless WYSIWYG Markdown editor in the spirit of Typora — no preview pane, no split view — built with **Tauri 2** (Rust) and **SolidJS**.
+A seamless WYSIWYG Markdown editor — no preview pane, no split view — built with **Tauri 2** (Rust) and **SolidJS**.
 
 The editing surface *is* the preview: every paragraph, heading, list, quote, table and code fence is a live block. Click a block and it opens into raw Markdown source; click away and it renders in place. One parser (`marked` + GFM), one theme, one window — what you see while writing is exactly what exports.
 
 ## Features
 
-- **Typora-style live editing** — type Markdown and the active block styles itself *as you type*: syntax markers stay visible but dimmed (the gray `##` next to a live-styled heading, gray `[ ]( )` around a blue link), and the block fully renders when you press **Enter** or move the caret away
+- **Live block editing** — type Markdown and the active block styles itself *as you type*: syntax markers stay visible but dimmed (the gray `##` next to a live-styled heading, gray `[ ]( )` around a blue link), and the block fully renders when you press **Enter** or move the caret away
 - **Smart Enter** — continues lists (with auto-numbering and unchecked task carry-over), continues blockquotes, ends a list on an empty item, auto-closes a just-opened code fence, and inserts plain newlines inside fences; `Shift+Enter` for a soft break
 - Click anywhere in rendered text and the caret lands at that spot in the source (rendered→source position mapping)
 - Merge on backspace at block start, arrow-key navigation across blocks, IME-safe (composition events respected)
 - **GFM**: tables, task lists (clickable checkboxes), strikethrough, fenced code highlighted by [Shiki](https://shiki.style) (TextMate grammars + VS Code themes; light/dark via CSS variables, self-contained inline styles in export)
 - **Math** (KaTeX): inline `$…$` and block `$$…$$`, rendered in inactive blocks and shown as raw source while editing; optional `\(…\)` / `\[…\]` delimiters and a `` ```math `` block (both preference-gated, off by default); a broken formula keeps its last good render with an error rather than blanking
 - **Diagrams** (Mermaid): `` ```mermaid `` blocks render every diagram type (flowchart, sequence, gantt, class, state, pie, ER, gitGraph, mindmap, timeline, quadrant, sankey, XY, block, kanban, architecture); invalid syntax shows an inline error and keeps the last good diagram; a `--mermaid-theme` CSS var follows the app's light/dark theme
-- **Native menu bar** (Typora-style: File, Edit, Paragraph, Format, View, Themes, Window, Help) — every item dispatches through one frontend command bus shared with the keyboard shortcuts
+- **Native menu bar** (File, Edit, Paragraph, Format, View, Themes, Window, Help) — every item dispatches through one frontend command bus shared with the keyboard shortcuts
 - **Find & replace** (`Cmd/Ctrl+F`, replace one or all) and **Open Quickly** fuzzy finder (`Shift+Cmd/Ctrl+P`)
 - **Sidebar**: file tree (open a folder, browse `.md` files) and live outline (click a heading to jump)
 - **Source mode** (`Cmd/Ctrl+/`) as an escape hatch to the full raw document; **Focus** (`F8`) and **Typewriter** (`F9`) modes
 - **Paragraph tools**: heading levels, pipe-table editing (insert/rows/columns/alignment), lists and task toggles, quotes, math/code blocks, `[TOC]`, footnotes, GFM alerts
 - **Themes**: Paper, Graphite, GitHub, Night, Newsprint, Whitey — pure CSS variables, add your own in `src/styles/app.css`
 - **Export**: HTML (with an outline sidebar), real PDF (headless Chromium with configurable page size, margins, and header/footer using `${pageNo}`/`${totalPages}`/`${title}`/`${date}`; falls back to the print dialog), and docx/odt/rtf/epub/LaTeX/MediaWiki/rst/Textile/OPML via [Pandoc](https://pandoc.org) (with sensible flags — docx reference doc, epub TOC/chapters). **Named presets** store a format, output path, after-export action (reveal/open/run a command) and pandoc flags; **Export with Previous** re-runs the last. Per-document YAML keys (`export_filename`, `export_pdf_margin`, …) override settings. Import via Pandoc too
-- **Local images**: relative `src` paths resolve against the document's folder (via Tauri's asset protocol) and render inline; inserting an image can copy it into a configurable folder (with a `${filename}` variable), and the per-document `typora-copy-images-to` / `typora-root-url` YAML keys override the copy folder and image root
+- **Local images**: relative `src` paths resolve against the document's folder (via Tauri's asset protocol) and render inline; inserting an image can copy it into a configurable folder (with a `${filename}` variable), and the per-document `copy-images-to` / `image-root-url` YAML keys override the copy folder and image root
 - **Recent files**, settings persisted to disk, smart punctuation, LF/CRLF line endings; **save is atomic** (temp file + rename)
 - Word/character count, dirty indicator (window title shows *— Edited*), confirm-on-close, keyboard-first
 

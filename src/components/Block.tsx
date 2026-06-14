@@ -13,6 +13,7 @@ import { renderMermaidIn } from "../mermaid";
 import { executeCommand, registerBlockApi, unregisterBlockApi, type BlockApi } from "../commands";
 import { parseTable, cellRanges } from "../tabletools";
 import { findImages } from "../images";
+import { pasteToInsert } from "../richpaste";
 import { openImageMenu } from "./ImageContextMenu";
 import TableToolbar from "./TableToolbar";
 import CodeLangPicker from "./CodeLangPicker";
@@ -334,10 +335,19 @@ export default function Block(props: Props) {
 
   const onPaste = (e: ClipboardEvent) => {
     e.preventDefault();
-    insertAtCaret(e.clipboardData?.getData("text/plain") ?? "");
+    const cd = e.clipboardData;
+    if (!cd) return;
+    insertAtCaret(
+      pasteToInsert({
+        html: cd.getData("text/html"),
+        plain: cd.getData("text/plain"),
+        // Code fences / YAML front matter are literal — keep paste raw there.
+        inFence: isFence(),
+      }),
+    );
   };
 
-  // Right-click an image in the rendered view → Typora-style image menu. The
+  // Right-click an image in the rendered view → image context menu. The
   // nth <img> maps to the nth image occurrence in this block's source.
   const onRenderedContextMenu = (e: MouseEvent) => {
     const host = e.currentTarget as HTMLElement;

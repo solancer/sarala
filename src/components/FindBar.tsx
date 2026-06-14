@@ -1,8 +1,9 @@
 import { Show, createSignal, createEffect } from "solid-js";
 import { doc, fullText, updateBlock, renderEpoch } from "../store";
+import { buildSearchRegex } from "../search";
 
 /**
- * Typora-style find: every match in the document is highlighted (CSS Custom
+ * Live find: every match in the document is highlighted (CSS Custom
  * Highlight API — pure painting, no DOM mutation, so the textContent caret
  * invariant is untouched), the current match gets a distinct style, and
  * Enter cycles while focus STAYS in the search input. Blocks are never
@@ -15,6 +16,12 @@ const [query, setQuery] = createSignal("");
 const [replaceWith, setReplaceWith] = createSignal("");
 const [cursor, setCursor] = createSignal(0);
 const [matchCount, setMatchCount] = createSignal(0);
+const [invalid, setInvalid] = createSignal(false);
+
+// Search options (VS Code-style toggles).
+const [useRegex, setUseRegex] = createSignal(false);
+const [caseSensitive, setCaseSensitive] = createSignal(false);
+const [wholeWord, setWholeWord] = createSignal(false);
 
 let focusInput: (() => void) | undefined;
 /** DOM ranges of all matches, refreshed by the highlight effect. */
@@ -26,14 +33,34 @@ export function openFind(replace = false) {
   queueMicrotask(() => focusInput?.());
 }
 
+/** Open the find bar pre-filled with a query (used by the folder-search panel). */
+export function openFindWith(q: string) {
+  setQuery(q);
+  setUseRegex(false);
+  setVisible(true);
+  queueMicrotask(() => focusInput?.());
+}
+
 export function closeFind() {
   setVisible(false);
 }
 
+/**
+ * Build the active search regex from the query + option toggles, or null when
+ * the query is empty or an invalid regex. Always global; case-insensitive
+ * unless the case toggle is on; word-bounded when the whole-word toggle is on.
+ */
+function buildPattern(): RegExp | null {
+  return buildSearchRegex(query(), {
+    regex: useRegex(),
+    caseSensitive: caseSensitive(),
+    wholeWord: wholeWord(),
+  });
+}
+
 /** Find query matches across each block's DOM text (whatever view it shows). */
-function computeDomMatches(q: string): Range[] {
+function computeDomMatches(re: RegExp): Range[] {
   const out: Range[] = [];
-  const needle = q.toLowerCase();
   for (const block of document.querySelectorAll(".page .block")) {
     // Full block text with a node map so matches can span inline elements.
     const nodes: { node: Text; start: number }[] = [];
@@ -43,23 +70,21 @@ function computeDomMatches(q: string): Range[] {
       nodes.push({ node: n, start: text.length });
       text += n.data;
     }
-    const hay = text.toLowerCase();
     const at = (offset: number) => {
       let lo = 0;
       for (let i = 0; i < nodes.length; i++) if (nodes[i].start <= offset) lo = i;
       return { node: nodes[lo].node, offset: offset - nodes[lo].start };
     };
-    let from = 0;
-    while (out.length < 999) {
-      const i = hay.indexOf(needle, from);
-      if (i === -1) break;
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while (out.length < 999 && (m = re.exec(text))) {
+      if (m[0].length === 0) { re.lastIndex++; continue; } // skip empty matches
       const range = document.createRange();
-      const s = at(i);
-      const e = at(i + needle.length);
+      const s = at(m.index);
+      const e = at(m.index + m[0].length);
       range.setStart(s.node, s.offset);
       range.setEnd(e.node, e.offset);
       out.push(range);
-      from = i + Math.max(needle.length, 1);
     }
   }
   return out;
@@ -78,8 +103,9 @@ function blockIndexOf(range: Range): number {
 }
 
 function replaceCurrent() {
+  const re = buildPattern();
   const n = matchCount();
-  if (!n || !query()) return;
+  if (!re || !n) return;
   const idx = Math.min(cursor(), n - 1);
   const range = domMatches[idx];
   if (!range) return;
@@ -89,23 +115,37 @@ function replaceCurrent() {
   let ordinal = 0;
   for (let k = 0; k < idx; k++) if (blockIndexOf(domMatches[k]) === blockIndex) ordinal++;
   const source = doc.blocks[blockIndex].text;
-  const hay = source.toLowerCase();
-  const needle = query().toLowerCase();
-  let at = -1;
-  for (let k = 0, from = 0; k <= ordinal; k++) {
-    at = hay.indexOf(needle, from);
-    if (at === -1) return;
-    from = at + Math.max(needle.length, 1);
+  re.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  let seen = -1;
+  let target: RegExpExecArray | null = null;
+  while ((m = re.exec(source))) {
+    if (m[0].length === 0) { re.lastIndex++; continue; }
+    if (++seen === ordinal) { target = m; break; }
   }
-  updateBlock(blockIndex, source.slice(0, at) + replaceWith() + source.slice(at + needle.length));
+  if (!target) return;
+  // Regex mode expands $1/$& backreferences; plain mode inserts the text as-is.
+  const replacement = useRegex()
+    ? target[0].replace(new RegExp(re.source, caseSensitive() ? "" : "i"), replaceWith())
+    : replaceWith();
+  updateBlock(
+    blockIndex,
+    source.slice(0, target.index) + replacement + source.slice(target.index + target[0].length),
+  );
 }
 
 function replaceAllMatches() {
-  const q = query();
-  if (!q) return;
-  const pattern = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  const re = buildPattern();
+  if (!re) return;
+  const rep = replaceWith();
+  const regex = useRegex();
   doc.blocks.forEach((block, i) => {
-    if (pattern.test(block.text)) updateBlock(i, block.text.replace(pattern, replaceWith()));
+    re.lastIndex = 0;
+    if (!re.test(block.text)) return;
+    // Plain mode replaces via a function so $ in the text isn't interpreted;
+    // regex mode keeps the template so $1 backreferences work.
+    const next = regex ? block.text.replace(re, rep) : block.text.replace(re, () => rep);
+    updateBlock(i, next);
   });
   setCursor(0);
 }
@@ -129,17 +169,23 @@ export default function FindBar() {
     renderEpoch();
     void doc.activeIndex;
     const q = query();
+    // Read the option toggles so flipping any of them re-runs the search.
+    void useRegex();
+    void caseSensitive();
+    void wholeWord();
+    const re = buildPattern();
     const idx = cursor();
     const on = visible() && q.length > 0;
+    setInvalid(on && useRegex() && re === null);
     const highlights = (window.CSS as typeof CSS & { highlights?: Map<string, unknown> }).highlights;
-    if (!on) {
+    if (!on || !re) {
       highlights?.delete("sarala-find");
       highlights?.delete("sarala-find-current");
       domMatches = [];
       setMatchCount(0);
       return;
     }
-    domMatches = computeDomMatches(q);
+    domMatches = computeDomMatches(re);
     setMatchCount(domMatches.length);
     const current = domMatches[Math.min(idx, domMatches.length - 1)];
     if (highlights && "Highlight" in window) {
@@ -163,8 +209,9 @@ export default function FindBar() {
 
   const count = () => {
     if (!query()) return "";
-    if (!matchCount()) return "0 results";
-    return `${Math.min(cursor() + 1, matchCount())} of ${matchCount()}`;
+    if (invalid()) return "Bad pattern";
+    if (!matchCount()) return "0 / 0";
+    return `${Math.min(cursor() + 1, matchCount())} / ${matchCount()}`;
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -180,9 +227,18 @@ export default function FindBar() {
             ref={inputEl}
             placeholder="Find"
             value={query()}
+            classList={{ invalid: invalid() }}
             onInput={(e) => setQuery(e.currentTarget.value)}
             onKeyDown={onKeyDown}
           />
+          <div class="findbar-toggles">
+            <button class="find-toggle" classList={{ on: caseSensitive() }}
+              title="Match case" onClick={() => setCaseSensitive(!caseSensitive())}>Aa</button>
+            <button class="find-toggle" classList={{ on: wholeWord() }}
+              title="Whole word" onClick={() => setWholeWord(!wholeWord())}>W</button>
+            <button class="find-toggle mono" classList={{ on: useRegex() }}
+              title="Use regular expression" onClick={() => setUseRegex(!useRegex())}>.*</button>
+          </div>
           <span class="findbar-count">{count()}</span>
           <button class="ghost-btn" title="Previous (Shift+Enter)" onClick={() => findNext(-1)}>↑</button>
           <button class="ghost-btn" title="Next (Enter)" onClick={() => findNext(1)}>↓</button>

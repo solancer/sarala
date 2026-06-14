@@ -18,6 +18,10 @@ const LANGS = [
   "lua", "r", "perl", "scala", "haskell", "elixir", "graphql", "vue", "ini",
 ];
 
+// Languages the app handles specially (not Shiki grammars) but should still be
+// offered in the picker — `mermaid` fences render as diagrams via markdown.ts.
+const EXTRA_LANGS = ["mermaid"];
+
 // Common fence aliases → a loaded grammar.
 const ALIASES: Record<string, string> = {
   js: "javascript", ts: "typescript", sh: "bash", shell: "bash", zsh: "bash",
@@ -68,7 +72,7 @@ export function highlightCode(code: string, lang: string): string | null {
 
 /** Languages offered by the code-block language picker. */
 export function codeLanguages(): string[] {
-  return [...new Set([...LANGS, ...Object.keys(ALIASES)])].sort();
+  return [...new Set([...LANGS, ...EXTRA_LANGS, ...Object.keys(ALIASES)])].sort();
 }
 
 setCodeHighlighter(highlightCode);

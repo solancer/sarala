@@ -88,6 +88,122 @@ fn read_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("Could not read {path}: {e}"))
 }
 
+#[derive(Serialize)]
+struct LineMatch {
+    line: usize,
+    text: String,
+}
+
+#[derive(Serialize)]
+struct FileMatches {
+    path: String,
+    name: String,
+    matches: Vec<LineMatch>,
+}
+
+/// Collect markdown file paths under `dir`, applying the same hidden/build
+/// directory skips as the workspace tree walk.
+fn collect_md_files(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') || name == "node_modules" || name == "target" {
+            continue;
+        }
+        if path.is_dir() {
+            if depth < MAX_DEPTH {
+                collect_md_files(&path, depth + 1, out);
+            }
+        } else if path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| MARKDOWN_EXTS.contains(&e.to_lowercase().as_str()))
+            .unwrap_or(false)
+        {
+            out.push(path);
+        }
+    }
+}
+
+/// Full-text search across every markdown file in the open folder. Supports
+/// plain, regex, case-sensitive, and whole-word modes; returns per-file line
+/// matches (capped to keep the payload bounded).
+#[tauri::command]
+fn search_in_folder(
+    root: String,
+    query: String,
+    regex: bool,
+    case_sensitive: bool,
+    whole_word: bool,
+) -> Result<Vec<FileMatches>, String> {
+    if query.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut pattern = if regex {
+        query.clone()
+    } else {
+        regex::escape(&query)
+    };
+    if whole_word {
+        pattern = format!(r"\b(?:{pattern})\b");
+    }
+    let re = regex::RegexBuilder::new(&pattern)
+        .case_insensitive(!case_sensitive)
+        .build()
+        .map_err(|e| format!("Invalid pattern: {e}"))?;
+
+    let root_path = Path::new(&root);
+    if !root_path.is_dir() {
+        return Err(format!("Not a directory: {root}"));
+    }
+    let mut files: Vec<PathBuf> = Vec::new();
+    collect_md_files(root_path, 0, &mut files);
+    files.sort();
+
+    const MAX_TOTAL: usize = 2000;
+    const MAX_PER_FILE: usize = 50;
+    let mut results: Vec<FileMatches> = Vec::new();
+    let mut total = 0usize;
+
+    for path in files {
+        if total >= MAX_TOTAL {
+            break;
+        }
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let mut matches: Vec<LineMatch> = Vec::new();
+        for (idx, line) in content.lines().enumerate() {
+            if matches.len() >= MAX_PER_FILE || total >= MAX_TOTAL {
+                break;
+            }
+            if re.is_match(line) {
+                let snippet: String = line.trim().chars().take(200).collect();
+                matches.push(LineMatch {
+                    line: idx + 1,
+                    text: snippet,
+                });
+                total += 1;
+            }
+        }
+        if !matches.is_empty() {
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            results.push(FileMatches {
+                path: path.to_string_lossy().to_string(),
+                name,
+                matches,
+            });
+        }
+    }
+    Ok(results)
+}
+
 #[tauri::command]
 fn save_file(path: String, contents: String) -> Result<(), String> {
     // Atomic-ish write: write to a sibling temp file, then rename over.
@@ -371,6 +487,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             list_dir,
             read_file,
+            search_in_folder,
             save_file,
             new_window,
             load_settings,

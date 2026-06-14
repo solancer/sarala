@@ -59,6 +59,35 @@ export async function listDirectory(path: string): Promise<FileNode[]> {
   return await invoke<FileNode[]>("list_dir", { path });
 }
 
+export interface FolderSearchHit {
+  path: string;
+  name: string;
+  matches: { line: number; text: string }[];
+}
+
+export interface FolderSearchOptions {
+  regex: boolean;
+  caseSensitive: boolean;
+  wholeWord: boolean;
+}
+
+/** Search every markdown file under `root`; empty in browser mode (no FS). */
+export async function searchInFolder(
+  root: string,
+  query: string,
+  opts: FolderSearchOptions,
+): Promise<FolderSearchHit[]> {
+  if (!isTauri) return [];
+  const { invoke } = await tauriCore();
+  return await invoke<FolderSearchHit[]>("search_in_folder", {
+    root,
+    query,
+    regex: opts.regex,
+    caseSensitive: opts.caseSensitive,
+    wholeWord: opts.wholeWord,
+  }).catch(() => []);
+}
+
 export async function clipboardWriteText(text: string): Promise<void> {
   if (!isTauri) {
     await navigator.clipboard.writeText(text);

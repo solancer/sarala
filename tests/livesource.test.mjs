@@ -600,5 +600,124 @@ assert(!styleSource("| lone | row |").includes("md-table"),
     "tables without leading/trailing pipes still render");
 }
 
+/* ---------- rich paste & clipboard ---------- */
+{
+  const out = path.join(here, ".build", "richpaste.mjs");
+  await build({
+    entryPoints: [path.join(here, "..", "src", "richpaste.ts")],
+    bundle: true,
+    format: "esm",
+    outfile: out,
+  });
+  const rp = await import(out);
+
+  // Control-char scrubbing.
+  assert(rp.stripControlChars("a bc") === "abc", "strips NUL/BEL/DEL");
+  assert(rp.stripControlChars("a\r\nb\rc") === "a\nb\nc", "normalizes CRLF and CR to LF");
+  assert(rp.stripControlChars("keep\ttab\nand\nnewline") === "keep\ttab\nand\nnewline",
+    "tabs and newlines survive");
+  assert(rp.stripControlChars("﻿hello") === "hello", "strips a leading BOM");
+
+  // HTML → Markdown conversion.
+  assert(rp.htmlToMarkdown("<h2>Title</h2>") === "## Title", "h2 → atx heading");
+  assert(rp.htmlToMarkdown("<p>a <strong>b</strong> <em>c</em></p>") === "a **b** *c*",
+    "bold/italic convert");
+  const ul = rp.htmlToMarkdown("<ul><li>one</li><li>two</li></ul>");
+  assert(/^-\s+one$/m.test(ul) && /^-\s+two$/m.test(ul), `unordered list uses - marker (${JSON.stringify(ul)})`);
+  assert(rp.htmlToMarkdown('<a href="https://x.com">link</a>') === "[link](https://x.com)",
+    "anchors become inline links");
+  assert(rp.htmlToMarkdown("<del>gone</del>").includes("~~gone~~"),
+    "GFM strikethrough converts");
+  const table = rp.htmlToMarkdown(
+    "<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>",
+  );
+  assert(table.includes("| A | B |") && table.includes("| --- | --- |"),
+    "GFM tables convert with a separator row");
+  // Google Docs wraps everything in <b style="font-weight:normal"> — must not bold.
+  const gdocs = rp.htmlToMarkdown('<b style="font-weight:normal" id="docs-internal-guid-x"><p>plain text</p></b>');
+  assert(gdocs === "plain text", `normal-weight wrapper bold is ignored (${JSON.stringify(gdocs)})`);
+
+  // pasteToInsert: inside a fence, content stays literal (never markdown-escaped)
+  // — the mermaid-diagram regression.
+  const mermaid = "A[Christmas] -->|Get money| B(Go shopping)";
+  const inFence = rp.pasteToInsert({ html: `<p>${mermaid}</p>`, plain: mermaid, inFence: true });
+  assert(inFence === mermaid, `paste into a fence keeps [ ] - > literal (${JSON.stringify(inFence)})`);
+  assert(!inFence.includes("\\["), "no backslash-escaping inside a code fence");
+  // Outside a fence, rich HTML is converted (Markdown escaping is then correct).
+  const outFence = rp.pasteToInsert({ html: "<p>a <strong>b</strong></p>", plain: "a b", inFence: false });
+  assert(outFence === "a **b**", "paste outside a fence converts HTML to Markdown");
+  // No HTML → plain text either way, with newline normalization.
+  assert(rp.pasteToInsert({ html: "", plain: "x\r\ny", inFence: false }) === "x\ny",
+    "plain-only paste normalizes newlines");
+  // Control chars inside HTML are scrubbed too.
+  assert(rp.htmlToMarkdown("<p>a b</p>") === "ab", "control chars stripped from converted HTML");
+}
+
+/* ---------- find/replace search patterns ---------- */
+{
+  const out = path.join(here, ".build", "search.mjs");
+  await build({
+    entryPoints: [path.join(here, "..", "src", "search.ts")],
+    bundle: true,
+    format: "esm",
+    outfile: out,
+  });
+  const { buildSearchRegex } = await import(out);
+  const opt = (o = {}) => ({ regex: false, caseSensitive: false, wholeWord: false, ...o });
+  const all = (re, s) => (s.match(re) || []).length;
+
+  assert(buildSearchRegex("", opt()) === null, "empty query → null");
+
+  // Plain mode escapes regex metacharacters.
+  const plain = buildSearchRegex("a.b", opt());
+  assert(plain.test("a.b") && !plain.test("axb"), "plain query treats . literally");
+
+  // Case sensitivity.
+  assert(all(buildSearchRegex("foo", opt()), "Foo foo FOO") === 3, "case-insensitive by default");
+  assert(all(buildSearchRegex("foo", opt({ caseSensitive: true })), "Foo foo FOO") === 1,
+    "case-sensitive matches exact case only");
+
+  // Whole word.
+  assert(all(buildSearchRegex("cat", opt({ wholeWord: true })), "cat category cat") === 2,
+    "whole-word skips 'category'");
+  assert(all(buildSearchRegex("cat", opt()), "cat category") === 2,
+    "without whole-word, substring matches inside 'category'");
+
+  // Regex mode.
+  const re = buildSearchRegex("\\d+", opt({ regex: true }));
+  assert(all(re, "a1 bb 234") === 2, "regex \\d+ finds number runs");
+  assert(buildSearchRegex("(", opt({ regex: true })) === null, "invalid regex → null");
+  assert(buildSearchRegex("(", opt({ regex: false })).test("("), "invalid-looking query is literal in plain mode");
+
+  // Global flag so callers can count/iterate all matches.
+  assert(buildSearchRegex("x", opt()).flags.includes("g"), "pattern is global");
+}
+
+/* ---------- code-block language icons ---------- */
+{
+  const out = path.join(here, ".build", "langicons.mjs");
+  await build({
+    entryPoints: [path.join(here, "..", "src", "langicons.ts")],
+    bundle: true,
+    format: "esm",
+    outfile: out,
+  });
+  const { langIcon, readableText } = await import(out);
+
+  assert(langIcon("javascript").label === "JS" && langIcon("javascript").color === "#f1e05a",
+    "javascript → JS chip with brand yellow");
+  assert(langIcon("js").color === langIcon("javascript").color, "alias js shares javascript's icon");
+  assert(langIcon("rs").label === "Rs" && langIcon("rs").color === langIcon("rust").color,
+    "alias rs resolves to rust");
+  assert(langIcon("mermaid").color === "#ff3670", "mermaid has its own brand color");
+  assert(langIcon("totally-unknown").label === "T" && langIcon("totally-unknown").color === "#8b8b8b",
+    "unknown language falls back to an initial + neutral grey");
+
+  // Contrast: light brand colors get dark text, dark ones get white.
+  assert(readableText("#f1e05a") === "#1a1a1a", "yellow chip uses dark text");
+  assert(readableText("#3178c6") === "#ffffff", "blue chip uses white text");
+  assert(readableText("not-a-color") === "#ffffff", "non-hex defaults to white text");
+}
+
 console.log(`${passes} passed, ${failures} failed`);
 if (failures) process.exit(1);

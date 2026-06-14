@@ -2,7 +2,7 @@
    Sarala — design tokens
    Paper: cool ivory page, graphite text, deep teal "ink" accent
    Graphite: charcoal page, warm off-white text, sea-glass accent
-   Type: Open Sans prose (Typora's default face) · system-ui chrome · mono source
+   Type: Open Sans prose · system-ui chrome · mono source
    ============================================================ */
 
 :root {
@@ -255,6 +255,70 @@ body { font-family: var(--font-ui); }
 .sidebar-empty p { margin: 0 0 10px; }
 .side-outline-empty { padding: 4px 10px; color: var(--ink-soft); font-size: 12px; }
 
+/* Collapsible section heads (Search) double as buttons. */
+.side-section-head.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.side-section-head.toggle .twist { font-size: 9px; color: var(--ink-soft); }
+
+/* ---------- folder search panel ---------- */
+.search-panel { padding: 2px 8px 8px; }
+.search-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font: 12px var(--font-ui);
+  background: var(--code-bg);
+  color: var(--ink);
+  outline: none;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-toggles { display: flex; align-items: center; gap: 2px; margin: 5px 0 2px; }
+.search-summary { margin-left: auto; font: 11px var(--font-ui); color: var(--ink-soft); }
+.search-empty { padding: 8px 4px; font: 12px var(--font-ui); color: var(--ink-soft); }
+
+.search-file { margin-top: 6px; }
+.search-file-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 600 12px var(--font-ui);
+  padding: 3px 4px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.search-file-head:hover { background: var(--tint); }
+.search-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-file-count { margin-left: auto; color: var(--ink-soft); font-weight: 400; }
+.search-hit {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: 12px/1.4 var(--font-ui);
+  padding: 2px 4px 2px 14px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.search-hit:hover { background: var(--tint); }
+.search-hit-line { flex: none; min-width: 22px; text-align: right; color: var(--accent); opacity: 0.7; font-variant-numeric: tabular-nums; }
+.search-hit-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* ---------- main column ---------- */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
@@ -273,12 +337,12 @@ body { font-family: var(--font-ui); }
 .scroll { flex: 1; overflow-y: auto; }
 
 /* ---------- editor page ----------
-   Typora-style use of space: the editing surface IS the window — one flat
+   Generous use of space: the editing surface IS the window — one flat
    background, no page card, a wide fluid column with ~80px gutters. */
 .main { background: var(--bg-page); }
 .editor { min-height: 100%; cursor: text; }
 .page {
-  max-width: 1300px; /* 1140px text column + gutters — Typora's cap */
+  max-width: 1300px; /* 1140px text column + gutters */
   margin: 0 auto;
   padding: 48px 80px 45vh;
 }
@@ -348,7 +412,7 @@ body { font-family: var(--font-ui); }
   color: var(--ink);
   padding: 2px 0;
 }
-/* Typora-like vertical rhythm: blocks keep their natural margins so a
+/* Natural vertical rhythm: blocks keep their natural margins so a
    heading breathes above the paragraph that follows it. */
 .rendered h1, .rendered h2, .rendered h3, .rendered h4 {
   font-family: var(--font-prose);
@@ -403,7 +467,7 @@ body { font-family: var(--font-ui); }
 [data-theme="classic"] .shiki, [data-theme="classic"] .shiki span {
   color: var(--shiki-dark) !important;
 }
-/* Typora's list rhythm: items sit ~2.06 line-height apart. Spacing lives in
+/* List rhythm: items sit ~2.06 line-height apart. Spacing lives in
    line-height (not li margins) so the live view — where items are bare text
    lines — can match it exactly and activation stays shift-free. */
 .rendered ul, .rendered ol { margin: 0.35em 0; padding-left: 1.5em; line-height: 2.06; }
@@ -545,7 +609,8 @@ body { font-family: var(--font-ui); }
 
 .findbar {
   border-bottom: 1px solid var(--accent-soft);
-  background: var(--paper, #fff);
+  background: var(--bg-panel);
+  color: var(--ink);
   padding: 6px 12px;
   display: flex;
   flex-direction: column;
@@ -564,7 +629,28 @@ body { font-family: var(--font-ui); }
   outline: none;
 }
 .findbar input:focus { border-color: var(--accent); }
-.findbar-count { font: 11px var(--font-ui); color: var(--ink-soft); min-width: 64px; }
+.findbar input.invalid { border-color: #e5534b; }
+.findbar-count { font: 11px var(--font-ui); color: var(--ink-soft); min-width: 56px; text-align: right; }
+
+.findbar-toggles { display: flex; gap: 2px; }
+.find-toggle {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: 600 12px var(--font-ui);
+  cursor: pointer;
+}
+.find-toggle.mono { font-family: var(--font-mono); }
+.find-toggle:hover { background: var(--accent-soft); }
+.find-toggle.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 /* ---- Table of contents block ([TOC]) ---- */
 
@@ -610,7 +696,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 
 [data-theme="github"] {
   --mermaid-theme: default;
-  /* Typora's default theme palette */
+  /* default theme palette */
   --bg: #ffffff;
   --bg-panel: #fafafa;
   --bg-page: #ffffff;
@@ -684,7 +770,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 
 .page { font-size: var(--zoom, 100%); }
 
-/* ---- Caret-scoped marker reveal (Typora behavior) ----
+/* ---- Caret-scoped marker reveal ----
    Markers inside an .md-tok are hidden until applyMarkerVisibility() flags
    the token with .md-on (caret inside the token / on the heading line).
    Hiding is display:none only — the text stays in the DOM so contenteditable
@@ -759,7 +845,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 .source .md-table .md-pipe { display: none; }
 .source .md-table .md-tsep { display: none; }
 
-/* ---- Table toolbar (Typora-style, floats above the active table) ---- */
+/* ---- Table toolbar (floats above the active table) ---- */
 
 .table-toolbar {
   position: absolute;
@@ -846,7 +932,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 .tt-size span { color: var(--ink-soft); font: 12px var(--font-ui); }
 .tt-apply { width: auto; padding: 0 8px; font: 12px var(--font-ui); }
 
-/* Zebra body rows, live table and rendered view alike (Typora look). */
+/* Zebra body rows, live table and rendered view alike. */
 .source .md-table .md-trow:nth-child(even):not(.md-tsep) .md-tcell { background: var(--tint); }
 .rendered tbody tr:nth-child(even) td { background: var(--tint); }
 
@@ -896,7 +982,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
 .app.tables-full .rendered table,
 body.tables-full .rendered table { width: 100%; }
 
-/* ---- Code block language picker (Typora-style) ---- */
+/* ---- Code block language picker ---- */
 
 /* Anchored INSIDE the code box's top-right corner so it can never drift
    away from its block; resting state is a quiet badge, the dropdown only
@@ -946,12 +1032,28 @@ body.tables-full .rendered table { width: 100%; }
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
 }
 .code-lang li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 4px 10px;
   font: 12px var(--font-mono);
   color: var(--ink);
   cursor: pointer;
 }
 .code-lang li.selected { background: var(--accent-soft); color: var(--accent); }
+
+/* Brand-colored monogram chip beside each language. */
+.cl-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  font: 700 9px/1 var(--font-ui);
+  letter-spacing: -0.02em;
+}
 
 /* ---- Find highlights (CSS Custom Highlight API — paint only, no DOM
    mutation, so caret offsets stay exact) ---- */

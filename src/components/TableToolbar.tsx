@@ -11,7 +11,7 @@ const GRID_COLS = 8;
 const GRID_ROWS = 10;
 
 /**
- * Typora-style floating toolbar above an active table block: grid-resize
+ * Floating toolbar above an active table block: grid-resize
  * picker (with exact cols x rows inputs), per-column alignment, delete.
  * mousedown is swallowed everywhere except the inputs so the block's
  * contenteditable keeps focus and the caret column stays meaningful.

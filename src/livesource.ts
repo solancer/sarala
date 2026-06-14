@@ -1,5 +1,5 @@
 /**
- * Live-styled Markdown source — the Typora behavior.
+ * Live-styled Markdown source — WYSIWYG inline editing.
  * The active block shows its raw source, but markers are dimmed and
  * content is styled in real time as you type. Rendering to final HTML
  * happens only when the caret leaves the block (Enter / blur / Esc).
@@ -217,7 +217,7 @@ export function styleSource(src: string): string {
 }
 
 /**
- * Typora-style caret-scoped reveal: toggle .md-on on every .md-tok in a
+ * Caret-scoped reveal: toggle .md-on on every .md-tok in a
  * live-styled block. A token reveals while the caret sits inside its source
  * range, edges inclusive — completing `**bold**` leaves the caret on the end
  * edge so the pair stays revealed, and a list/heading prefix reveals when the

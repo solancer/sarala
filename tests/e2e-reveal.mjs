@@ -224,7 +224,7 @@ check(afterResize.stillTable, "resized table still renders as a grid");
 check(afterResize.hasOld, "existing cells survive the resize");
 
 // Zero-jank activation: opening any block type must not shift the layout
-// below it (Typora behavior). Reload first to discard earlier edits.
+// below it (zero layout shift). Reload first to discard earlier edits.
 await page.reload();
 await page.waitForSelector(".block");
 const JANK_TARGETS = [
@@ -305,7 +305,7 @@ await page.keyboard.press("Escape");
 // dropdown that rewrites the fence line.
 await page.locator(".block .rendered", { hasText: "tauri::command" }).click();
 await page.waitForSelector(".block.active .code-lang .cl-badge");
-check((await page.locator(".cl-badge").textContent()) === "rust",
+check((await page.locator(".cl-badge").textContent())?.endsWith("rust"),
   "badge shows the fence's current language");
 await page.locator(".cl-badge").click();
 await page.waitForSelector(".code-lang input");
@@ -339,18 +339,18 @@ const findState = () =>
 let fs = await findState();
 check(fs.highlights >= 3, `all matches highlighted (${fs.highlights})`);
 check(fs.current === 1, "current match has its own highlight");
-check(fs.count?.startsWith("1 of"), `count shows position (${fs.count})`);
+check(fs.count?.startsWith("1 / "), `count shows position (${fs.count})`);
 check(!fs.anyActive, "searching does not activate any block");
 await page.keyboard.press("Enter");
 await page.waitForTimeout(100);
 fs = await findState();
-check(fs.count?.startsWith("2 of"), `Enter advances to the next match (${fs.count})`);
+check(fs.count?.startsWith("2 / "), `Enter advances to the next match (${fs.count})`);
 check(fs.inputFocused, "focus stays in the search input after Enter");
 const total = fs.highlights;
 for (let i = 0; i < total - 1; i++) await page.keyboard.press("Enter");
 await page.waitForTimeout(100);
 fs = await findState();
-check(fs.count?.startsWith("1 of"), `Enter wraps around the match list (${fs.count})`);
+check(fs.count?.startsWith("1 / "), `Enter wraps around the match list (${fs.count})`);
 await page.keyboard.press("Escape");
 await page.waitForTimeout(100);
 check((await page.evaluate(() => CSS.highlights?.get("sarala-find")?.size ?? 0)) === 0,

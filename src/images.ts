@@ -103,7 +103,7 @@ interface ResolveCtx {
 /**
  * Pure absolute-path resolution for a markdown image src (testable):
  *  - remote/data URLs → null (no local file);
- *  - root-relative (`/x`) → against `typora-root-url` when set;
+ *  - root-relative (`/x`) → against the `image-root-url` front matter when set;
  *  - other relative paths → against the document's directory;
  *  - absolute file paths → used directly.
  * Returns null when the src has no local file (remote, or no doc dir).
@@ -130,7 +130,7 @@ export function resolveImageSrc(src: string): string {
   if (!isTauri) return src;
   return resolveImagePath(src, {
     dir: docDir(),
-    rootUrl: currentFrontMatter()["typora-root-url"],
+    rootUrl: currentFrontMatter()["image-root-url"],
     convert: (p) => {
       try {
         return convertFileSrc(p);
@@ -143,7 +143,7 @@ export function resolveImageSrc(src: string): string {
 
 /** Absolute filesystem path of an image src, for file operations. Null if remote. */
 export function imageFsPath(src: string): string | null {
-  return toAbsImagePath(src, { dir: docDir(), rootUrl: currentFrontMatter()["typora-root-url"] });
+  return toAbsImagePath(src, { dir: docDir(), rootUrl: currentFrontMatter()["image-root-url"] });
 }
 
 setImageResolver(resolveImageSrc);
