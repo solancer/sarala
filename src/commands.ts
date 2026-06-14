@@ -33,7 +33,7 @@ import {
 } from "./settings";
 import {
   buildExportHtml, pageCss, readExportOverrides, pandocFlagsFor, resolveOutputPath,
-  EXPORT_PRINT_CSS, type ExportPreset, type ExportFormat,
+  EXPORT_PRINT_CSS, PDF_PRINT_CSS, type ExportPreset, type ExportFormat,
 } from "./export";
 import { docDir, currentFrontMatter, docBaseName } from "./images";
 // The app stylesheet as a string (bundled at build time), so exports embed it
@@ -221,14 +221,25 @@ function loadExportCss(): string {
 }
 
 /** Build the exported HTML document (outline sidebar when there are headings). */
-async function htmlDocument(withStyles: boolean, withOutline: boolean, pdf?: string): Promise<string> {
+function htmlDocument(withStyles: boolean, withOutline: boolean): string {
   return buildExportHtml({
     title: exportBaseName(),
     body: renderMarkdown(fullText()),
     css: withStyles ? loadExportCss() : "",
     theme: theme(),
     withOutline,
-    pageCss: pdf,
+  });
+}
+
+/** Build the print HTML for PDF: always a light theme, full-width, no outline. */
+function pdfDocument(): string {
+  return buildExportHtml({
+    title: exportBaseName(),
+    body: renderMarkdown(fullText()),
+    css: appCssText + PDF_PRINT_CSS,
+    theme: "github", // force a light page regardless of the editor theme
+    withOutline: false,
+    pageCss: currentPdfCss(),
   });
 }
 
@@ -249,11 +260,11 @@ function currentPdfCss(): string {
 /** Run one export to `out`; returns the path written, or null if cancelled. */
 async function runExport(format: ExportFormat, out: string, pandocFlags: string[] = []): Promise<string | null> {
   if (format === "html" || format === "html_plain") {
-    await writeTextFile(out, await htmlDocument(format === "html", true));
+    await writeTextFile(out, htmlDocument(format === "html", true));
     return out;
   }
   if (format === "pdf") {
-    const html = await htmlDocument(true, false, currentPdfCss());
+    const html = pdfDocument();
     try {
       await exportPdf(html, out);
       return out;
