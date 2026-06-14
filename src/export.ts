@@ -161,6 +161,7 @@ export interface BuildHtmlOptions {
   css: string; // base export stylesheet
   theme: string;
   withOutline: boolean;
+  tablesFull?: boolean; // stretch tables to the column (matches the editor toggle)
   pageCss?: string; // PDF @page rules
 }
 
@@ -173,8 +174,9 @@ export function buildExportHtml(o: BuildHtmlOptions): string {
         .map((h) => `<li class="toc-l${h.level}"><a href="#${h.id}">${escapeHtml(h.text)}</a></li>`)
         .join("")}</ul></nav>`
     : "";
+  const bodyClass = [showToc && "has-toc", o.tablesFull && "tables-full"].filter(Boolean).join(" ");
   const style = `<style>${o.css}${showToc ? TOC_CSS : ""}${o.pageCss ?? ""}</style>`;
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(o.title)}</title>${style}</head><body data-theme="${o.theme}" class="${showToc ? "has-toc" : ""}">${toc}<article class="rendered">${body}</article></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(o.title)}</title>${style}</head><body data-theme="${o.theme}" class="${bodyClass}">${toc}<article class="rendered">${body}</article></body></html>`;
 }
 
 /* ---------- per-document YAML export overrides ---------- */

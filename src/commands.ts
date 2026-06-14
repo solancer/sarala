@@ -228,6 +228,7 @@ function htmlDocument(withStyles: boolean, withOutline: boolean): string {
     css: withStyles ? loadExportCss() : "",
     theme: theme(),
     withOutline,
+    tablesFull: tableFullWidth(),
   });
 }
 
@@ -239,6 +240,7 @@ function pdfDocument(): string {
     css: appCssText + PDF_PRINT_CSS,
     theme: theme(),
     withOutline: false,
+    tablesFull: tableFullWidth(),
     pageCss: currentPdfCss(),
   });
 }

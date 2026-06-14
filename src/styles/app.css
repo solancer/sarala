@@ -890,9 +890,11 @@ ul.toc li.toc-l6 { padding-left: 92px; }
    dimmed source markers. */
 .source .md-olnum > .md-mark { color: var(--ink); opacity: 1; }
 
-/* Tables stretch to the page column when toggled (table toolbar ↔ icon). */
+/* Tables stretch to the page column when toggled (table toolbar ↔ icon).
+   body.tables-full applies in exports, where there is no .app wrapper. */
 .app.tables-full .source .md-table,
-.app.tables-full .rendered table { width: 100%; }
+.app.tables-full .rendered table,
+body.tables-full .rendered table { width: 100%; }
 
 /* ---- Code block language picker (Typora-style) ---- */
 

@@ -479,6 +479,8 @@ assert(!styleSource("| lone | row |").includes("md-table"),
     "buildExportHtml adds the outline sidebar with anchors");
   const noToc = ex.buildExportHtml({ title: "T", theme: "x", css: "", withOutline: false, body: "<p>x</p>" });
   assert(!noToc.includes("doc-toc"), "no outline when disabled");
+  const full = ex.buildExportHtml({ title: "T", theme: "x", css: "", withOutline: false, tablesFull: true, body: "<table></table>" });
+  assert(full.includes('class="tables-full"'), "tablesFull adds the body class so exported tables stretch");
 
   // YAML export overrides.
   const ov = ex.readExportOverrides({ export_filename: "report", export_pdf_margin: "15mm", title: "x" });
