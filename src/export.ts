@@ -136,13 +136,15 @@ body.has-toc { padding: 40px 28px; box-sizing: border-box; }
 `;
 
 /**
- * PDF-specific overrides: always a light page (a dark editor theme should not
- * become a dark PDF), the content fills the printable area (the @page margin is
- * the only inset — no extra column), and blocks avoid awkward page breaks.
+ * PDF-specific overrides: keep the editor's theme colors (dark stays dark), but
+ * let the content fill the printable area (the @page margin is the only inset —
+ * no extra column) and avoid awkward page breaks. print-color-adjust forces the
+ * theme background/colors to actually print.
  */
 export const PDF_PRINT_CSS = `
 html, body { height: auto !important; margin: 0 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-body { background: #ffffff !important; }
+* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { background: var(--bg); color: var(--ink); }
 .rendered { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; font-size: 11pt; }
 .rendered pre, .rendered table, .rendered blockquote, .rendered img, .rendered .mermaid-block, .rendered .math-block { break-inside: avoid; }
 .rendered h1, .rendered h2, .rendered h3, .rendered h4, .rendered h5, .rendered h6 { break-after: avoid; }

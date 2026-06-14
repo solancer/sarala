@@ -231,13 +231,13 @@ function htmlDocument(withStyles: boolean, withOutline: boolean): string {
   });
 }
 
-/** Build the print HTML for PDF: always a light theme, full-width, no outline. */
+/** Build the print HTML for PDF: matches the editor theme, full-width, no outline. */
 function pdfDocument(): string {
   return buildExportHtml({
     title: exportBaseName(),
     body: renderMarkdown(fullText()),
     css: appCssText + PDF_PRINT_CSS,
-    theme: "github", // force a light page regardless of the editor theme
+    theme: theme(),
     withOutline: false,
     pageCss: currentPdfCss(),
   });
