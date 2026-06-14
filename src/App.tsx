@@ -10,6 +10,7 @@ import ImageContextMenu from "./components/ImageContextMenu";
 import PaletteSwitcher from "./components/PaletteSwitcher";
 import AboutModal from "./components/AboutModal";
 import ExportHtmlDialog from "./components/ExportHtmlDialog";
+import ConflictBanner from "./components/ConflictBanner";
 import { initSettings } from "./settings";
 import {
   doc, theme, sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
@@ -18,11 +19,16 @@ import {
   focusMode, typewriterMode, alwaysOnTop, zoom, tableFullWidth,
   mathAltDelimiters, mathFence, bumpMermaidEpoch,
   emojiEnabled, highlightEnabled, subSupEnabled, autolinkEnabled,
+  finalNewline, autosaveInterval, setExternalChange,
 } from "./store";
-import { isTauri, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS } from "./platform";
+import {
+  isTauri, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS,
+  onExternalChange,
+} from "./platform";
 import {
   executeCommand, openFile, openFolder, insertImageFromPath,
 } from "./commands";
+import { startAutosave, findRecoverable, restoreSession, shadowBaseName } from "./autosave";
 
 export default function App() {
   let editorEl: HTMLDivElement | undefined;
@@ -83,8 +89,34 @@ export default function App() {
             await win.destroy();
           }
         });
+
+        // Crash recovery runs once, in the initial window (new windows carry a
+        // "main-<ts>" label), so user-opened windows don't re-prompt.
+        if (win.label === "main") {
+          const cands = await findRecoverable();
+          if (cands.length) {
+            const newest = cands[0];
+            const extra = cands.length > 1
+              ? ` (and ${cands.length - 1} more — open those files to recover them)`
+              : "";
+            const ok = await confirmDialog(
+              `Unsaved changes from a previous session were found for ${shadowBaseName(newest.path)}${extra}. Restore them now?`,
+            );
+            if (ok) await restoreSession(newest);
+          }
+        }
       });
-      onCleanup(() => { unlisten?.(); undrop?.(); unclose?.(); });
+
+      // Reload-or-keep conflict banner: surface the Rust watcher's events.
+      let unwatch: (() => void) | undefined;
+      onExternalChange((path, deleted) => setExternalChange({ path, deleted })).then((u) => {
+        unwatch = u;
+      });
+
+      // Autosave shadows of dirty (saved) documents.
+      startAutosave();
+
+      onCleanup(() => { unlisten?.(); undrop?.(); unclose?.(); unwatch?.(); });
     } else {
       window.addEventListener("keydown", onKey);
       onCleanup(() => window.removeEventListener("keydown", onKey));
@@ -165,6 +197,25 @@ export default function App() {
     void setMenuChecked("edit.line_ending.lf", le === "lf");
     void setMenuChecked("edit.line_ending.crlf", le === "crlf");
   });
+  createEffect(() => {
+    const fn = finalNewline();
+    void setMenuChecked("edit.final_newline.ensure", fn === "ensure");
+    void setMenuChecked("edit.final_newline.preserve", fn === "preserve");
+    void setMenuChecked("edit.final_newline.trim", fn === "trim");
+  });
+  createEffect(() => {
+    const s = autosaveInterval();
+    void setMenuChecked("edit.autosave.off", s === 0);
+    void setMenuChecked("edit.autosave.5", s === 5);
+    void setMenuChecked("edit.autosave.15", s === 15);
+    void setMenuChecked("edit.autosave.30", s === 30);
+  });
+  // Reflect the open document's encoding in the Reopen-with-Encoding radio.
+  createEffect(() => {
+    const enc = doc.encoding.toLowerCase();
+    void setMenuChecked("edit.encoding.utf-8", enc === "utf-8" && !doc.hadBom);
+    void setMenuChecked("edit.encoding.utf8_bom", enc === "utf-8" && doc.hadBom);
+  });
 
   return (
     <div
@@ -202,6 +253,7 @@ export default function App() {
         </Show>
         <main class="main">
           <FindBar />
+          <ConflictBanner />
           <div class="scroll" ref={editorEl}>
             <Show when={!sourceMode()} fallback={<SourceView />}>
               <Editor />

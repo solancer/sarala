@@ -1,4 +1,5 @@
-import { stats } from "../store";
+import { Show } from "solid-js";
+import { stats, doc, encodingLossy } from "../store";
 import { togglePalette, isPaletteOpen } from "./PaletteSwitcher";
 
 export default function StatusBar() {
@@ -7,6 +8,20 @@ export default function StatusBar() {
       <span>{stats().words} words</span>
       <span class="sep">·</span>
       <span>{stats().chars} characters</span>
+      <span class="sep">·</span>
+      <span
+        class="encoding"
+        classList={{ lossy: encodingLossy() }}
+        title={
+          encodingLossy()
+            ? "Some bytes didn't decode cleanly — try Edit ▸ Reopen with Encoding"
+            : "Text encoding — change via Edit ▸ Reopen with Encoding"
+        }
+      >
+        {doc.encoding}
+        <Show when={doc.hadBom}> BOM</Show>
+        <Show when={encodingLossy()}> ⚠</Show>
+      </span>
       <span class="spacer" />
       <button
         class="palette-toggle"

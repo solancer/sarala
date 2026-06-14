@@ -40,7 +40,46 @@ export async function readTextFile(path: string): Promise<string> {
   return await invoke<string>("read_file", { path });
 }
 
-export async function writeTextFile(path: string, contents: string): Promise<void> {
+export interface EncodedDoc {
+  content: string;
+  encoding: string;
+  hadBom: boolean;
+  /** Decoding hit replacement chars — auto-detection may have guessed wrong. */
+  lossy: boolean;
+}
+
+// Rust serializes had_bom; normalise to camelCase for the rest of the app.
+interface RawEncodedDoc {
+  content: string;
+  encoding: string;
+  had_bom: boolean;
+  lossy: boolean;
+}
+const normEncoded = (d: RawEncodedDoc): EncodedDoc => ({
+  content: d.content,
+  encoding: d.encoding,
+  hadBom: d.had_bom,
+  lossy: d.lossy,
+});
+
+/** Read a file with encoding auto-detection (BOM sniff + chardetng). */
+export async function readFileEncoded(path: string): Promise<EncodedDoc> {
+  const { invoke } = await tauriCore();
+  return normEncoded(await invoke<RawEncodedDoc>("read_file_encoded", { path }));
+}
+
+/** Re-decode a file with an explicit encoding label (the encoding picker). */
+export async function reopenWithEncoding(path: string, label: string): Promise<EncodedDoc> {
+  const { invoke } = await tauriCore();
+  return normEncoded(await invoke<RawEncodedDoc>("reopen_with_encoding", { path, label }));
+}
+
+export async function writeTextFile(
+  path: string,
+  contents: string,
+  encoding = "UTF-8",
+  bom = false,
+): Promise<void> {
   if (!isTauri) {
     const blob = new Blob([contents], { type: "text/plain" });
     const a = document.createElement("a");
@@ -51,7 +90,57 @@ export async function writeTextFile(path: string, contents: string): Promise<voi
     return;
   }
   const { invoke } = await tauriCore();
-  await invoke("save_file", { path, contents });
+  await invoke("save_file", { path, contents, encoding, bom });
+}
+
+/** Start watching a file for external changes (no-op in browser). */
+export async function watchFile(path: string): Promise<void> {
+  if (!isTauri) return;
+  const { invoke } = await tauriCore();
+  await invoke("watch_file", { path }).catch(() => {});
+}
+
+export async function unwatchFile(path: string): Promise<void> {
+  if (!isTauri) return;
+  const { invoke } = await tauriCore();
+  await invoke("unwatch_file", { path }).catch(() => {});
+}
+
+/** Listen for the Rust watcher's external-change/-removed events. */
+export async function onExternalChange(
+  fn: (path: string, deleted: boolean) => void,
+): Promise<() => void> {
+  if (!isTauri) return () => {};
+  const { listen } = await import("@tauri-apps/api/event");
+  const a = await listen<{ path: string }>("external-change", (e) => fn(e.payload.path, false));
+  const b = await listen<{ path: string }>("external-removed", (e) => fn(e.payload.path, true));
+  return () => { a(); b(); };
+}
+
+export interface ShadowSession {
+  path: string;
+  content: string;
+  savedAt: number;
+  encoding: string;
+  hadBom: boolean;
+}
+
+export async function writeShadow(key: string, data: ShadowSession): Promise<void> {
+  if (!isTauri) return;
+  const { invoke } = await tauriCore();
+  await invoke("write_shadow", { key, data }).catch(() => {});
+}
+
+export async function clearShadow(key: string): Promise<void> {
+  if (!isTauri) return;
+  const { invoke } = await tauriCore();
+  await invoke("clear_shadow", { key }).catch(() => {});
+}
+
+export async function listShadows(): Promise<ShadowSession[]> {
+  if (!isTauri) return [];
+  const { invoke } = await tauriCore();
+  return await invoke<ShadowSession[]>("list_shadows").catch(() => []);
 }
 
 export async function listDirectory(path: string): Promise<FileNode[]> {

@@ -3,9 +3,17 @@
 mod menu;
 
 use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use encoding_rs::Encoding;
+use notify::{RecommendedWatcher, RecursiveMode};
+use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Serialize)]
@@ -86,6 +94,101 @@ fn list_dir(path: String) -> Result<Vec<FileNode>, String> {
 #[tauri::command]
 fn read_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("Could not read {path}: {e}"))
+}
+
+/// A document decoded from disk, tagged with the detected encoding so the editor
+/// can round-trip it (and show the encoding in the status bar).
+#[derive(Serialize)]
+struct EncodedDoc {
+    content: String,
+    encoding: String,
+    had_bom: bool,
+    /// True when decoding hit bytes that don't map cleanly (replacement chars):
+    /// a hint that auto-detection guessed wrong and the user may want to repick.
+    lossy: bool,
+}
+
+/// Decode raw bytes into a string. With `forced = None` we trust a BOM if one is
+/// present, else sniff the encoding with `chardetng` (the detector Firefox uses).
+/// With `forced = Some(enc)` we decode with exactly that encoding (the picker).
+fn decode_bytes(bytes: &[u8], forced: Option<&'static Encoding>) -> EncodedDoc {
+    if let Some(enc) = forced {
+        let (cow, _, lossy) = enc.decode(bytes);
+        return EncodedDoc {
+            content: cow.into_owned(),
+            encoding: enc.name().to_string(),
+            had_bom: Encoding::for_bom(bytes).is_some(),
+            lossy,
+        };
+    }
+    if let Some((enc, _)) = Encoding::for_bom(bytes) {
+        let (cow, _, lossy) = enc.decode(bytes);
+        return EncodedDoc {
+            content: cow.into_owned(),
+            encoding: enc.name().to_string(),
+            had_bom: true,
+            lossy,
+        };
+    }
+    let mut det = chardetng::EncodingDetector::new();
+    det.feed(bytes, true);
+    let enc = det.guess(None, true);
+    let (cow, _, lossy) = enc.decode(bytes);
+    EncodedDoc {
+        content: cow.into_owned(),
+        encoding: enc.name().to_string(),
+        had_bom: false,
+        lossy,
+    }
+}
+
+#[tauri::command]
+fn read_file_encoded(path: String) -> Result<EncodedDoc, String> {
+    let bytes = fs::read(&path).map_err(|e| format!("Could not read {path}: {e}"))?;
+    Ok(decode_bytes(&bytes, None))
+}
+
+#[tauri::command]
+fn reopen_with_encoding(path: String, label: String) -> Result<EncodedDoc, String> {
+    let enc = Encoding::for_label(label.as_bytes())
+        .ok_or_else(|| format!("Unknown encoding: {label}"))?;
+    let bytes = fs::read(&path).map_err(|e| format!("Could not read {path}: {e}"))?;
+    Ok(decode_bytes(&bytes, Some(enc)))
+}
+
+/// Encode the document back to its on-disk byte form. `encoding_rs` has no UTF-16
+/// *encoder* (the Encoding Standard never emits UTF-16), so we hand-roll UTF-16;
+/// everything else (UTF-8, Shift_JIS, windows-1252, …) has a real encoder. A
+/// UTF-8 BOM is added only when the original file had one.
+fn encode_contents(contents: &str, label: Option<&str>, bom: bool) -> Result<Vec<u8>, String> {
+    let label = label.unwrap_or("UTF-8");
+    let enc = Encoding::for_label(label.as_bytes())
+        .ok_or_else(|| format!("Unknown encoding: {label}"))?;
+    if enc == encoding_rs::UTF_16LE || enc == encoding_rs::UTF_16BE {
+        let little = enc == encoding_rs::UTF_16LE;
+        let mut out = Vec::with_capacity(contents.len() * 2 + 2);
+        if bom {
+            out.extend_from_slice(if little { &[0xFF, 0xFE] } else { &[0xFE, 0xFF] });
+        }
+        for unit in contents.encode_utf16() {
+            if little {
+                out.extend_from_slice(&unit.to_le_bytes());
+            } else {
+                out.extend_from_slice(&unit.to_be_bytes());
+            }
+        }
+        return Ok(out);
+    }
+    if enc == encoding_rs::UTF_8 {
+        let mut out = Vec::with_capacity(contents.len() + 3);
+        if bom {
+            out.extend_from_slice(&[0xEF, 0xBB, 0xBF]);
+        }
+        out.extend_from_slice(contents.as_bytes());
+        return Ok(out);
+    }
+    let (cow, _, _) = enc.encode(contents);
+    Ok(cow.into_owned())
 }
 
 #[derive(Serialize)]
@@ -205,12 +308,27 @@ fn search_in_folder(
 }
 
 #[tauri::command]
-fn save_file(path: String, contents: String) -> Result<(), String> {
+fn save_file(
+    state: tauri::State<FileWatcher>,
+    path: String,
+    contents: String,
+    encoding: Option<String>,
+    bom: Option<bool>,
+) -> Result<(), String> {
+    let bytes = encode_contents(&contents, encoding.as_deref(), bom.unwrap_or(false))?;
     // Atomic-ish write: write to a sibling temp file, then rename over.
     let target = Path::new(&path);
     let tmp = target.with_extension("sarala.tmp");
-    fs::write(&tmp, &contents).map_err(|e| format!("Could not write {path}: {e}"))?;
-    fs::rename(&tmp, target).map_err(|e| format!("Could not finalize {path}: {e}"))
+    fs::write(&tmp, &bytes).map_err(|e| format!("Could not write {path}: {e}"))?;
+    fs::rename(&tmp, target).map_err(|e| format!("Could not finalize {path}: {e}"))?;
+    // Suppress the watcher's self-trigger: record the hash of what we just wrote
+    // so the resulting filesystem event is recognised as our own save, not an
+    // external edit. (The debounce window is far longer than this update.)
+    let mut hashes = state.hashes.lock().unwrap();
+    if hashes.contains_key(target) {
+        hashes.insert(target.to_path_buf(), hash_bytes(&bytes));
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -469,6 +587,103 @@ fn run_command(command: String) -> Result<(), String> {
     Ok(())
 }
 
+/// File-watcher state. The debouncer watches the *parent dirs* of open files
+/// (so atomic temp+rename saves are caught), and `hashes` records the last-known
+/// content hash per tracked file. An event only matters when the on-disk hash
+/// differs from what we recorded — which is how a save we just made ourselves is
+/// told apart from an edit by another program. `hashes` is an `Arc` so the
+/// debouncer's callback (set up once in `setup`) and the commands share it.
+struct FileWatcher {
+    debouncer: Mutex<Option<Debouncer<RecommendedWatcher>>>,
+    watched: Mutex<HashSet<PathBuf>>,
+    hashes: Arc<Mutex<HashMap<PathBuf, u64>>>,
+}
+
+fn hash_bytes(bytes: &[u8]) -> u64 {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut h);
+    h.finish()
+}
+
+#[tauri::command]
+fn watch_file(state: tauri::State<FileWatcher>, path: String) -> Result<(), String> {
+    let p = PathBuf::from(&path);
+    let bytes = fs::read(&p).map_err(|e| format!("Could not read {path}: {e}"))?;
+    state
+        .hashes
+        .lock()
+        .unwrap()
+        .insert(p.clone(), hash_bytes(&bytes));
+    if let Some(parent) = p.parent().map(Path::to_path_buf) {
+        let mut watched = state.watched.lock().unwrap();
+        if !watched.contains(&parent) {
+            if let Some(deb) = state.debouncer.lock().unwrap().as_mut() {
+                deb.watcher()
+                    .watch(&parent, RecursiveMode::NonRecursive)
+                    .map_err(|e| e.to_string())?;
+                watched.insert(parent);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Stop caring about a file's events (e.g. it was closed). We leave the parent
+/// dir watched — sibling files may still be tracked, and re-watching is cheap.
+#[tauri::command]
+fn unwatch_file(state: tauri::State<FileWatcher>, path: String) {
+    state.hashes.lock().unwrap().remove(&PathBuf::from(&path));
+}
+
+/// `<app_data_dir>/sessions`: where autosave shadows of dirty documents live.
+fn shadow_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("sessions");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+#[tauri::command]
+fn write_shadow(app: AppHandle, key: String, data: serde_json::Value) -> Result<(), String> {
+    let path = shadow_dir(&app)?.join(format!("{key}.json"));
+    let tmp = path.with_extension("json.tmp");
+    let text = serde_json::to_string(&data).map_err(|e| e.to_string())?;
+    fs::write(&tmp, text).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, &path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn clear_shadow(app: AppHandle, key: String) -> Result<(), String> {
+    let path = shadow_dir(&app)?.join(format!("{key}.json"));
+    match fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+fn list_shadows(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    let dir = shadow_dir(&app)?;
+    let mut out = Vec::new();
+    if let Ok(entries) = fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().and_then(|e| e.to_str()) == Some("json") {
+                if let Ok(text) = fs::read_to_string(&p) {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                        out.push(v);
+                    }
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -477,6 +692,54 @@ fn main() {
         .setup(|app| {
             let menu = menu::build_menu(app.handle())?;
             app.set_menu(menu)?;
+
+            // File watcher: one debouncer for the whole app. Its callback and the
+            // commands share `hashes` (an Arc), so the callback can tell our own
+            // saves apart from external edits and emit only on the latter.
+            let hashes: Arc<Mutex<HashMap<PathBuf, u64>>> = Arc::new(Mutex::new(HashMap::new()));
+            let app_handle = app.handle().clone();
+            let cb_hashes = hashes.clone();
+            let debouncer = new_debouncer(
+                Duration::from_millis(400),
+                move |res: DebounceEventResult| {
+                    let Ok(events) = res else { return };
+                    let mut seen: HashSet<PathBuf> = HashSet::new();
+                    for ev in events {
+                        seen.insert(ev.path);
+                    }
+                    let mut map = cb_hashes.lock().unwrap();
+                    for path in seen {
+                        let Some(&known) = map.get(&path) else {
+                            continue;
+                        };
+                        match fs::read(&path) {
+                            Ok(bytes) => {
+                                let h = hash_bytes(&bytes);
+                                if h != known {
+                                    map.insert(path.clone(), h);
+                                    let _ = app_handle.emit(
+                                        "external-change",
+                                        serde_json::json!({ "path": path.to_string_lossy() }),
+                                    );
+                                }
+                            }
+                            Err(_) => {
+                                map.remove(&path);
+                                let _ = app_handle.emit(
+                                    "external-removed",
+                                    serde_json::json!({ "path": path.to_string_lossy() }),
+                                );
+                            }
+                        }
+                    }
+                },
+            )
+            .ok();
+            app.manage(FileWatcher {
+                debouncer: Mutex::new(debouncer),
+                watched: Mutex::new(HashSet::new()),
+                hashes,
+            });
             Ok(())
         })
         .on_menu_event(|app, event| {
@@ -487,8 +750,15 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             list_dir,
             read_file,
+            read_file_encoded,
+            reopen_with_encoding,
             search_in_folder,
             save_file,
+            watch_file,
+            unwatch_file,
+            write_shadow,
+            clear_shadow,
+            list_shadows,
             new_window,
             load_settings,
             save_settings,
@@ -509,4 +779,67 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running Sarala");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{decode_bytes, encode_contents};
+
+    #[test]
+    fn utf8_round_trips() {
+        let bytes = encode_contents("héllo — café", None, false).unwrap();
+        assert_eq!(bytes, "héllo — café".as_bytes());
+        let doc = decode_bytes(&bytes, None);
+        assert_eq!(doc.content, "héllo — café");
+        assert_eq!(doc.encoding, "UTF-8");
+        assert!(!doc.had_bom);
+    }
+
+    #[test]
+    fn utf8_bom_is_added_and_detected() {
+        let bytes = encode_contents("x", Some("UTF-8"), true).unwrap();
+        assert_eq!(&bytes[..3], &[0xEF, 0xBB, 0xBF]);
+        let doc = decode_bytes(&bytes, None);
+        assert_eq!(doc.content, "x"); // BOM is stripped on decode
+        assert!(doc.had_bom);
+    }
+
+    #[test]
+    fn windows_1252_round_trips() {
+        // "café" — é is a single byte 0xE9 in windows-1252.
+        let bytes = encode_contents("café", Some("windows-1252"), false).unwrap();
+        assert_eq!(bytes, vec![b'c', b'a', b'f', 0xE9]);
+        let doc = decode_bytes(&bytes, Some(encoding_rs::WINDOWS_1252));
+        assert_eq!(doc.content, "café");
+        assert_eq!(doc.encoding, "windows-1252");
+    }
+
+    #[test]
+    fn shift_jis_round_trips() {
+        let bytes = encode_contents("日本語", Some("Shift_JIS"), false).unwrap();
+        let doc = decode_bytes(&bytes, Some(encoding_rs::SHIFT_JIS));
+        assert_eq!(doc.content, "日本語");
+    }
+
+    #[test]
+    fn utf16le_hand_rolled_round_trips_with_bom() {
+        let bytes = encode_contents("Hi—こ", Some("UTF-16LE"), true).unwrap();
+        assert_eq!(&bytes[..2], &[0xFF, 0xFE]); // LE BOM
+        let doc = decode_bytes(&bytes, None); // BOM sniff picks UTF-16LE
+        assert_eq!(doc.content, "Hi—こ");
+        assert!(doc.had_bom);
+    }
+
+    #[test]
+    fn utf16be_round_trips() {
+        let bytes = encode_contents("Hi—こ", Some("UTF-16BE"), true).unwrap();
+        assert_eq!(&bytes[..2], &[0xFE, 0xFF]); // BE BOM
+        let doc = decode_bytes(&bytes, None);
+        assert_eq!(doc.content, "Hi—こ");
+    }
+
+    #[test]
+    fn unknown_label_errors() {
+        assert!(encode_contents("x", Some("not-an-encoding"), false).is_err());
+    }
 }

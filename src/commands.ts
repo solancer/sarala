@@ -7,6 +7,8 @@ import {
   targetBlockIndex, requestCaret, undo, redo, setCaretProvider,
   spellcheckOn, setSpellcheckOn, smartPunctuation, setSmartPunctuation,
   preserveBreaks, setPreserveBreaks, lineEnding, setLineEnding,
+  finalNewline, setFinalNewline, setAutosaveInterval,
+  setEncodingLossy, setExternalChange, setDocDirty,
   copyImageToAssets, setCopyImageToAssets, copyImagesToFolder, tableFullWidth, setTableFullWidth,
   mathAltDelimiters, setMathAltDelimitersSig, mathFence, setMathFenceSig,
   emojiEnabled, setEmojiEnabledSig, highlightEnabled, setHighlightEnabledSig,
@@ -17,7 +19,8 @@ import {
 } from "./store";
 import {
   isTauri, pickFolder, pickMarkdownFile, pickSavePath, pickImportFile,
-  readTextFile, writeTextFile, listDirectory, openExternal,
+  readFileEncoded, reopenWithEncoding, writeTextFile, type EncodedDoc,
+  watchFile, clearShadow, listDirectory, openExternal,
   confirmDialog, alertDialog, renameFile, deleteFile, openNewWindow,
   hasPandoc, pandocImport, pandocExport, exportPdf, runCommand, revealInDir,
   clipboardWriteText, clipboardReadText,
@@ -34,6 +37,7 @@ import {
   setAutolinkEnabled as setAutolinkEnabledOpt,
 } from "./markdown";
 import { setLiveHighlight, setLiveSubSup } from "./livesource";
+import { shadowFor, restoreSession, keyForPath } from "./autosave";
 import { stripControlChars } from "./richpaste";
 import {
   recentFiles, addRecentFile, clearRecentFiles, lastExport, setLastExport,
@@ -113,28 +117,82 @@ async function confirmDiscard(): Promise<boolean> {
   return confirmDialog(`Discard unsaved changes to ${fileName()}?`);
 }
 
+/** Load a decoded file into the editor, flag lossy decodes, and start watching
+ *  it for external changes (clearing any stale conflict banner). */
+async function applyOpened(p: string, ed: EncodedDoc) {
+  loadDocument(ed.content, p, { encoding: ed.encoding, hadBom: ed.hadBom });
+  setEncodingLossy(ed.lossy);
+  setExternalChange(null);
+  await watchFile(p);
+}
+
 export async function openFile(path?: string) {
   const p = path ?? (await pickMarkdownFile());
   if (!p) return;
-  loadDocument(await readTextFile(p), p);
+  const ed = await readFileEncoded(p);
+  // Offer to recover newer autosaved content from a previous session.
+  const shadow = await shadowFor(p, ed.content);
+  if (shadow && (await confirmDialog(
+    `Sarala has unsaved autosaved changes for ${fileName0(p)} from a previous session. Restore them?`,
+  ))) {
+    await restoreSession(shadow);
+  } else {
+    if (shadow) await clearShadow(keyForPath(p));
+    await applyOpened(p, ed);
+  }
   await addRecentFile(p);
 }
+
+const fileName0 = (p: string) => p.replace(/\\/g, "/").split("/").pop() || p;
 
 async function newFile() {
   if (await confirmDiscard()) loadDocument("", null);
 }
 
-/** Document text with the configured line endings applied (Edit ▸ Line Endings). */
-const textForDisk = () =>
-  lineEnding() === "crlf" ? fullText().replace(/\n/g, "\r\n") : fullText();
+/** Conflict banner ▸ Reload: re-read the file from disk, discarding edits. */
+export async function reloadFromDisk() {
+  const path = doc.filePath;
+  if (!path) {
+    setExternalChange(null);
+    return;
+  }
+  try {
+    await applyOpened(path, await readFileEncoded(path));
+  } catch {
+    setExternalChange(null);
+  }
+}
+
+/** Conflict banner ▸ Keep mine: dismiss, re-baseline the watcher to the current
+ *  on-disk bytes (so a later external change re-prompts), and mark dirty so the
+ *  next save overwrites the external version. */
+export async function keepMine() {
+  const path = doc.filePath;
+  setExternalChange(null);
+  setDocDirty(true);
+  if (path) await watchFile(path);
+}
+
+/** Document bytes-as-text for disk: apply the final-newline policy (Edit ▸ Final
+ *  Newline), then line endings (Edit ▸ Line Endings). Both touch only the disk
+ *  form — never the in-memory blocks. */
+function textForDisk(): string {
+  let text = fullText();
+  const policy = finalNewline();
+  if (policy === "ensure") text = text.length ? text.replace(/\n+$/, "") + "\n" : text;
+  else if (policy === "trim") text = text.replace(/\n+$/, "");
+  return lineEnding() === "crlf" ? text.replace(/\n/g, "\r\n") : text;
+}
 
 export async function save() {
   let path = doc.filePath;
   if (!path) path = await pickSavePath(fileName());
   if (!path && isTauri) return;
-  await writeTextFile(path ?? fileName(), textForDisk());
+  await writeTextFile(path ?? fileName(), textForDisk(), doc.encoding, doc.hadBom);
   if (path) {
     markSaved(path);
+    setExternalChange(null);
+    await watchFile(path);
     await addRecentFile(path);
   }
 }
@@ -142,9 +200,11 @@ export async function save() {
 async function saveAs() {
   const path = await pickSavePath(fileName());
   if (!path && isTauri) return;
-  await writeTextFile(path ?? fileName(), textForDisk());
+  await writeTextFile(path ?? fileName(), textForDisk(), doc.encoding, doc.hadBom);
   if (path) {
     markSaved(path);
+    setExternalChange(null);
+    await watchFile(path);
     await addRecentFile(path);
     await refreshTree();
   }
@@ -187,7 +247,7 @@ async function revertToSaved() {
   const path = doc.filePath;
   if (!path) return;
   if (doc.dirty && !(await confirmDialog(`Revert ${fileName()} to the last saved version?`))) return;
-  loadDocument(await readTextFile(path), path);
+  await applyOpened(path, await readFileEncoded(path));
 }
 
 async function importViaPandoc() {
@@ -561,6 +621,44 @@ async function chooseLineEnding(v: "lf" | "crlf") {
   await setSetting("lineEnding", v);
 }
 
+async function chooseFinalNewline(v: "ensure" | "preserve" | "trim") {
+  setFinalNewline(v);
+  await setSetting("finalNewline", v);
+}
+
+async function chooseAutosaveInterval(seconds: number) {
+  setAutosaveInterval(seconds);
+  await setSetting("autosaveInterval", seconds);
+}
+
+/** Re-decode the current file with a chosen encoding (Edit ▸ Reopen with
+ *  Encoding). `utf8_bom` keeps UTF-8 but forces a BOM on the next save. */
+async function reopenEncoding(idLabel: string) {
+  const path = doc.filePath;
+  if (!path) {
+    await alertDialog("Open a file before choosing an encoding.");
+    return;
+  }
+  if (doc.dirty && !(await confirmDialog(`Reopen ${fileName()} with a different encoding? Unsaved changes will be lost.`))) {
+    return;
+  }
+  try {
+    if (idLabel === "utf8_bom") {
+      const ed = await reopenWithEncoding(path, "UTF-8");
+      loadDocument(ed.content, path, { encoding: "UTF-8", hadBom: true });
+      setEncodingLossy(ed.lossy);
+    } else {
+      const ed = await reopenWithEncoding(path, idLabel);
+      loadDocument(ed.content, path, { encoding: ed.encoding, hadBom: ed.hadBom });
+      setEncodingLossy(ed.lossy);
+    }
+    setExternalChange(null);
+    await watchFile(path);
+  } catch (e) {
+    await alertDialog(String(e));
+  }
+}
+
 async function toggleMathAltDelimiters() {
   const v = !mathAltDelimiters();
   setMathAltDelimitersSig(v);
@@ -743,6 +841,13 @@ const registry: Record<string, Command> = {
   "edit.spellcheck": toggleSpellcheck,
   "edit.line_ending.lf": () => chooseLineEnding("lf"),
   "edit.line_ending.crlf": () => chooseLineEnding("crlf"),
+  "edit.final_newline.ensure": () => chooseFinalNewline("ensure"),
+  "edit.final_newline.preserve": () => chooseFinalNewline("preserve"),
+  "edit.final_newline.trim": () => chooseFinalNewline("trim"),
+  "edit.autosave.off": () => chooseAutosaveInterval(0),
+  "edit.autosave.5": () => chooseAutosaveInterval(5),
+  "edit.autosave.15": () => chooseAutosaveInterval(15),
+  "edit.autosave.30": () => chooseAutosaveInterval(30),
   "edit.preserve_breaks": togglePreserveBreaks,
   "edit.math.alt_delimiters": toggleMathAltDelimiters,
   "edit.math.fence": toggleMathFence,
@@ -867,6 +972,10 @@ for (const [id, format] of Object.entries(EXPORT_MENU)) {
 }
 
 export function executeCommand(id: string) {
+  if (id.startsWith("edit.encoding.")) {
+    void reopenEncoding(id.slice("edit.encoding.".length));
+    return;
+  }
   const recent = id.match(/^file\.open_recent\.item\.(\d+)$/);
   if (recent) {
     const path = recentFiles()[Number(recent[1])];

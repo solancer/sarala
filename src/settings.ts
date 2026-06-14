@@ -1,6 +1,7 @@
 import { isTauri } from "./platform";
 import {
   setSpellcheckOn, setSmartPunctuation, setPreserveBreaks, setLineEnding,
+  setFinalNewline, setAutosaveInterval,
   setCopyImageToAssets, setCopyImagesToFolder, setTableFullWidth, bumpRenderEpoch,
   setTheme, setZoom, clampZoom, THEMES, type ThemeId,
   setSidebarWidth, clampSidebar,
@@ -104,6 +105,8 @@ function hydrateStore() {
   setSpellcheckOn(getSetting("spellcheck", true));
   setSmartPunctuation(getSetting("smartPunctuation", false));
   setLineEnding(getSetting<"lf" | "crlf">("lineEnding", "lf"));
+  setFinalNewline(getSetting<"ensure" | "preserve" | "trim">("finalNewline", "ensure"));
+  setAutosaveInterval(getSetting("autosaveInterval", 5));
   setCopyImageToAssets(getSetting("copyImageToAssets", false));
   setCopyImagesToFolder(getSetting("copyImagesToFolder", "assets"));
   setTableFullWidth(getSetting("tableFullWidth", false));

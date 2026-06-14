@@ -61,6 +61,10 @@ const [state, setState] = createStore({
   activeIndex: -1 as number,
   filePath: null as string | null,
   dirty: false,
+  // Encoding the document was read in / will be written back in (Data Safety).
+  // The buffer is always UTF-8 in memory; these drive the byte-level save.
+  encoding: "UTF-8" as string,
+  hadBom: false,
 });
 
 // eslint-disable-next-line solid/reactivity -- store proxy re-export; consumers read it in tracked scopes
@@ -98,6 +102,20 @@ export const [spellcheckOn, setSpellcheckOn] = createSignal(true);
 export const [smartPunctuation, setSmartPunctuation] = createSignal(false);
 export const [preserveBreaks, setPreserveBreaks] = createSignal(false);
 export const [lineEnding, setLineEnding] = createSignal<"lf" | "crlf">("lf");
+// Trailing-newline policy applied only at disk-write time (textForDisk), never
+// to in-memory blocks. "ensure" = exactly one; "trim" = none; "preserve" = leave.
+export const [finalNewline, setFinalNewline] =
+  createSignal<"ensure" | "preserve" | "trim">("ensure");
+// Autosave shadow cadence in seconds; 0 disables. Drives the autosave loop.
+export const [autosaveInterval, setAutosaveInterval] = createSignal(5);
+
+// An external change to the open file detected by the Rust watcher: drives the
+// reload-or-keep conflict banner. `deleted` = the file vanished on disk.
+export const [externalChange, setExternalChange] =
+  createSignal<{ path: string; deleted: boolean } | null>(null);
+// True when the last decode produced replacement chars — the status bar flags
+// it so the user can repick via Edit ▸ Reopen with Encoding.
+export const [encodingLossy, setEncodingLossy] = createSignal(false);
 
 // Format ▸ Image: copy inserted local images next to the doc. The folder is a
 // template supporting ${filename} (the doc's base name); a per-document
@@ -209,7 +227,12 @@ export function redo() {
   applySnapshot(next);
 }
 
-export function loadDocument(text: string, path: string | null) {
+export interface DocMeta {
+  encoding: string;
+  hadBom: boolean;
+}
+
+export function loadDocument(text: string, path: string | null, meta?: DocMeta) {
   undoStack.length = 0;
   redoStack.length = 0;
   lastPushKey = null;
@@ -219,8 +242,24 @@ export function loadDocument(text: string, path: string | null) {
       s.activeIndex = -1;
       s.filePath = path;
       s.dirty = false;
+      s.encoding = meta?.encoding ?? "UTF-8";
+      s.hadBom = meta?.hadBom ?? false;
     })
   );
+}
+
+/** Flip the dirty flag directly (autosave recovery marks a restored buffer
+ *  dirty so the recovered-but-unsaved content can be written back). */
+export function setDocDirty(v: boolean) {
+  setState("dirty", v);
+}
+
+/** Update the encoding the document will be saved in (encoding picker). */
+export function setEncoding(encoding: string, hadBom: boolean) {
+  setState(produce((s) => {
+    s.encoding = encoding;
+    s.hadBom = hadBom;
+  }));
 }
 
 let lastActive = -1;

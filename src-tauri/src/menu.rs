@@ -191,6 +191,134 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         )?)
         .build()?;
 
+    let final_newline = SubmenuBuilder::with_id(app, "edit.final_newline", "Final Newline")
+        .item(&ci(
+            app,
+            "edit.final_newline.ensure",
+            "Ensure Trailing Newline",
+            true,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.final_newline.preserve",
+            "Preserve As-Is",
+            false,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.final_newline.trim",
+            "Trim Trailing Newlines",
+            false,
+            None,
+        )?)
+        .build()?;
+
+    // Decode the current file again with a chosen encoding (fixes mis-detected
+    // legacy files). Ids carry the encoding_rs label the Rust side decodes with;
+    // "utf8_bom" is a save-time variant (UTF-8 that re-emits its BOM).
+    let encoding = SubmenuBuilder::with_id(app, "edit.encoding", "Reopen with Encoding")
+        .item(&ci(app, "edit.encoding.utf-8", "UTF-8", true, None)?)
+        .item(&ci(
+            app,
+            "edit.encoding.utf8_bom",
+            "UTF-8 with BOM",
+            false,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.encoding.utf-16le",
+            "UTF-16 LE",
+            false,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.encoding.utf-16be",
+            "UTF-16 BE",
+            false,
+            None,
+        )?)
+        .separator()
+        .item(&ci(
+            app,
+            "edit.encoding.windows-1252",
+            "Western (Windows-1252)",
+            false,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.encoding.windows-1251",
+            "Cyrillic (Windows-1251)",
+            false,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.encoding.koi8-r",
+            "Cyrillic (KOI8-R)",
+            false,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.encoding.shift_jis",
+            "Japanese (Shift_JIS)",
+            false,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.encoding.euc-jp",
+            "Japanese (EUC-JP)",
+            false,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.encoding.gbk",
+            "Chinese Simplified (GBK)",
+            false,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.encoding.big5",
+            "Chinese Traditional (Big5)",
+            false,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.encoding.euc-kr",
+            "Korean (EUC-KR)",
+            false,
+            None,
+        )?)
+        .build()?;
+
+    let autosave = SubmenuBuilder::with_id(app, "edit.autosave", "Autosave Recovery")
+        .item(&ci(app, "edit.autosave.off", "Off", false, None)?)
+        .item(&ci(app, "edit.autosave.5", "Every 5 seconds", true, None)?)
+        .item(&ci(
+            app,
+            "edit.autosave.15",
+            "Every 15 seconds",
+            false,
+            None,
+        )?)
+        .item(&ci(
+            app,
+            "edit.autosave.30",
+            "Every 30 seconds",
+            false,
+            None,
+        )?)
+        .build()?;
+
     let whitespace = SubmenuBuilder::with_id(app, "edit.whitespace", "Whitespace and Line Breaks")
         .item(&ci(
             app,
@@ -312,6 +440,9 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         )?)
         .separator()
         .item(&line_endings)
+        .item(&final_newline)
+        .item(&encoding)
+        .item(&autosave)
         .item(&whitespace)
         .item(&math)
         .item(&extensions)
