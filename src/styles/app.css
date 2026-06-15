@@ -236,7 +236,8 @@ body { font-family: var(--font-ui); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.tree-item .file-icon { flex: none; color: var(--ink-soft); }
+.tree-item .file-icon,
+.tree-item .folder-icon { flex: none; color: var(--ink-soft); }
 .tree-item:hover { background: rgba(0, 0, 0, 0.045); }
 .tree-item.heading.h1 { font-weight: 600; color: var(--accent); }
 .tree-item.heading { color: var(--ink-soft); }

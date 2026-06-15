@@ -15,12 +15,37 @@ interface Props {
   onJump: (blockIndex: number) => void;
 }
 
+// Plain document outline (default file glyph).
 const FileIcon = () => (
   <svg class="file-icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-    <path fill="none" stroke="currentColor" stroke-width="1.1"
+    <path fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"
       d="M4 1.6h5L12.4 5v9.4H4z M9 1.6V5h3.4" />
   </svg>
 );
+
+// Document with text lines — used for Markdown / plain-text files.
+const TextFileIcon = () => (
+  <svg class="file-icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+    <path fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"
+      d="M4 1.6h5L12.4 5v9.4H4z M9 1.6V5h3.4" />
+    <path fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"
+      d="M5.7 8h4.6 M5.7 10.2h4.6 M5.7 12.4h2.8" />
+  </svg>
+);
+
+// Outline folder, consistent for every directory (the chevron shows open/closed).
+const FolderIcon = () => (
+  <svg class="folder-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+    <path fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"
+      d="M1.7 4c0-.5.4-.9.9-.9h2.7l1.2 1.3h6.9c.5 0 .9.4.9.9v6.7c0 .5-.4.9-.9.9H2.6c-.5 0-.9-.4-.9-.9z" />
+  </svg>
+);
+
+const TEXT_EXT = /\.(md|markdown|mdx|txt|text|rst|adoc|org)$/i;
+
+/** Leading file glyph: a lined-document for text/Markdown, else a plain document. */
+const FileGlyph = (props: { name: string }) =>
+  TEXT_EXT.test(props.name) ? <TextFileIcon /> : <FileIcon />;
 
 function Tree(props: { nodes: FileNode[]; depth: number; onOpenFile: (p: string) => void; current: string | null }) {
   return (
@@ -37,7 +62,7 @@ function Tree(props: { nodes: FileNode[]; depth: number; onOpenFile: (p: string)
                 style={{ "padding-left": `${10 + props.depth * 14}px` }}
                 onClick={() => props.onOpenFile(node.path)}
               >
-                <FileIcon /> {node.name}
+                <FileGlyph name={node.name} /> {node.name}
               </button>
             }
           >
@@ -46,7 +71,8 @@ function Tree(props: { nodes: FileNode[]; depth: number; onOpenFile: (p: string)
               style={{ "padding-left": `${10 + props.depth * 14}px` }}
               onClick={() => setOpen(!open())}
             >
-              <span class="twist">{open() ? "▾" : "▸"}</span> {node.name}
+              <span class="twist">{open() ? "▾" : "▸"}</span>
+              <FolderIcon /> {node.name}
             </button>
             <Show when={open()}>
               <Tree nodes={node.children ?? []} depth={props.depth + 1} onOpenFile={props.onOpenFile} current={props.current} />
@@ -90,7 +116,7 @@ export default function Sidebar(props: Props) {
           </Show>
         </Show>
 
-        <div class="side-section-head">Workspace</div>
+        <div class="side-section-head">Files</div>
         <Show
           when={props.tree.length > 0}
           fallback={
