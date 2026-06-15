@@ -19,8 +19,9 @@ const LANGS = [
 ];
 
 // Languages the app handles specially (not Shiki grammars) but should still be
-// offered in the picker — `mermaid` fences render as diagrams via markdown.ts.
-const EXTRA_LANGS = ["mermaid"];
+// offered in the picker — `mermaid` and `d2` fences render as diagrams via
+// markdown.ts.
+const EXTRA_LANGS = ["mermaid", "d2"];
 
 // Common fence aliases → a loaded grammar.
 const ALIASES: Record<string, string> = {

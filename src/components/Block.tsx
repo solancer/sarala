@@ -10,6 +10,7 @@ import {
   spellcheckOn, smartPunctuation, renderEpoch, mermaidEpoch,
 } from "../store";
 import { renderMermaidIn } from "../mermaid";
+import { renderD2In } from "../d2";
 import { executeCommand, registerBlockApi, unregisterBlockApi, type BlockApi } from "../commands";
 import { parseTable, cellRanges } from "../tabletools";
 import { findImages } from "../images";
@@ -17,6 +18,7 @@ import { pasteToInsert } from "../richpaste";
 import { openImageMenu } from "./ImageContextMenu";
 import TableToolbar from "./TableToolbar";
 import CodeLangPicker from "./CodeLangPicker";
+import D2SizeControl from "./D2SizeControl";
 
 interface Props {
   id: number;
@@ -40,8 +42,9 @@ export default function Block(props: Props) {
   let composing = false;
   let lastRevealCaret = -1;
 
-  // Render mermaid diagrams into the rendered view after each (re)render of an
-  // inactive block. renderMarkdown emits empty placeholders; this fills them.
+  // Render mermaid/D2 diagrams into the rendered view after each (re)render of
+  // an inactive block. renderMarkdown emits empty placeholders; this fills them.
+  // Both engines re-render on a theme switch (the shared mermaidEpoch bump).
   createEffect(() => {
     renderEpoch();
     mermaidEpoch();
@@ -49,7 +52,10 @@ export default function Block(props: Props) {
     if (props.active) return;
     const host = renderedEl;
     const key = String(props.id);
-    if (host) queueMicrotask(() => void renderMermaidIn(host, key));
+    if (host) queueMicrotask(() => {
+      void renderMermaidIn(host, key);
+      void renderD2In(host, key);
+    });
   });
 
   const reveal = (caret: number) => {
@@ -73,6 +79,24 @@ export default function Block(props: Props) {
     const caret = cur > lines[0].length ? cur + delta : Math.min(cur, newFirst.length);
     commit([newFirst, ...lines.slice(1)].join("\n"), Math.max(0, caret));
   };
+
+  // D2 diagram options live in the fence info string (`zoom=NN`, `theme=NN`). A
+  // d2 fence is a single block holding one diagram, so the controls govern the
+  // whole block. zoom is a percent (100 = unset); theme is a D2 theme id or null.
+  const isD2 = () => fenceLang().toLowerCase() === "d2";
+  const d2Zoom = () => Number(props.text.match(/(?:^|\s)zoom=(\d{1,3})\b/)?.[1]) || 100;
+  const d2Theme = () => props.text.match(/(?:^|\s)theme=(\d{1,3})\b/)?.[1] ?? null;
+  const writeD2Opts = (zoom: number, theme: string | null) => {
+    const lines = props.text.split("\n");
+    const head = lines[0].match(/^(\s*(?:`{3,}|~{3,}))/);
+    if (!head) return;
+    let info = "d2";
+    if (zoom !== 100) info += ` zoom=${zoom}`;
+    if (theme != null) info += ` theme=${theme}`;
+    commit([head[1] + info, ...lines.slice(1)].join("\n"), 0);
+  };
+  const setD2Zoom = (percent: number) => writeD2Opts(percent, d2Theme());
+  const setD2Theme = (theme: string | null) => writeD2Opts(d2Zoom(), theme);
 
   // Block-type class so the live view's box metrics match the rendered view
   // (same margins the rendered elements carry) — activation must not shift
@@ -424,15 +448,25 @@ export default function Block(props: Props) {
       <Show
         when={props.active}
         fallback={
-          <div
-            class="rendered"
-            ref={renderedEl}
-            onMouseDown={onRenderedClick}
-            onClick={onRenderedCheckboxClick}
-            onContextMenu={onRenderedContextMenu}
-            // eslint-disable-next-line solid/no-innerhtml -- renderMarkdown output is DOMPurify-sanitized
-            innerHTML={(renderEpoch(), mermaidEpoch(), renderMarkdown(props.text, String(props.id)))}
-          />
+          <>
+            <div
+              class="rendered"
+              ref={renderedEl}
+              onMouseDown={onRenderedClick}
+              onClick={onRenderedCheckboxClick}
+              onContextMenu={onRenderedContextMenu}
+              // eslint-disable-next-line solid/no-innerhtml -- renderMarkdown output is DOMPurify-sanitized
+              innerHTML={(renderEpoch(), mermaidEpoch(), renderMarkdown(props.text, String(props.id)))}
+            />
+            <Show when={isD2()}>
+              <D2SizeControl
+                zoom={d2Zoom()}
+                onZoom={setD2Zoom}
+                theme={d2Theme()}
+                onTheme={setD2Theme}
+              />
+            </Show>
+          </>
         }
       >
         <div

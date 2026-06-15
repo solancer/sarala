@@ -48,6 +48,7 @@ export function setAutolinkEnabled(on: boolean) {
 // sanitizer otherwise — the latter reads as a comment-close mXSS vector).
 let mathStash: string[] = [];
 let mermaidStash: string[] = [];
+let d2Stash: string[] = [];
 let imgStash: string[] = [];
 let shikiStash: string[] = [];
 let mathErrored = false;
@@ -275,10 +276,23 @@ marked.use({
     // strip Shiki's inline-style color spans), with a plain fallback until
     // Shiki has loaded.
     code(token: Tokens.Code) {
-      const lang = (token.lang || "").split(/\s+/)[0].toLowerCase();
+      const info = token.lang || "";
+      const lang = info.split(/\s+/)[0].toLowerCase();
       if (lang === "mermaid") {
         mermaidStash.push(token.text);
         return `<div class="mermaid-block" data-mmd="${mermaidStash.length - 1}"></div>`;
+      }
+      if (lang === "d2") {
+        d2Stash.push(token.text);
+        // Optional fence-info tokens, persisted in the markdown and baked into
+        // exports: `zoom=NN` scales the diagram via CSS (NN%); `theme=NN` pins a
+        // D2 theme id (renderD2In reads it off data-d2-theme). Clamp zoom so a
+        // typo can't explode the layout.
+        const z = Number(/(?:^|\s)zoom=(\d{1,3})\b/.exec(info)?.[1]);
+        const style = z && z !== 100 ? ` style="zoom:${Math.min(400, Math.max(10, z))}%"` : "";
+        const t = /(?:^|\s)theme=(\d{1,3})\b/.exec(info)?.[1];
+        const themeAttr = t ? ` data-d2-theme="${t}"` : "";
+        return `<div class="d2-block" data-d2idx="${d2Stash.length - 1}"${themeAttr}${style}></div>`;
       }
       if (lang === "math" && mathFence) {
         return stashMath(token.text, true);
@@ -433,6 +447,7 @@ export function renderMarkdown(md: string, blockKey?: string): string {
 
   mathStash = [];
   mermaidStash = [];
+  d2Stash = [];
   imgStash = [];
   shikiStash = [];
   mathErrored = false;
@@ -446,6 +461,7 @@ export function renderMarkdown(md: string, blockKey?: string): string {
     .replace(/<span data-math="(\d+)">\s*<\/span>/g, (_, i) => mathStash[Number(i)] ?? "")
     .replace(/<div data-math="(\d+)">\s*<\/div>/g, (_, i) => mathStash[Number(i)] ?? "")
     .replace(/data-mmd="(\d+)"/g, (_, i) => `data-mermaid="${escapeAttr(mermaidStash[Number(i)] ?? "")}"`)
+    .replace(/data-d2idx="(\d+)"/g, (_, i) => `data-d2="${escapeAttr(d2Stash[Number(i)] ?? "")}"`)
     .replace(/data-img="(\d+)"/g, (_, i) => `src="${escapeAttr(imgStash[Number(i)] ?? "")}"`)
     .replace(/<div data-shiki="(\d+)">\s*<\/div>/g, (_, i) => shikiStash[Number(i)] ?? "");
   // Resolve srcs of raw HTML <img> tags (markdown images were already handled

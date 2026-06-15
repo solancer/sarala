@@ -20,14 +20,14 @@ const LANG_COLORS: Record<string, string> = {
   swift: "#f05138", kotlin: "#a97bff", bash: "#89e051", yaml: "#cb171e", toml: "#9c4221",
   sql: "#e38c00", dockerfile: "#384d54", diff: "#6b6b6b", xml: "#0060ac", lua: "#000080",
   r: "#198ce7", perl: "#0298c3", scala: "#c22d40", haskell: "#5e5086", elixir: "#6e4a7e",
-  graphql: "#e10098", vue: "#41b883", ini: "#6b6b6b", mermaid: "#ff3670",
+  graphql: "#e10098", vue: "#41b883", ini: "#6b6b6b", mermaid: "#ff3670", d2: "#2030b0",
 };
 
 // Two-character labels where a single initial reads poorly (C vs C++ vs C#).
 const LANG_LABELS: Record<string, string> = {
   javascript: "JS", typescript: "TS", jsx: "JX", tsx: "TX", cpp: "C+", csharp: "C#",
   go: "Go", rust: "Rs", ruby: "Rb", kotlin: "Kt", swift: "Sw",
-  haskell: "Hs", scala: "Sc", python: "Py", php: "Ph", graphql: "GQ", mermaid: "Me",
+  haskell: "Hs", scala: "Sc", python: "Py", php: "Ph", graphql: "GQ", mermaid: "Me", d2: "D2",
 };
 
 export interface LangIcon {

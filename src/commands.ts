@@ -36,6 +36,8 @@ import {
   setSubSupEnabled as setSubSupEnabledOpt,
   setAutolinkEnabled as setAutolinkEnabledOpt,
 } from "./markdown";
+import { renderMermaidIn } from "./mermaid";
+import { renderD2In } from "./d2";
 import { setLiveHighlight, setLiveSubSup } from "./livesource";
 import { shadowFor, restoreSession, keyForPath } from "./autosave";
 import { stripControlChars } from "./richpaste";
@@ -289,11 +291,27 @@ function loadExportCss(): string {
   return appCssText + EXPORT_PRINT_CSS;
 }
 
+/**
+ * Render markdown to HTML and bake the async diagram SVGs (mermaid + D2) into
+ * it. renderMarkdown emits empty diagram placeholders; the editor fills them
+ * live, but exports render synchronously, so we replay the same injection on a
+ * detached container here. The diagram engines append temporary measuring nodes
+ * to <body> and clean them up themselves; injection targets each placeholder's
+ * own innerHTML, so a detached host works.
+ */
+async function renderBody(md: string): Promise<string> {
+  const div = document.createElement("div");
+  div.innerHTML = renderMarkdown(md);
+  await renderMermaidIn(div);
+  await renderD2In(div);
+  return div.innerHTML;
+}
+
 /** Build the exported HTML document (outline sidebar when there are headings). */
-function htmlDocument(withStyles: boolean, withOutline: boolean): string {
+async function htmlDocument(withStyles: boolean, withOutline: boolean): Promise<string> {
   return buildExportHtml({
     title: exportBaseName(),
-    body: renderMarkdown(fullText()),
+    body: await renderBody(fullText()),
     css: withStyles ? loadExportCss() : "",
     theme: theme(),
     withOutline,
@@ -302,10 +320,10 @@ function htmlDocument(withStyles: boolean, withOutline: boolean): string {
 }
 
 /** Build the print HTML for PDF: matches the editor theme, full-width, no outline. */
-function pdfDocument(): string {
+async function pdfDocument(): Promise<string> {
   return buildExportHtml({
     title: exportBaseName(),
-    body: renderMarkdown(fullText()),
+    body: await renderBody(fullText()),
     css: appCssText + PDF_PRINT_CSS,
     theme: theme(),
     withOutline: false,
@@ -335,11 +353,11 @@ async function runExport(
   outline = true,
 ): Promise<string | null> {
   if (format === "html" || format === "html_plain") {
-    await writeTextFile(out, htmlDocument(format === "html", format === "html" && outline));
+    await writeTextFile(out, await htmlDocument(format === "html", format === "html" && outline));
     return out;
   }
   if (format === "pdf") {
-    const html = pdfDocument();
+    const html = await pdfDocument();
     try {
       await exportPdf(html, out);
       return out;
@@ -824,7 +842,7 @@ const registry: Record<string, Command> = {
   "edit.undo": undo,
   "edit.redo": redo,
   "edit.copy_markdown": copyAsMarkdown,
-  "edit.copy_html": () => clipboardWriteText(renderMarkdown(fullText())),
+  "edit.copy_html": async () => clipboardWriteText(await renderBody(fullText())),
   "edit.paste_plain": pastePlain,
   "edit.move_row_up": () => { if (doc.activeIndex >= 0) moveBlock(doc.activeIndex, -1); },
   "edit.move_row_down": () => { if (doc.activeIndex >= 0) moveBlock(doc.activeIndex, 1); },

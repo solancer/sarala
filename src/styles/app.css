@@ -1137,13 +1137,59 @@ body.tables-full .rendered table { width: 100%; }
 .math-error { color: #c0392b; border-bottom: 1px dotted #c0392b; cursor: help; }
 .math-block-error { text-align: left; }
 
-.mermaid-block { margin: 0.6em 0; text-align: center; overflow-x: auto; }
-.mermaid-block svg { max-width: 100%; height: auto; }
-.mermaid-block:not(.rendered):empty::before {
+.mermaid-block, .d2-block { margin: 0.6em 0; text-align: center; overflow-x: auto; }
+.mermaid-block svg, .d2-block svg { max-width: 100%; height: auto; }
+.mermaid-block:not(.rendered):empty::before,
+.d2-block:not(.rendered):empty::before {
   content: "Rendering diagram…";
   color: var(--ink-soft);
   font: 12px var(--font-ui);
 }
+
+/* Hover control to resize a rendered D2 diagram (top-right of the block). */
+.d2-controls {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 5;
+}
+.block:hover .d2-controls,
+.d2-controls:focus-within { opacity: 1; }
+.d2-zoom-btn, .d2-zoom-label {
+  border: none;
+  background: none;
+  color: var(--ink);
+  font: 12px var(--font-ui);
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.d2-zoom-btn { font-size: 14px; line-height: 1; width: 22px; }
+.d2-zoom-label { min-width: 40px; font-variant-numeric: tabular-nums; }
+.d2-zoom-btn:hover:not(:disabled), .d2-zoom-label:hover { background: var(--accent-soft); color: var(--accent); }
+.d2-zoom-btn:disabled { opacity: 0.35; cursor: default; }
+.d2-controls-sep { width: 1px; align-self: stretch; margin: 1px 2px; background: var(--border); }
+.d2-theme-select {
+  border: none;
+  background: none;
+  color: var(--ink);
+  font: 12px var(--font-ui);
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 2px 4px;
+  max-width: 150px;
+}
+.d2-theme-select:hover { background: var(--accent-soft); color: var(--accent); }
 
 .render-error {
   margin-top: 6px;
