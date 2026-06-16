@@ -1,6 +1,20 @@
 import { Show } from "solid-js";
 import { stats, doc, encodingLossy } from "../store";
 import { togglePalette, isPaletteOpen } from "./PaletteSwitcher";
+import { updatePhase, type UpdatePhase } from "../updater";
+
+function updateLabel(p: UpdatePhase): string {
+  switch (p.kind) {
+    case "checking":
+      return "Checking for updates…";
+    case "downloading":
+      return `Downloading update… ${p.percent}%`;
+    case "installing":
+      return "Installing update…";
+    default:
+      return "";
+  }
+}
 
 export default function StatusBar() {
   return (
@@ -22,6 +36,10 @@ export default function StatusBar() {
         <Show when={doc.hadBom}> BOM</Show>
         <Show when={encodingLossy()}> ⚠</Show>
       </span>
+      <Show when={updatePhase().kind !== "idle"}>
+        <span class="sep">·</span>
+        <span class="update-status">{updateLabel(updatePhase())}</span>
+      </Show>
       <span class="spacer" />
       <button
         class="palette-toggle"

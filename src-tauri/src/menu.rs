@@ -851,6 +851,7 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     // ---- Help ----
     let help = SubmenuBuilder::new(app, "Help")
         .item(&mi(app, "help.about", "About Sarala", None)?)
+        .item(&mi(app, "help.check_updates", "Check for Updates…", None)?)
         .build()?;
     menu.append(&help)?;
 

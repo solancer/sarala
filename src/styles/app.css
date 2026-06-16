@@ -525,6 +525,7 @@ body { font-family: var(--font-ui); }
 .statusbar .sep { opacity: 0.5; }
 .statusbar .encoding { letter-spacing: 0.02em; }
 .statusbar .encoding.lossy { color: var(--accent); font-weight: 600; }
+.statusbar .update-status { color: var(--accent); font-weight: 600; }
 
 /* Reload-or-keep conflict banner: non-blocking bar above the editor scroll. */
 .conflict-banner {

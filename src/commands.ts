@@ -58,9 +58,10 @@ import { askHtmlOutline } from "./components/ExportHtmlDialog";
 import { openFind, findNext } from "./components/FindBar";
 import { openTableDialog } from "./components/TableDialog";
 import { openAbout } from "./components/AboutModal";
+import { checkForUpdates } from "./updater";
 import { skeletonTable, editTable, resizeTable, type TableEdit, type Align } from "./tabletools";
 
-const HELP_URL = "https://github.com/srinivasgowda/sarala#readme";
+const HELP_URL = "https://github.com/solancer/sarala#readme";
 
 /**
  * Handle to the currently active (contenteditable) block. Blocks register
@@ -963,6 +964,7 @@ const registry: Record<string, Command> = {
   // Help
   "help.readme": () => openExternal(HELP_URL),
   "help.about": () => openAbout(),
+  "help.check_updates": () => checkForUpdates(),
 };
 
 async function changeZoom(value: number) {

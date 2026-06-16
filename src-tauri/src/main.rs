@@ -331,6 +331,15 @@ fn save_file(
     Ok(())
 }
 
+/// Relaunch the running app. Used after the updater finishes installing a new
+/// version: the frontend drives check/download/install (via the JS updater
+/// plugin) and then calls this so the swap takes effect. `restart()` diverges
+/// (it never returns — it re-execs the process), so this command has no result.
+#[tauri::command]
+fn relaunch(app: AppHandle) {
+    app.restart();
+}
+
 #[tauri::command]
 fn new_window(app: AppHandle) -> Result<(), String> {
     let label = format!(
@@ -690,6 +699,12 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
+            // Auto-updater (desktop only). The plugin reads its pubkey/endpoints
+            // from tauri.conf.json; the frontend invokes `plugin:updater|check`.
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
+
             let menu = menu::build_menu(app.handle())?;
             app.set_menu(menu)?;
 
@@ -760,6 +775,7 @@ fn main() {
             clear_shadow,
             list_shadows,
             new_window,
+            relaunch,
             load_settings,
             save_settings,
             rename_file,

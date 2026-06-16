@@ -334,6 +334,13 @@ export async function setMenuEnabled(id: string, enabled: boolean): Promise<void
   await invoke("set_menu_enabled", { id, enabled }).catch(() => {});
 }
 
+/** Restart the app (Rust `app.restart()`); used after an update installs. */
+export async function relaunchApp(): Promise<void> {
+  if (!isTauri) return;
+  const { invoke } = await tauriCore();
+  await invoke("relaunch");
+}
+
 export async function openExternal(url: string): Promise<void> {
   if (!isTauri) {
     window.open(url, "_blank", "noopener");
