@@ -12,6 +12,7 @@
     "test": "node tests/livesource.test.mjs",
     "lint": "eslint src",
     "lint:rust": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    "release": "bash scripts/release.sh",
     "tauri": "tauri"
   },
   "dependencies": {

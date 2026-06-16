@@ -30,56 +30,54 @@ This prints a **public key** and writes the password-protected **private key** t
 - **Never commit the private key or its password.** Keep them in `~/.tauri/` and
   in GitHub Actions secrets.
 
-### 2. Create the manifest gist
+### 2. The manifest gist (already configured)
 
-Create a public Gist containing a file named `latest.json` (see shape below).
-Copy its ID into the `endpoints` URL in `tauri.conf.json` (replace
-`REPLACE_WITH_GIST_ID`):
+The updater endpoint in `tauri.conf.json` points at this gist:
 
 ```
-https://gist.githubusercontent.com/solancer/<GIST_ID>/raw/latest.json
+https://gist.githubusercontent.com/solancer/47a3dee0bace9ff5134878f55d887157/raw/latest.json
 ```
 
-The `/raw/` (no revision hash) form always serves the latest revision.
+The `/raw/` form **without** a revision hash always serves the latest revision —
+don't pin a revision in the endpoint, or the app will be stuck on one manifest.
+CI rewrites this gist's `latest.json` on every release (see below).
 
-### 3. Build-time environment variables
+### 3. GitHub Actions secrets
 
-Export these wherever you run `pnpm tauri build` (locally or in CI secrets):
+The release workflow (`.github/workflows/release.yml`) needs three repo secrets
+(Settings ▸ Secrets and variables ▸ Actions):
 
-```sh
-export TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/sarala.key)"
-export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="<the password you set>"
-```
+| Secret | Value |
+|---|---|
+| `TAURI_SIGNING_PRIVATE_KEY` | Contents of `~/.tauri/sarala.key` (the minisign private key). |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | The password you set when generating it. |
+| `GIST_TOKEN` | A GitHub PAT with the **`gist`** scope. The default `GITHUB_TOKEN` is repo-scoped and **cannot** edit a user-owned gist. |
 
-## Per-release checklist
+> Building locally instead? Export the two `TAURI_SIGNING_*` values in your shell
+> before `pnpm tauri build` (see the manual fallback at the bottom).
 
-1. **Bump the version** in both `src-tauri/tauri.conf.json` and
-   `src-tauri/Cargo.toml` (and `package.json` for tidiness). The updater compares
-   the manifest `version` against `tauri.conf.json`'s `version`.
+## Cutting a release (automated)
 
-2. **Build** on each target OS (the updater bundle differs per platform):
+1. **Bump + tag** with the helper (updates `package.json`,
+   `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`, commits, tags):
 
    ```sh
-   pnpm tauri build
+   pnpm release 0.2.0          # then push when ready
+   pnpm release 0.2.0 --push   # or bump, tag, and push in one go
    ```
 
-   With the signing env vars set, this emits an artifact **and** a `.sig` next to
-   it:
-   - **macOS** — `Sarala.app.tar.gz` + `Sarala.app.tar.gz.sig`
-   - **Windows** — NSIS `Sarala_<ver>_x64-setup.exe` + `.sig`
-   - **Linux** — `sarala_<ver>_amd64.AppImage` + `.sig`
+2. **Pushing the `vX.Y.Z` tag** triggers `.github/workflows/release.yml`, which:
+   - builds + signs on macOS (universal), Windows, and Linux;
+   - creates the **GitHub Release** `vX.Y.Z` with the installers and updater
+     artifacts (`Sarala.app.tar.gz`, `*-setup.exe`, `*.AppImage`, each + `.sig`);
+   - generates `latest.json` and **pushes it to the gist** — which is the moment
+     existing installs start seeing the update.
 
-   > macOS/Windows builds must be cross-compiled or built on their own OS;
-   > there's no single-host build for all three. GitHub Actions matrix is the
-   > usual way.
+3. Watch it at <https://github.com/solancer/sarala/actions>. That's it — no
+   manual signature pasting.
 
-3. **Create a GitHub Release** tagged `v<version>` and upload the artifacts
-   (the installable files; the `.sig` contents go into the manifest, not the
-   release, though uploading them too is harmless).
-
-4. **Update the gist `latest.json`**: bump `version`, set `pub_date`, paste each
-   platform's `.sig` **file contents** into `signature`, and point `url` at the
-   GitHub Release download links.
+The updater compares the manifest `version` against `tauri.conf.json`'s
+`version`, so step 1 keeping them in lockstep is what makes the update visible.
 
 ## `latest.json` shape
 
@@ -130,3 +128,26 @@ Until the Apple Developer account is set up, auto-updates will install but
 Gatekeeper may refuse to launch the replaced app on other machines. Windows has
 an analogous (softer) SmartScreen story; an Authenticode cert removes the
 warning.
+
+## Manual fallback (build locally, no CI)
+
+If you ever need to release without the workflow:
+
+1. Export the signing env vars:
+
+   ```sh
+   export TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/sarala.key)"
+   export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="<the password you set>"
+   ```
+
+2. `pnpm tauri build` **on each OS** (no single host builds all three). Each emits
+   the artifact plus a sibling `.sig`:
+   - **macOS** — `Sarala.app.tar.gz` + `.sig`
+   - **Windows** — `Sarala_<ver>_x64-setup.exe` + `.sig`
+   - **Linux** — `sarala_<ver>_amd64.AppImage` + `.sig`
+
+3. Create a GitHub Release tagged `v<version>` and upload the artifacts.
+
+4. Hand-edit the gist's `latest.json` (shape above): bump `version`, set
+   `pub_date`, paste each `.sig`'s **contents** into `signature`, and point each
+   `url` at the Release download link.

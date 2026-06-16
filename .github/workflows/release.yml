@@ -1,0 +1,106 @@
+name: Release
+
+# Cut a release by pushing a tag: `git push origin main vX.Y.Z`
+# (use `pnpm release X.Y.Z` to bump + tag for you). The matrix builds and signs
+# on each OS, creates the GitHub Release with the updater artifacts, and the
+# final job pushes the generated latest.json to the updater gist.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest # universal (Apple Silicon + Intel)
+            args: "--target universal-apple-darwin"
+          - platform: ubuntu-22.04 # AppImage
+            args: ""
+          - platform: windows-latest # NSIS .exe
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libappindicator3-dev \
+            patchelf
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build, sign, and create the GitHub Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater signing (minisign). Set these as repo secrets.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Sarala ${{ github.ref_name }}
+          releaseBody: "See the assets below to download and install this version."
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  # The updater endpoint in tauri.conf.json points at a gist, so mirror the
+  # latest.json that tauri-action attached to the release into that gist. Runs
+  # once, after every platform has uploaded.
+  update-gist:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download latest.json from the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern latest.json \
+            --output latest.json --clobber
+
+      - name: Push latest.json to the updater gist
+        env:
+          # PAT with the `gist` scope — the default GITHUB_TOKEN cannot edit
+          # user-owned gists.
+          GH_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: 47a3dee0bace9ff5134878f55d887157
+        run: |
+          jq -n --rawfile content latest.json \
+            '{files: {"latest.json": {content: $content}}}' \
+            | gh api -X PATCH "/gists/$GIST_ID" --input -
