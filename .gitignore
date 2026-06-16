@@ -4,3 +4,4 @@ src-tauri/target/
 CLAUDE.local.md
 tests/.build/
 .DS_Store
+.claude/
