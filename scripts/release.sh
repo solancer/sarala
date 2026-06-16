@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Cut a release. Bumps the version across all manifests, commits, tags it, and
+# Cut a release. Bumps the version across all manifests, commits, tags it (when
+# the version is already current it skips the commit and just tags), and
 # (optionally) pushes — the tag push triggers .github/workflows/release.yml,
 # which builds + signs on every OS, publishes the GitHub Release, and updates
 # the updater gist's latest.json.
@@ -51,7 +52,14 @@ perl -i -pe 'if (!$done && s/^version = "[^"]*"/version = "'"$VERSION"'"/) { $do
 ( cd src-tauri && cargo update -p sarala >/dev/null 2>&1 || true )
 
 git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
-git commit -m "Release $TAG"
+
+# If the manifests already sit at $VERSION there's nothing to commit — just tag
+# the current commit (re-releasing / first release of the current version).
+if git diff --cached --quiet; then
+  echo "Manifests already at $VERSION — tagging the current commit, no bump."
+else
+  git commit -m "Release $TAG"
+fi
 git tag -a "$TAG" -m "Sarala $TAG"
 
 if [ "$PUSH" = "--push" ]; then
@@ -60,6 +68,6 @@ if [ "$PUSH" = "--push" ]; then
   echo "Done. Watch the build: https://github.com/solancer/sarala/actions"
 else
   echo
-  echo "Committed and tagged $TAG. Push to trigger the release workflow:"
+  echo "Tagged $TAG. Push to trigger the release workflow:"
   echo "  git push origin HEAD $TAG"
 fi
