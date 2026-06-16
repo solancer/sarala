@@ -43,7 +43,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "REPLACE_WITH_MINISIGN_PUBLIC_KEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY4NDMzMDkwRTQzNzIxQ0MKUldUTUlUZmtrREJEYUN6NXpqMndNLzlyVEZxbndacHNydEFWQVBydm1uUUkxUUsxZ0xUYS9zYkYK",
       "endpoints": [
         "https://gist.githubusercontent.com/solancer/47a3dee0bace9ff5134878f55d887157/raw/latest.json"
       ]
