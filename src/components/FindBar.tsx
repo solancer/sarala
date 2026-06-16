@@ -230,6 +230,10 @@ export default function FindBar() {
             classList={{ invalid: invalid() }}
             onInput={(e) => setQuery(e.currentTarget.value)}
             onKeyDown={onKeyDown}
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck={false}
           />
           <div class="findbar-toggles">
             <button class="find-toggle" classList={{ on: caseSensitive() }}
@@ -252,6 +256,10 @@ export default function FindBar() {
               value={replaceWith()}
               onInput={(e) => setReplaceWith(e.currentTarget.value)}
               onKeyDown={(e) => e.key === "Escape" && closeFind()}
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck={false}
             />
             <button class="ghost-btn" onClick={replaceCurrent}>Replace</button>
             <button class="ghost-btn" onClick={replaceAllMatches}>All</button>

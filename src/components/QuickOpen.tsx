@@ -61,6 +61,10 @@ export default function QuickOpen() {
             value={query()}
             onInput={(e) => { setQuery(e.currentTarget.value); setCursor(0); }}
             onKeyDown={onKeyDown}
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck={false}
           />
           <Show when={matches().length} fallback={<div class="quick-open-empty">No matching files</div>}>
             <ul>

@@ -105,6 +105,10 @@ export default function SearchPanel(props: Props) {
         placeholder="Search in folder…"
         value={query()}
         onInput={(e) => setQuery(e.currentTarget.value)}
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck={false}
       />
       <div class="search-toggles">
         <button class="find-toggle" classList={{ on: caseSensitive() }}
