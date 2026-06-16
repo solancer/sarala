@@ -22,6 +22,7 @@ The editing surface *is* the preview: every paragraph, heading, list, quote, tab
 - **Export**: HTML (with an outline sidebar), real PDF (headless Chromium with configurable page size, margins, and header/footer using `${pageNo}`/`${totalPages}`/`${title}`/`${date}`; falls back to the print dialog), and docx/odt/rtf/epub/LaTeX/MediaWiki/rst/Textile/OPML via [Pandoc](https://pandoc.org) (with sensible flags — docx reference doc, epub TOC/chapters). **Named presets** store a format, output path, after-export action (reveal/open/run a command) and pandoc flags; **Export with Previous** re-runs the last. Per-document YAML keys (`export_filename`, `export_pdf_margin`, …) override settings. Import via Pandoc too
 - **Local images**: relative `src` paths resolve against the document's folder (via Tauri's asset protocol) and render inline; inserting an image can copy it into a configurable folder (with a `${filename}` variable), and the per-document `copy-images-to` / `image-root-url` YAML keys override the copy folder and image root
 - **Recent files**, settings persisted to disk, smart punctuation, LF/CRLF line endings; **save is atomic** (temp file + rename)
+- **Auto-update** (opt-in): **Help ▸ Check for Updates…** checks a manifest, then downloads, verifies (minisign), installs, and relaunches — signed artifacts from GitHub Releases, see [Releasing](#releasing)
 - Word/character count, dirty indicator (window title shows *— Edited*), confirm-on-close, keyboard-first
 
 ## Shortcuts
@@ -60,6 +61,29 @@ pnpm tauri build    # installers in src-tauri/target/release/bundle
 
 The frontend also runs standalone in a browser (`pnpm dev`) with an in-memory
 demo document — file dialogs are desktop-only, and Save downloads the file instead.
+
+## Releasing
+
+Releases are automated — bump the version and push a tag, and CI does the rest:
+
+```bash
+pnpm release 0.2.0          # bump manifests + commit + tag v0.2.0
+pnpm release 0.2.0 --push   # ...and push main + the tag in one go
+```
+
+Pushing the `vX.Y.Z` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which:
+
+1. builds and signs on macOS (universal), Windows, and Linux via `tauri-action`;
+2. publishes the **GitHub Release** `vX.Y.Z` with the installers and updater
+   artifacts (`.app.tar.gz`, `-setup.exe`, `.AppImage`, each with a `.sig`);
+3. writes the generated `latest.json` to the updater gist — the moment existing
+   installs start seeing the update (**Help ▸ Check for Updates…**).
+
+The updater verifies each download against the minisign public key in
+`src-tauri/tauri.conf.json`. One-time setup (signing key, CI secrets:
+`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, `GIST_TOKEN`),
+the `latest.json` shape, the macOS notarization caveat, and a no-CI manual
+fallback are all documented in [RELEASING.md](RELEASING.md).
 
 ## Architecture
 
