@@ -15,8 +15,9 @@ import {
   subSupEnabled, setSubSupEnabledSig, autolinkEnabled, setAutolinkEnabledSig,
   setSidebarTab, focusMode, setFocusMode, typewriterMode, setTypewriterMode,
   alwaysOnTop, setAlwaysOnTop, zoom, setZoom, clampZoom,
-  bumpRenderEpoch,
+  bumpRenderEpoch, proseFont, monoFont,
 } from "./store";
+import { fontEmbedCss } from "./fonts";
 import {
   isTauri, pickFolder, pickMarkdownFile, pickSavePath, pickImportFile,
   readFileEncoded, reopenWithEncoding, writeTextFile, type EncodedDoc,
@@ -58,6 +59,7 @@ import { askHtmlOutline } from "./components/ExportHtmlDialog";
 import { openFind, findNext } from "./components/FindBar";
 import { openTableDialog } from "./components/TableDialog";
 import { openAbout } from "./components/AboutModal";
+import { openSettings } from "./components/SettingsModal";
 import { checkForUpdates } from "./updater";
 import { skeletonTable, editTable, resizeTable, type TableEdit, type Align } from "./tabletools";
 
@@ -308,12 +310,19 @@ async function renderBody(md: string): Promise<string> {
   return div.innerHTML;
 }
 
+/** Embedded @font-face data URIs for the chosen prose/code fonts, so an export
+ *  renders the same on a machine that doesn't have them installed. Appended
+ *  after the app CSS so its :root overrides win. */
+async function fontCss(): Promise<string> {
+  return fontEmbedCss(proseFont(), monoFont());
+}
+
 /** Build the exported HTML document (outline sidebar when there are headings). */
 async function htmlDocument(withStyles: boolean, withOutline: boolean): Promise<string> {
   return buildExportHtml({
     title: exportBaseName(),
     body: await renderBody(fullText()),
-    css: withStyles ? loadExportCss() : "",
+    css: withStyles ? loadExportCss() + (await fontCss()) : "",
     theme: theme(),
     withOutline,
     tablesFull: tableFullWidth(),
@@ -325,7 +334,7 @@ async function pdfDocument(): Promise<string> {
   return buildExportHtml({
     title: exportBaseName(),
     body: await renderBody(fullText()),
-    css: appCssText + PDF_PRINT_CSS,
+    css: appCssText + PDF_PRINT_CSS + (await fontCss()),
     theme: theme(),
     withOutline: false,
     tablesFull: tableFullWidth(),
@@ -965,6 +974,9 @@ const registry: Record<string, Command> = {
   "help.readme": () => openExternal(HELP_URL),
   "help.about": () => openAbout(),
   "help.check_updates": () => checkForUpdates(),
+
+  // Settings
+  "app.settings": () => openSettings(),
 };
 
 async function changeZoom(value: number) {

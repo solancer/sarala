@@ -97,6 +97,11 @@ export const [folderName, setFolderName] = createSignal<string | null>(null);
 export const [folderPath, setFolderPath] = createSignal<string | null>(null);
 export const [quickOpenVisible, setQuickOpenVisible] = createSignal(false);
 
+// Chosen system fonts (null = theme default). Persisted in settings; applied to
+// the --font-prose / --font-mono CSS variables and embedded into exports.
+export const [proseFont, setProseFont] = createSignal<string | null>(null);
+export const [monoFont, setMonoFont] = createSignal<string | null>(null);
+
 // Edit-menu toggles (persisted in settings).
 export const [spellcheckOn, setSpellcheckOn] = createSignal(true);
 export const [smartPunctuation, setSmartPunctuation] = createSignal(false);

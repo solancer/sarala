@@ -7,7 +7,9 @@ import {
   setSidebarWidth, clampSidebar,
   setMathAltDelimitersSig, setMathFenceSig,
   setEmojiEnabledSig, setHighlightEnabledSig, setSubSupEnabledSig, setAutolinkEnabledSig,
+  setProseFont, setMonoFont,
 } from "./store";
+import { applyProseFont, applyMonoFont } from "./fonts";
 import {
   setPreserveBreaksOption, setMathAltDelimiters, setMathFence,
   setEmojiEnabled, setHighlightEnabled, setSubSupEnabled, setAutolinkEnabled,
@@ -137,6 +139,12 @@ function hydrateStore() {
   const autolink = getSetting("autolinkEnabled", true);
   setAutolinkEnabledSig(autolink);
   setAutolinkEnabled(autolink);
+  const prose = getSetting<string | null>("proseFont", null);
+  setProseFont(prose);
+  applyProseFont(prose);
+  const mono = getSetting<string | null>("monoFont", null);
+  setMonoFont(mono);
+  applyMonoFont(mono);
   bumpRenderEpoch();
 }
 

@@ -9,6 +9,7 @@ import TableDialog from "./components/TableDialog";
 import ImageContextMenu from "./components/ImageContextMenu";
 import PaletteSwitcher from "./components/PaletteSwitcher";
 import AboutModal from "./components/AboutModal";
+import SettingsModal from "./components/SettingsModal";
 import ExportHtmlDialog from "./components/ExportHtmlDialog";
 import ConflictBanner from "./components/ConflictBanner";
 import { initSettings } from "./settings";
@@ -267,6 +268,7 @@ export default function App() {
       <TableDialog />
       <ImageContextMenu />
       <AboutModal />
+      <SettingsModal />
       <ExportHtmlDialog />
     </div>
   );

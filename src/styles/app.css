@@ -1287,6 +1287,73 @@ body.tables-full .rendered table { width: 100%; }
 .about-actions { display: flex; justify-content: center; gap: 8px; margin-top: 18px; }
 .about-actions .primary { color: var(--accent); font-weight: 600; }
 
+/* ---- Settings modal (font picker) ---- */
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 300;
+}
+.settings {
+  width: 440px;
+  max-height: 78vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-page);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 18px 18px 14px;
+  color: var(--ink);
+  outline: none;
+}
+.settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.settings-head h2 { margin: 0; font: 700 18px var(--font-ui); }
+.settings-head .primary { color: var(--accent); font-weight: 600; }
+.settings-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.settings-tabs button {
+  flex: 1;
+  padding: 6px 0;
+  font: 600 12px var(--font-ui);
+  color: var(--ink-soft);
+  background: var(--tint);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.settings-tabs button.on { color: var(--bg-page); background: var(--accent); border-color: var(--accent); }
+.settings-current { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: 12px var(--font-ui); color: var(--ink-soft); margin-bottom: 10px; }
+.settings-current strong { color: var(--ink); font-weight: 600; }
+.settings-search {
+  width: 100%;
+  padding: 8px 10px;
+  font: 13px var(--font-ui);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  outline: none;
+  margin-bottom: 8px;
+}
+.settings-search:focus { border-color: var(--select); }
+.settings-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+.settings-font {
+  text-align: left;
+  padding: 7px 10px;
+  font-size: 16px;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.settings-font:hover { background: var(--tint); }
+.settings-font.current { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.settings-empty { padding: 16px 6px; font: 13px var(--font-ui); color: var(--ink-soft); text-align: center; }
+
 /* ---- Export HTML dialog ---- */
 .export-dialog {
   width: 340px;

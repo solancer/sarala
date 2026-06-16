@@ -693,6 +693,82 @@ fn list_shadows(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
     Ok(out)
 }
 
+/// Every installed font family name (sorted, de-duplicated). Powers the font
+/// picker in Settings — the webview can't enumerate system fonts itself
+/// (WKWebView has no Local Font Access API), so it asks Rust.
+#[tauri::command]
+fn list_system_fonts() -> Vec<String> {
+    use font_kit::source::SystemSource;
+    let mut names = SystemSource::new().all_families().unwrap_or_default();
+    names.sort_by_key(|s| s.to_lowercase());
+    names.dedup();
+    names
+}
+
+#[derive(Serialize)]
+struct FontFace {
+    weight: u32,
+    italic: bool,
+    format: String,
+    b64: String,
+}
+
+/// Base64 font data for a family's standard faces (regular / bold / italic /
+/// bold-italic). The frontend turns these into `@font-face` data URIs so a
+/// chosen system font can be embedded in an HTML/PDF export and travel to a
+/// machine that doesn't have it installed.
+#[tauri::command]
+fn font_faces_b64(family: String) -> Result<Vec<FontFace>, String> {
+    use base64::Engine;
+    use font_kit::family_name::FamilyName;
+    use font_kit::properties::{Properties, Style, Weight};
+    use font_kit::source::SystemSource;
+
+    let source = SystemSource::new();
+    let combos = [
+        (Weight::NORMAL, Style::Normal),
+        (Weight::BOLD, Style::Normal),
+        (Weight::NORMAL, Style::Italic),
+        (Weight::BOLD, Style::Italic),
+    ];
+
+    let mut out: Vec<FontFace> = Vec::new();
+    let mut seen: HashSet<u64> = HashSet::new();
+    for (weight, style) in combos {
+        let props = Properties {
+            weight,
+            style,
+            ..Default::default()
+        };
+        let Ok(handle) = source.select_best_match(&[FamilyName::Title(family.clone())], &props)
+        else {
+            continue;
+        };
+        let Ok(font) = handle.load() else { continue };
+        let Some(data) = font.copy_font_data() else {
+            continue;
+        };
+        // The "best match" for Bold may resolve to the Regular file when the
+        // family ships no bold; only emit each distinct face once.
+        if !seen.insert(hash_bytes(&data[..])) {
+            continue;
+        }
+        let actual = font.properties();
+        let format = if data.len() >= 4 && &data[0..4] == b"OTTO" {
+            "opentype"
+        } else {
+            "truetype"
+        };
+        out.push(FontFace {
+            weight: actual.weight.0 as u32,
+            italic: matches!(actual.style, Style::Italic | Style::Oblique),
+            format: format.to_string(),
+            b64: base64::engine::general_purpose::STANDARD.encode(&data[..]),
+        });
+    }
+    Ok(out)
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -776,6 +852,8 @@ fn main() {
             list_shadows,
             new_window,
             relaunch,
+            list_system_fonts,
+            font_faces_b64,
             load_settings,
             save_settings,
             rename_file,
@@ -799,7 +877,28 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{decode_bytes, encode_contents, search_in_folder};
+    use super::{
+        decode_bytes, encode_contents, font_faces_b64, list_system_fonts, search_in_folder,
+    };
+
+    #[test]
+    fn system_fonts_enumerate_and_embed() {
+        let families = list_system_fonts();
+        assert!(
+            !families.is_empty(),
+            "expected some installed font families"
+        );
+        // At least one family should yield embeddable (base64) face data.
+        let any = families.iter().take(40).any(|f| {
+            font_faces_b64(f.clone())
+                .map(|faces| faces.iter().any(|face| !face.b64.is_empty()))
+                .unwrap_or(false)
+        });
+        assert!(
+            any,
+            "expected at least one family to produce embeddable faces"
+        );
+    }
 
     #[test]
     fn search_spans_multiple_files_and_subdirs() {

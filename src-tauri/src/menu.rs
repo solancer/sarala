@@ -743,6 +743,13 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
 
     // ---- View ----
     let view = SubmenuBuilder::new(app, "View")
+        .item(&mi(
+            app,
+            "app.settings",
+            "Settings…",
+            Some("CmdOrCtrl+Comma"),
+        )?)
+        .separator()
         .item(&ci(
             app,
             "view.source_mode",

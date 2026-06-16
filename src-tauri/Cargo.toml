@@ -21,6 +21,8 @@ notify = "6"
 notify-debouncer-mini = "0.4"
 encoding_rs = "0.8"
 chardetng = "0.1"
+font-kit = "0.14"
+base64 = "0.22"
 
 # Auto-updater. Desktop-only (the plugin doesn't build for mobile); Sarala has no
 # mobile target, but the cfg gate keeps that true if one is ever added.
