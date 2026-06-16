@@ -799,7 +799,34 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{decode_bytes, encode_contents};
+    use super::{decode_bytes, encode_contents, search_in_folder};
+
+    #[test]
+    fn search_spans_multiple_files_and_subdirs() {
+        use std::fs;
+        let dir = std::env::temp_dir().join(format!("sarala-search-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("sub")).unwrap();
+        fs::write(dir.join("a.md"), "Alpha line\nsecond").unwrap();
+        fs::write(dir.join("b.md"), "Another Alpha here").unwrap();
+        fs::write(dir.join("sub/c.md"), "nested Alpha line").unwrap();
+
+        let res = search_in_folder(
+            dir.to_string_lossy().to_string(),
+            "Alpha".to_string(),
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        let _ = fs::remove_dir_all(&dir);
+        assert_eq!(
+            res.len(),
+            3,
+            "expected matches in 3 files, got {}",
+            res.len()
+        );
+    }
 
     #[test]
     fn utf8_round_trips() {
