@@ -227,6 +227,9 @@ export default function App() {
     >
       {/* Full-width top bar: filename + status dot left, Live/Source right. */}
       <header class="topbar" data-tauri-drag-region>
+        {/* Non-draggable gap over the native macOS traffic lights — a drag
+            region here would swallow their clicks (close/minimize/zoom). */}
+        {isTauri && <span class="topbar-traffic" aria-hidden="true" />}
         <button
           class="topbar-toggle"
           title="Toggle sidebar (Shift+Cmd/Ctrl+L)"

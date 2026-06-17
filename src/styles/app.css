@@ -142,8 +142,11 @@ body { font-family: var(--font-ui); }
   user-select: none;
   -webkit-user-select: none;
 }
-/* Clear the macOS traffic lights when the native bar is hidden (overlay). */
-.app.is-tauri .topbar { padding-left: 84px; }
+/* Clear the macOS traffic lights when the native bar is hidden (overlay).
+   This must be a real (non-drag) element, not padding on the drag region —
+   a drag region over the traffic lights swallows their clicks. */
+.app.is-tauri .topbar { padding-left: 0; }
+.topbar-traffic { flex: none; width: 80px; align-self: stretch; }
 .topbar > * { pointer-events: auto; }
 .topbar-toggle {
   border: 0;
