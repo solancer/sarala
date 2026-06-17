@@ -38,7 +38,7 @@ if git rev-parse "$TAG" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Bumping version to $VERSION…"
+echo "Bumping version to $VERSION..."
 
 # package.json + tauri.conf.json (both 2-space JSON).
 node -e "const f='package.json';const j=require('./'+f);j.version='$VERSION';require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
@@ -63,7 +63,7 @@ fi
 git tag -a "$TAG" -m "Sarala $TAG"
 
 if [ "$PUSH" = "--push" ]; then
-  echo "Pushing main and $TAG…"
+  echo "Pushing main and $TAG..."
   git push origin HEAD "$TAG"
   echo "Done. Watch the build: https://github.com/solancer/sarala/actions"
 else
