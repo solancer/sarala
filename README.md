@@ -1,8 +1,25 @@
+<div align="center">
+
+<img src="src-tauri/icons/icon.png" alt="Sarala" width="128" height="128" />
+
 # Sarala
 
-A seamless WYSIWYG Markdown editor — no preview pane, no split view — built with **Tauri 2** (Rust) and **SolidJS**.
+**A seamless WYSIWYG Markdown editor — no preview pane, no split view.**
 
-The editing surface *is* the preview: every paragraph, heading, list, quote, table and code fence is a live block. Click a block and it opens into raw Markdown source; click away and it renders in place. One parser (`marked` + GFM), one theme, one window — what you see while writing is exactly what exports.
+The editing surface *is* the preview. Every paragraph, heading, list, quote, table and code fence is a live block: click into one and it opens to raw Markdown, click away and it renders in place. One parser, one theme, one window — what you see while writing is exactly what exports.
+
+[![Release](https://github.com/solancer/sarala/actions/workflows/release.yml/badge.svg)](https://github.com/solancer/sarala/actions/workflows/release.yml)
+[![Latest release](https://img.shields.io/github/v/release/solancer/sarala?sort=semver)](https://github.com/solancer/sarala/releases/latest)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#run-it)
+[![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg?logo=tauri&logoColor=white)](https://tauri.app)
+[![SolidJS](https://img.shields.io/badge/SolidJS-2C4F7C.svg?logo=solid&logoColor=white)](https://www.solidjs.com)
+
+<br />
+
+<img src="docs/screenshot.png" alt="Sarala editing a Markdown document — live blocks, outline sidebar, and theme palette" width="900" />
+
+</div>
 
 ## Features
 
