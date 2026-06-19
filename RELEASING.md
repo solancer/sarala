@@ -52,17 +52,16 @@ The release workflow (`.github/workflows/release.yml`) needs three repo secrets
 | `TAURI_SIGNING_PRIVATE_KEY` | Contents of `~/.tauri/sarala.key` (the minisign private key). |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | The password you set when generating it. |
 | `GIST_TOKEN` | A GitHub PAT with the **`gist`** scope. The default `GITHUB_TOKEN` is repo-scoped and **cannot** edit a user-owned gist. |
-| `SNAPCRAFT_STORE_CREDENTIALS` | A Snap Store login token (see [Snap publishing](#snap-publishing-snapcraftio)). Only needed if you publish the snap. |
 
 > Building locally instead? Export the two `TAURI_SIGNING_*` values in your shell
 > before `pnpm tauri build` (see the manual fallback at the bottom).
 
 ### 4. Snap publishing (snapcraft.io)
 
-The snap is built and pushed by a **separate** workflow,
-`.github/workflows/snap.yml`, on the same `vX.Y.Z` tag. The manifest lives at
-`snap/snapcraft.yaml` (a `core22`, strictly-confined build that compiles the app
-and unpacks Tauri's `.deb` into the snap). One-time setup:
+The snap is **not** built in GitHub Actions — it's built by the **Snap Store
+build service**, which is connected to this repo and builds `snap/snapcraft.yaml`
+(a `core22`, strictly-confined build that compiles the app and unpacks Tauri's
+`.deb` into the snap) natively on **amd64** and **arm64**. One-time setup:
 
 1. **Register the name** once (the snap name must be globally unique):
 
@@ -70,21 +69,22 @@ and unpacks Tauri's `.deb` into the snap). One-time setup:
    snapcraft register sarala
    ```
 
-2. **Export a store token** and save it as the `SNAPCRAFT_STORE_CREDENTIALS`
-   repo secret. Scope it to just this snap so a leak can't touch your account:
+2. **Connect the repo:** at <https://snapcraft.io/sarala/builds>, link the GitHub
+   repository. From then on every push to `main` triggers a build and uploads the
+   resulting revisions to the **edge** channel automatically — no repo secret or
+   workflow required (which is why there's no `snap.yml`).
 
-   ```sh
-   snapcraft export-login --snaps sarala \
-     --acls package_access,package_push,package_release -
-   ```
+3. **Promote to stable** from the snap's **Releases** page once a revision looks
+   good (or `snapcraft release sarala <revision> stable`). Edge is your testing
+   channel; `snap install sarala --edge` to try a build before promoting.
 
-   Paste the printed token into Settings ▸ Secrets and variables ▸ Actions.
-
-After that, pushing a `vX.Y.Z` tag builds the snap and releases it to the
-**stable** channel. To push to another channel for testing, run the **Snap**
-workflow manually (Actions ▸ Snap ▸ Run workflow) and set the `channel` input
-(e.g. `edge` or `beta`). The build also uploads the `.snap` as a workflow
-artifact, so you can grab and `snap install --dangerous` it without publishing.
+> **First-revision review:** a brand-new snap's first revision goes through a
+> one-time **manual review** by Canonical, and the store won't process newer
+> uploads until that clears (you'll see *"Waiting for previous upload(s) to
+> complete their review process"*). Clear or prioritize it from
+> <https://dashboard.snapcraft.io/>, or ask on
+> <https://forum.snapcraft.io/c/store-requests>. After it's approved, later
+> revisions publish without manual steps.
 
 > **Auto-updater note:** a snap is a read-only image that the Snap Store keeps
 > updated, so Tauri's in-app updater can't (and shouldn't) replace the binary
