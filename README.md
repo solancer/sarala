@@ -21,6 +21,25 @@ The editing surface *is* the preview. Every paragraph, heading, list, quote, tab
 
 </div>
 
+## Install
+
+**macOS (Homebrew)** — the easiest way to get Sarala on a Mac:
+
+```bash
+brew tap solancer/sarala https://github.com/solancer/sarala
+brew install --cask --no-quarantine sarala
+```
+
+> **Why `--no-quarantine`?** Sarala's universal build is ad-hoc signed (so it runs
+> natively on both Apple Silicon and Intel) but isn't Apple-notarized. The flag tells
+> Homebrew not to set the quarantine attribute, so Gatekeeper won't block the first
+> launch. Upgrade later with `brew upgrade --cask sarala`.
+
+**Other platforms** — grab an installer from the
+[latest release](https://github.com/solancer/sarala/releases/latest): `.dmg` (macOS),
+`.exe`/`.msi` (Windows), or `.AppImage`/`.deb`/`.rpm` (Linux). Linux users can also
+install the [snap](https://snapcraft.io/sarala).
+
 ## Features
 
 - **Live block editing** — type Markdown and the active block styles itself *as you type*: syntax markers stay visible but dimmed (the gray `##` next to a live-styled heading, gray `[ ]( )` around a blue link), and the block fully renders when you press **Enter** or move the caret away

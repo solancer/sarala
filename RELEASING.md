@@ -91,6 +91,28 @@ build service**, which is connected to this repo and builds `snap/snapcraft.yaml
 > there. The **Check for Updates…** action will simply fail to install inside the
 > snap — that's expected; `snap refresh` is the update path for this package.
 
+### 5. Homebrew cask (macOS)
+
+`Casks/sarala.rb` is a Homebrew cask served straight from this repo, so Mac users
+can install without an Apple Developer account or notarization:
+
+```sh
+brew tap solancer/sarala https://github.com/solancer/sarala
+brew install --cask --no-quarantine sarala
+```
+
+The universal `.dmg` is **ad-hoc signed** by Tauri's build (verified:
+`codesign` reports `flags=...(adhoc,linker-signed)`), which is enough to run on
+Apple Silicon. It is **not** Apple-notarized, so `--no-quarantine` is required —
+it tells Homebrew not to set `com.apple.quarantine`, which is what makes
+Gatekeeper demand notarization on first launch. (If a user forgets the flag, the
+fallback is `xattr -dr com.apple.quarantine /Applications/Sarala.app`.)
+
+No setup needed: the `update-cask` job in `release.yml` bumps the cask's
+`version` + `sha256` to the new `.dmg` and commits it to `main` on every release.
+If `main` is ever branch-protected, that push needs a PAT with `contents:write`
+instead of the default `GITHUB_TOKEN`.
+
 ## Cutting a release (automated)
 
 1. **Bump + tag** with the helper (updates `package.json`,

@@ -104,3 +104,39 @@ jobs:
           jq -n --rawfile content latest.json \
             '{files: {"latest.json": {content: $content}}}' \
             | gh api -X PATCH "/gists/$GIST_ID" --input -
+
+  # Point the Homebrew cask (Casks/sarala.rb on main) at the just-released macOS
+  # .dmg by bumping its version + sha256. Runs once, after every platform has
+  # uploaded, so the .dmg exists on the release.
+  update-cask:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main # commit the bump back onto main, not the detached tag
+
+      - name: Bump the cask to the released version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "Sarala_${version}_universal.dmg" \
+            --output sarala.dmg --clobber
+          sha="$(shasum -a 256 sarala.dmg | awk '{print $1}')"
+          rm -f sarala.dmg
+
+          sed -i -E "s|^  version \".*\"|  version \"$version\"|" Casks/sarala.rb
+          sed -i -E "s|^  sha256 \".*\"|  sha256 \"$sha\"|" Casks/sarala.rb
+
+          if git diff --quiet -- Casks/sarala.rb; then
+            echo "Cask already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/sarala.rb
+          git commit -m "Update Homebrew cask to $version"
+          git push origin main
