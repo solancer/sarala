@@ -2,6 +2,13 @@ name: sarala
 # `base: core22` == Ubuntu 22.04, which is where the GitHub release build runs and
 # the only Ubuntu series that still ships libwebkit2gtk-4.1 that Tauri v2 needs.
 base: core22
+# The `gnome` extension's build snap (gnome-42-2204-sdk) is only published for
+# amd64 and arm64. Restrict builds to those, or the Snap Store's build service —
+# which otherwise attempts every architecture — fails on ppc64el / s390x where
+# that SDK doesn't exist. These two cover x86-64 and 64-bit ARM Linux desktops.
+architectures:
+  - build-on: [amd64]
+  - build-on: [arm64]
 adopt-info: sarala # version + summary are pulled from package.json at build time
 title: Sarala
 summary: A seamless WYSIWYG Markdown editor
