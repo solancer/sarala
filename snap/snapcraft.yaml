@@ -3,7 +3,13 @@ name: sarala
 # the only Ubuntu series that still ships libwebkit2gtk-4.1 that Tauri v2 needs.
 base: core22
 adopt-info: sarala # version + summary are pulled from package.json at build time
+title: Sarala
 summary: A seamless WYSIWYG Markdown editor
+license: GPL-3.0-or-later
+website: https://github.com/solancer/sarala
+source-code: https://github.com/solancer/sarala
+issues: https://github.com/solancer/sarala/issues
+contact: https://github.com/solancer/sarala/issues
 description: |
   Sarala is a fast, distraction-free WYSIWYG Markdown editor. It styles Markdown
   live as you type while keeping the underlying source intact, and renders code,
