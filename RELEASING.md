@@ -52,9 +52,44 @@ The release workflow (`.github/workflows/release.yml`) needs three repo secrets
 | `TAURI_SIGNING_PRIVATE_KEY` | Contents of `~/.tauri/sarala.key` (the minisign private key). |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | The password you set when generating it. |
 | `GIST_TOKEN` | A GitHub PAT with the **`gist`** scope. The default `GITHUB_TOKEN` is repo-scoped and **cannot** edit a user-owned gist. |
+| `SNAPCRAFT_STORE_CREDENTIALS` | A Snap Store login token (see [Snap publishing](#snap-publishing-snapcraftio)). Only needed if you publish the snap. |
 
 > Building locally instead? Export the two `TAURI_SIGNING_*` values in your shell
 > before `pnpm tauri build` (see the manual fallback at the bottom).
+
+### 4. Snap publishing (snapcraft.io)
+
+The snap is built and pushed by a **separate** workflow,
+`.github/workflows/snap.yml`, on the same `vX.Y.Z` tag. The manifest lives at
+`snap/snapcraft.yaml` (a `core22`, strictly-confined build that compiles the app
+and unpacks Tauri's `.deb` into the snap). One-time setup:
+
+1. **Register the name** once (the snap name must be globally unique):
+
+   ```sh
+   snapcraft register sarala
+   ```
+
+2. **Export a store token** and save it as the `SNAPCRAFT_STORE_CREDENTIALS`
+   repo secret. Scope it to just this snap so a leak can't touch your account:
+
+   ```sh
+   snapcraft export-login --snaps sarala \
+     --acls package_access,package_push,package_release -
+   ```
+
+   Paste the printed token into Settings ▸ Secrets and variables ▸ Actions.
+
+After that, pushing a `vX.Y.Z` tag builds the snap and releases it to the
+**stable** channel. To push to another channel for testing, run the **Snap**
+workflow manually (Actions ▸ Snap ▸ Run workflow) and set the `channel` input
+(e.g. `edge` or `beta`). The build also uploads the `.snap` as a workflow
+artifact, so you can grab and `snap install --dangerous` it without publishing.
+
+> **Auto-updater note:** a snap is a read-only image that the Snap Store keeps
+> updated, so Tauri's in-app updater can't (and shouldn't) replace the binary
+> there. The **Check for Updates…** action will simply fail to install inside the
+> snap — that's expected; `snap refresh` is the update path for this package.
 
 ## Cutting a release (automated)
 

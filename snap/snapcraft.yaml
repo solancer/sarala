@@ -1,0 +1,84 @@
+name: sarala
+# `base: core22` == Ubuntu 22.04, which is where the GitHub release build runs and
+# the only Ubuntu series that still ships libwebkit2gtk-4.1 that Tauri v2 needs.
+base: core22
+adopt-info: sarala # version + summary are pulled from package.json at build time
+summary: A seamless WYSIWYG Markdown editor
+description: |
+  Sarala is a fast, distraction-free WYSIWYG Markdown editor. It styles Markdown
+  live as you type while keeping the underlying source intact, and renders code,
+  math (KaTeX), Mermaid, and D2 diagrams. Files are read and written as plain
+  Markdown, so your documents are never locked into a proprietary format.
+
+grade: stable
+confinement: strict
+
+# webkit2gtk dlopen()s some of its own modules by absolute path; bind the staged
+# copy back over the expected location so it resolves inside the confined snap.
+layout:
+  /usr/lib/$SNAPCRAFT_ARCH_TRIPLET/webkit2gtk-4.1:
+    bind: $SNAP/usr/lib/$SNAPCRAFT_ARCH_TRIPLET/webkit2gtk-4.1
+
+apps:
+  sarala:
+    command: usr/bin/sarala
+    desktop: usr/share/applications/sarala.desktop
+    # The `gnome` extension wires up the GTK/GNOME runtime, themes, fonts, and the
+    # graphics (wayland/x11/opengl) plugs, so we only declare the extra ones.
+    extensions: [gnome]
+    plugs:
+      - home # open/save Markdown files in the user's home via the native dialog
+      - removable-media # ...and on mounted USB drives / external disks
+      - network # auto-updater check + remote images in previews
+
+parts:
+  sarala:
+    plugin: dump
+    source: .
+    build-snaps:
+      - node/20/stable
+      - rustup/latest/stable
+    build-packages:
+      - libwebkit2gtk-4.1-dev
+      - build-essential
+      - curl
+      - wget
+      - file
+      - libxdo-dev
+      - libssl-dev
+      - libayatana-appindicator3-dev
+      - librsvg2-dev
+      - dpkg
+    stage-packages:
+      - libwebkit2gtk-4.1-0
+      - libayatana-appindicator3-1
+    override-build: |
+      set -eu
+
+      # Keep the snap version in lockstep with package.json (bumped by `pnpm release`).
+      craftctl set version="$(node -p "require('$CRAFT_PART_SRC/package.json').version")"
+
+      rustup default stable
+      npm install -g pnpm@9
+      pnpm install --frozen-lockfile
+
+      # Build the .deb only — it's the cleanest way to get the binary + .desktop +
+      # icons laid out the way snapcraft wants, which we then unpack into the snap.
+      pnpm tauri build --bundles deb
+      dpkg-deb -x src-tauri/target/release/bundle/deb/*.deb "$CRAFT_PART_INSTALL/"
+
+      # Tauri names the Linux artifacts after `productName`, whose casing can drift.
+      # Normalize the binary + .desktop names so the static `apps.command`/`desktop`
+      # above always resolve, regardless of what Tauri emitted.
+      bin="$(find "$CRAFT_PART_INSTALL/usr/bin" -maxdepth 1 -type f | head -n1)"
+      [ "$bin" = "$CRAFT_PART_INSTALL/usr/bin/sarala" ] || mv "$bin" "$CRAFT_PART_INSTALL/usr/bin/sarala"
+
+      desktop="$(find "$CRAFT_PART_INSTALL/usr/share/applications" -name '*.desktop' | head -n1)"
+
+      # snapd rewrites an absolute `Icon=` path to point inside the snap mount, so
+      # repoint it at a staged icon (prefer 128x128) instead of the bare theme name.
+      icon="$(cd "$CRAFT_PART_INSTALL" && { find usr/share/icons -path '*128x128*' -name '*.png'; find usr/share/icons -name '*.png'; } | head -n1)"
+      sed -i -E "s|^Icon=.*|Icon=/$icon|" "$desktop"
+
+      [ "$desktop" = "$CRAFT_PART_INSTALL/usr/share/applications/sarala.desktop" ] \
+        || mv "$desktop" "$CRAFT_PART_INSTALL/usr/share/applications/sarala.desktop"

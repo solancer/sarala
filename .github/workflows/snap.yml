@@ -1,0 +1,45 @@
+name: Snap
+
+# Builds the snap and publishes it to https://snapcraft.io/sarala.
+# Fires on the same `vX.Y.Z` tags as the main release workflow, and can be run
+# by hand to push to a non-default channel for testing.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Snap Store channel to release to"
+        required: false
+        default: stable
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build snap
+        id: build
+        uses: snapcore/action-build@v1
+
+      # Keep a copy on the workflow run even if publishing is skipped or fails.
+      - name: Upload snap artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sarala-snap
+          path: ${{ steps.build.outputs.snap }}
+
+      - name: Publish to the Snap Store
+        uses: snapcore/action-publish@v1
+        env:
+          # `snapcraft export-login` token with package_push/package_release/
+          # package_access ACLs for the `sarala` snap. Store it as a repo secret.
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.build.outputs.snap }}
+          release: ${{ github.event.inputs.channel || 'stable' }}
