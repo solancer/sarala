@@ -67,20 +67,25 @@ parts:
       # Disable updater artifacts: the Snap Store handles updates, so we neither
       # produce nor sign them here (and thus need no TAURI_SIGNING_PRIVATE_KEY).
       pnpm tauri build --bundles deb --config '{"bundle":{"createUpdaterArtifacts":false}}'
-      dpkg-deb -x src-tauri/target/release/bundle/deb/*.deb "$CRAFT_PART_INSTALL/"
 
-      # Tauri names the Linux artifacts after `productName`, whose casing can drift.
-      # Normalize the binary + .desktop names so the static `apps.command`/`desktop`
-      # above always resolve, regardless of what Tauri emitted.
-      bin="$(find "$CRAFT_PART_INSTALL/usr/bin" -maxdepth 1 -type f | head -n1)"
-      [ "$bin" = "$CRAFT_PART_INSTALL/usr/bin/sarala" ] || mv "$bin" "$CRAFT_PART_INSTALL/usr/bin/sarala"
+      # Unpack the .deb into a scratch dir first. `$CRAFT_PART_INSTALL` already holds
+      # the stage-packages (webkit, appindicator, and their deps), which ship their
+      # own binaries and .desktop files under usr/ — extracting there makes "find the
+      # app's files" ambiguous. In the scratch dir the deb's payload stands alone.
+      pkgroot="$(mktemp -d)"
+      dpkg-deb -x src-tauri/target/release/bundle/deb/*.deb "$pkgroot"
 
-      desktop="$(find "$CRAFT_PART_INSTALL/usr/share/applications" -name '*.desktop' | head -n1)"
+      # The binary keeps the Cargo package name (`sarala`), which `apps.command`
+      # hard-codes. Fail loudly here if Tauri ever changes that, rather than shipping
+      # a snap whose command doesn't resolve.
+      test -x "$pkgroot/usr/bin/sarala"
 
-      # snapd rewrites an absolute `Icon=` path to point inside the snap mount, so
-      # repoint it at a staged icon (prefer 128x128) instead of the bare theme name.
-      icon="$(cd "$CRAFT_PART_INSTALL" && { find usr/share/icons -path '*128x128*' -name '*.png'; find usr/share/icons -name '*.png'; } | head -n1)"
-      sed -i -E "s|^Icon=.*|Icon=/$icon|" "$desktop"
+      # Tauri names the .desktop after productName (`Sarala.desktop`); rename it to
+      # match `apps.desktop`, and point Icon at the staged 128px icon. snapd rewrites
+      # an absolute Icon path to resolve inside the snap's mount.
+      mv "$pkgroot"/usr/share/applications/*.desktop "$pkgroot/usr/share/applications/sarala.desktop"
+      sed -i -E 's|^Icon=.*|Icon=/usr/share/icons/hicolor/128x128/apps/sarala.png|' \
+        "$pkgroot/usr/share/applications/sarala.desktop"
 
-      [ "$desktop" = "$CRAFT_PART_INSTALL/usr/share/applications/sarala.desktop" ] \
-        || mv "$desktop" "$CRAFT_PART_INSTALL/usr/share/applications/sarala.desktop"
+      # Merge the app payload into the snap alongside the stage-packages.
+      cp -rT "$pkgroot/usr" "$CRAFT_PART_INSTALL/usr"
