@@ -98,15 +98,17 @@ can install without an Apple Developer account or notarization:
 
 ```sh
 brew tap solancer/sarala https://github.com/solancer/sarala
-brew install --cask --no-quarantine sarala
+brew install --cask sarala
 ```
 
 The universal `.dmg` is **ad-hoc signed** by Tauri's build (verified:
 `codesign` reports `flags=...(adhoc,linker-signed)`), which is enough to run on
-Apple Silicon. It is **not** Apple-notarized, so `--no-quarantine` is required —
-it tells Homebrew not to set `com.apple.quarantine`, which is what makes
-Gatekeeper demand notarization on first launch. (If a user forgets the flag, the
-fallback is `xattr -dr com.apple.quarantine /Applications/Sarala.app`.)
+Apple Silicon. It is **not** Apple-notarized, so the cask's `postflight` strips
+`com.apple.quarantine` after install — that attribute is what makes Gatekeeper
+demand notarization on first launch, so removing it lets the ad-hoc-signed app
+open with no extra flags. This is deliberately disallowed by the official
+`homebrew/cask` repo (which mandates notarization), but fine for our self-hosted
+tap. Users who'd rather keep quarantine can install with `--quarantine`.
 
 No setup needed: the `update-cask` job in `release.yml` bumps the cask's
 `version` + `sha256` to the new `.dmg` and commits it to `main` on every release.

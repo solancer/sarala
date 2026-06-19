@@ -27,13 +27,13 @@ The editing surface *is* the preview. Every paragraph, heading, list, quote, tab
 
 ```bash
 brew tap solancer/sarala https://github.com/solancer/sarala
-brew install --cask --no-quarantine sarala
+brew install --cask sarala
 ```
 
-> **Why `--no-quarantine`?** Sarala's universal build is ad-hoc signed (so it runs
-> natively on both Apple Silicon and Intel) but isn't Apple-notarized. The flag tells
-> Homebrew not to set the quarantine attribute, so Gatekeeper won't block the first
-> launch. Upgrade later with `brew upgrade --cask sarala`.
+> Sarala's universal build is ad-hoc signed (so it runs natively on both Apple Silicon
+> and Intel) but isn't Apple-notarized. The cask clears the quarantine attribute on
+> install so Gatekeeper won't block the first launch — no extra flags needed. Upgrade
+> later with `brew upgrade --cask sarala`.
 
 **Other platforms** — grab an installer from the
 [latest release](https://github.com/solancer/sarala/releases/latest): `.dmg` (macOS),

@@ -9,12 +9,18 @@ cask "sarala" do
 
   depends_on macos: :catalina
 
-  # Sarala's universal binary is ad-hoc signed (so it runs on Apple Silicon) but
-  # is NOT Apple-notarized. Install with `--no-quarantine` so Gatekeeper doesn't
-  # block the first launch:
-  #   brew install --cask --no-quarantine sarala
   # `version`/`sha256` above are bumped automatically by .github/workflows/release.yml.
   app "Sarala.app"
+
+  # Sarala's universal binary is ad-hoc signed (so it runs on Apple Silicon) but is
+  # NOT Apple-notarized. Strip the quarantine attribute Homebrew sets so Gatekeeper
+  # doesn't block the first launch — this is why plain `brew install --cask sarala`
+  # works with no extra flags. (The official homebrew/cask repo forbids this, which
+  # is fine: this cask is served from a self-hosted tap, not submitted there.)
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Sarala.app"]
+  end
 
   zap trash: [
     "~/Library/Application Support/com.srinivasgowda.sarala",
