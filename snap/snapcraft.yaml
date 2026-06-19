@@ -64,7 +64,9 @@ parts:
 
       # Build the .deb only — it's the cleanest way to get the binary + .desktop +
       # icons laid out the way snapcraft wants, which we then unpack into the snap.
-      pnpm tauri build --bundles deb
+      # Disable updater artifacts: the Snap Store handles updates, so we neither
+      # produce nor sign them here (and thus need no TAURI_SIGNING_PRIVATE_KEY).
+      pnpm tauri build --bundles deb --config '{"bundle":{"createUpdaterArtifacts":false}}'
       dpkg-deb -x src-tauri/target/release/bundle/deb/*.deb "$CRAFT_PART_INSTALL/"
 
       # Tauri names the Linux artifacts after `productName`, whose casing can drift.
