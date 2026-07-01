@@ -61,6 +61,9 @@ parts:
       - libssl-dev
       - libayatana-appindicator3-dev
       - librsvg2-dev
+      # rfd's xdg-portal backend pulls wayland-backend with the client_system
+      # feature, which links libwayland-client at build time (see src-tauri/Cargo.toml).
+      - libwayland-dev
       - dpkg
     stage-packages:
       - libwebkit2gtk-4.1-0
