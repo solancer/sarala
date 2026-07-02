@@ -57,9 +57,11 @@ export interface ImageRef {
 export function findImages(text: string): ImageRef[] {
   const out: ImageRef[] = [];
   let m: RegExpExecArray | null;
-  const md = /!\[([^\]\n]*)\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g;
+  // Destination is either <…> (may contain spaces) or a bare run of non-space
+  // characters, optionally followed by a "title".
+  const md = /!\[([^\]\n]*)\]\(\s*(?:<([^>\n]*)>|([^)\s]+))(?:\s+"[^"]*")?\s*\)/g;
   while ((m = md.exec(text))) {
-    out.push({ start: m.index, end: m.index + m[0].length, alt: m[1], src: m[2], kind: "md" });
+    out.push({ start: m.index, end: m.index + m[0].length, alt: m[1], src: m[2] ?? m[3], kind: "md" });
   }
   const html = /<img\s[^>]*?\/?>/gi;
   while ((m = html.exec(text))) {

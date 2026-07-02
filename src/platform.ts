@@ -8,6 +8,12 @@ export interface FileNode {
 export const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+// macOS keeps its native global menu bar; every other platform (and the browser
+// dev build) uses the in-app menubar, so this gates which menu the UI renders.
+export const isMac =
+  typeof navigator !== "undefined" &&
+  /Mac/i.test(navigator.userAgent || (navigator as { platform?: string }).platform || "");
+
 async function tauriCore() {
   return await import("@tauri-apps/api/core");
 }
@@ -275,6 +281,12 @@ export async function hasPandoc(): Promise<boolean> {
   return await invoke<boolean>("has_pandoc");
 }
 
+/** Download-on-demand: fetch pandoc into the app-data dir. Throws on failure. */
+export async function downloadPandoc(): Promise<void> {
+  const { invoke } = await tauriCore();
+  await invoke("download_pandoc");
+}
+
 export async function pandocImport(path: string): Promise<string> {
   const { invoke } = await tauriCore();
   return await invoke<string>("pandoc_import", { path });
@@ -309,6 +321,18 @@ export async function setWindowAlwaysOnTop(onTop: boolean): Promise<void> {
   await getCurrentWindow().setAlwaysOnTop(onTop);
 }
 
+export async function minimizeWindow(): Promise<void> {
+  if (!isTauri) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().minimize();
+}
+
+export async function toggleMaximizeWindow(): Promise<void> {
+  if (!isTauri) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().toggleMaximize();
+}
+
 export async function toggleFullscreen(): Promise<void> {
   if (!isTauri) {
     if (document.fullscreenElement) await document.exitFullscreen();
@@ -320,16 +344,17 @@ export async function toggleFullscreen(): Promise<void> {
   await win.setFullscreen(!(await win.isFullscreen()));
 }
 
-/** Sync a native check/radio menu item with frontend state. No-op in browser. */
+/** Sync a native check/radio menu item with frontend state. Only macOS has a
+ *  native menu now (elsewhere the in-app MenuBar reads state reactively). */
 export async function setMenuChecked(id: string, checked: boolean): Promise<void> {
-  if (!isTauri) return;
+  if (!isTauri || !isMac) return;
   const { invoke } = await tauriCore();
   await invoke("set_menu_checked", { id, checked }).catch(() => {});
 }
 
-/** Enable/disable a native menu item. No-op in browser. */
+/** Enable/disable a native menu item. Only macOS has a native menu. */
 export async function setMenuEnabled(id: string, enabled: boolean): Promise<void> {
-  if (!isTauri) return;
+  if (!isTauri || !isMac) return;
   const { invoke } = await tauriCore();
   await invoke("set_menu_enabled", { id, enabled }).catch(() => {});
 }

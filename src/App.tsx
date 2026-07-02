@@ -10,8 +10,10 @@ import ImageContextMenu from "./components/ImageContextMenu";
 import PaletteSwitcher from "./components/PaletteSwitcher";
 import AboutModal from "./components/AboutModal";
 import SettingsModal from "./components/SettingsModal";
+import PandocDownloadModal from "./components/PandocDownloadModal";
 import ExportHtmlDialog from "./components/ExportHtmlDialog";
 import ConflictBanner from "./components/ConflictBanner";
+import MenuBar from "./components/MenuBar";
 import { initSettings } from "./settings";
 import {
   doc, theme, sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
@@ -23,12 +25,14 @@ import {
   finalNewline, autosaveInterval, setExternalChange,
 } from "./store";
 import {
-  isTauri, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS,
+  isTauri, isMac, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS,
   onExternalChange,
 } from "./platform";
 import {
   executeCommand, openFile, openFolder, insertImageFromPath,
 } from "./commands";
+import { BLOCK_TARGETED_IDS } from "./menudata";
+import { makeMenuKeyHandler } from "./shortcuts";
 import { startAutosave, findRecoverable, restoreSession, shadowBaseName } from "./autosave";
 
 export default function App() {
@@ -62,7 +66,21 @@ export default function App() {
 
   onMount(() => {
     void initSettings();
+    // Keyboard accelerators for the in-app menu (Linux/Windows/browser). macOS
+    // gets them from its native menu, so it's excluded to avoid double-firing.
+    if (!isMac) {
+      const onMenuKey = makeMenuKeyHandler();
+      window.addEventListener("keydown", onMenuKey);
+      onCleanup(() => window.removeEventListener("keydown", onMenuKey));
+    }
     if (isTauri) {
+      // Suppress the webview's native right-click menu (Inspect Element, Reload,
+      // …). The app draws its own context menus (e.g. images), which run on the
+      // target element before this document-level handler, so they still open.
+      const onCtxMenu = (e: MouseEvent) => e.preventDefault();
+      document.addEventListener("contextmenu", onCtxMenu);
+      onCleanup(() => document.removeEventListener("contextmenu", onCtxMenu));
+
       let unlisten: (() => void) | undefined;
       import("@tauri-apps/api/event").then(async ({ listen }) => {
         unlisten = await listen<string>("menu", (e) => executeCommand(e.payload));
@@ -118,7 +136,9 @@ export default function App() {
       startAutosave();
 
       onCleanup(() => { unlisten?.(); undrop?.(); unclose?.(); unwatch?.(); });
-    } else {
+    } else if (isMac) {
+      // Browser dev on macOS has neither a native menu nor the in-app menubar,
+      // so keep the minimal chord fallback there.
       window.addEventListener("keydown", onKey);
       onCleanup(() => window.removeEventListener("keydown", onKey));
     }
@@ -151,19 +171,8 @@ export default function App() {
 
   // Selection-dependent enabling: block-targeted items are disabled until
   // some block has held the caret (then targetBlockIndex keeps them valid).
-  const BLOCK_TARGETED_IDS = [
-    "format.strong", "format.emphasis", "format.underline", "format.code",
-    "format.strike", "format.comment", "format.inline_math", "format.hyperlink",
-    "format.link", "format.image.insert", "format.clear",
-    "paragraph.heading.0", "paragraph.heading.1", "paragraph.heading.2",
-    "paragraph.heading.3", "paragraph.heading.4", "paragraph.heading.5",
-    "paragraph.heading.6", "paragraph.heading_up", "paragraph.heading_down",
-    "paragraph.table", "paragraph.math_block", "paragraph.code_fences",
-    "paragraph.quote", "paragraph.ordered_list", "paragraph.unordered_list",
-    "paragraph.task_list", "paragraph.task_status", "paragraph.indentation",
-    "paragraph.insert_before", "paragraph.insert_after", "paragraph.footnote",
-    "edit.move_row_up", "edit.move_row_down", "edit.delete_range", "edit.selection",
-  ];
+  // The in-app menubar reads BLOCK_TARGETED_IDS directly; this effect only
+  // mirrors the state to the native macOS menu (a no-op elsewhere).
   let lastBlockEnabled: boolean | null = null;
   createEffect(() => {
     void doc.activeIndex;
@@ -222,14 +231,19 @@ export default function App() {
     <div
       class="app"
       data-theme={theme()}
-      classList={{ "focus-mode": focusMode(), "tables-full": tableFullWidth(), "is-tauri": isTauri }}
+      classList={{ "focus-mode": focusMode(), "tables-full": tableFullWidth(), "is-tauri": isTauri, "is-mac": isMac }}
       style={{ "--zoom": `${zoom()}%` }}
     >
+      {/* In-app menubar strip, replacing the OS menu bar (not on macOS). */}
+      <Show when={!isMac}>
+        <MenuBar />
+      </Show>
       {/* Full-width top bar: filename + status dot left, Live/Source right. */}
       <header class="topbar" data-tauri-drag-region>
         {/* Non-draggable gap over the native macOS traffic lights — a drag
-            region here would swallow their clicks (close/minimize/zoom). */}
-        {isTauri && <span class="topbar-traffic" aria-hidden="true" />}
+            region here would swallow their clicks (close/minimize/zoom). Only
+            macOS has traffic lights; other platforms keep the bar left-aligned. */}
+        {isTauri && isMac && <span class="topbar-traffic" aria-hidden="true" />}
         <button
           class="topbar-toggle"
           title="Toggle sidebar (Shift+Cmd/Ctrl+L)"
@@ -272,6 +286,7 @@ export default function App() {
       <ImageContextMenu />
       <AboutModal />
       <SettingsModal />
+      <PandocDownloadModal />
       <ExportHtmlDialog />
     </div>
   );

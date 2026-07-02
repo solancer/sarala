@@ -470,18 +470,50 @@ fn copy_file_to(src: String, dest_dir: String) -> Result<String, String> {
     Ok(target.to_string_lossy().to_string())
 }
 
-#[tauri::command]
-fn has_pandoc() -> bool {
-    Command::new("pandoc")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+fn pandoc_bin_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "pandoc.exe"
+    } else {
+        "pandoc"
+    }
+}
+
+/// Path to the app-managed (download-on-demand) pandoc binary.
+fn managed_pandoc_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("bin");
+    Ok(dir.join(pandoc_bin_name()))
+}
+
+/// A usable pandoc: one on PATH if present, else the downloaded copy. `None`
+/// means neither runs. Both candidates are proven with a `--version` call.
+fn resolve_pandoc(app: &AppHandle) -> Option<PathBuf> {
+    let works = |p: &Path| {
+        Command::new(p)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    };
+    if works(Path::new("pandoc")) {
+        return Some(PathBuf::from("pandoc"));
+    }
+    if let Ok(p) = managed_pandoc_path(app) {
+        if p.exists() && works(&p) {
+            return Some(p);
+        }
+    }
+    None
 }
 
 #[tauri::command]
-fn pandoc_import(path: String) -> Result<String, String> {
-    let out = Command::new("pandoc")
+fn has_pandoc(app: AppHandle) -> bool {
+    resolve_pandoc(&app).is_some()
+}
+
+#[tauri::command]
+fn pandoc_import(app: AppHandle, path: String) -> Result<String, String> {
+    let pandoc = resolve_pandoc(&app).ok_or("Pandoc is not available")?;
+    let out = Command::new(&pandoc)
         .arg(&path)
         .args(["-t", "gfm", "--wrap=none"])
         .output()
@@ -494,14 +526,16 @@ fn pandoc_import(path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn pandoc_export(
+    app: AppHandle,
     markdown: String,
     output: String,
     format: String,
     flags: Vec<String>,
 ) -> Result<(), String> {
+    let pandoc = resolve_pandoc(&app).ok_or("Pandoc is not available")?;
     let tmp = std::env::temp_dir().join("sarala-export.md");
     fs::write(&tmp, &markdown).map_err(|e| e.to_string())?;
-    let out = Command::new("pandoc")
+    let out = Command::new(&pandoc)
         .arg(&tmp)
         .args(["-f", "gfm", "-t", &format, "-o", &output])
         .args(&flags)
@@ -512,6 +546,205 @@ fn pandoc_export(
         return Err(String::from_utf8_lossy(&out.stderr).into_owned());
     }
     Ok(())
+}
+
+/// The pandoc release-asset name fragment for this platform, and whether it's a
+/// gzip tarball (Linux) versus a zip (macOS/Windows).
+fn pandoc_asset() -> Result<(&'static str, bool), String> {
+    Ok(match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("linux", "x86_64") => ("linux-amd64.tar.gz", true),
+        ("linux", "aarch64") => ("linux-arm64.tar.gz", true),
+        ("macos", "x86_64") => ("x86_64-macOS.zip", false),
+        ("macos", "aarch64") => ("arm64-macOS.zip", false),
+        ("windows", "x86_64") => ("windows-x86_64.zip", false),
+        (os, arch) => return Err(format!("No pandoc download available for {os}/{arch}")),
+    })
+}
+
+/// Recursively find a file named `name` beneath `dir`.
+fn find_file(dir: &Path, name: &str) -> Option<PathBuf> {
+    for entry in fs::read_dir(dir).ok()?.flatten() {
+        let p = entry.path();
+        if p.is_dir() {
+            if let Some(found) = find_file(&p, name) {
+                return Some(found);
+            }
+        } else if p.file_name().and_then(|n| n.to_str()) == Some(name) {
+            return Some(p);
+        }
+    }
+    None
+}
+
+/// Emit a `pandoc-download` progress event to the frontend modal. `phase` is one
+/// of query/download/extract/install/verify/done/error; `percent` is only set for
+/// the download phase (real bytes-received progress).
+fn emit_pandoc(app: &AppHandle, phase: &str, percent: Option<u8>, message: Option<&str>) {
+    let _ = app.emit(
+        "pandoc-download",
+        serde_json::json!({ "phase": phase, "percent": percent, "message": message }),
+    );
+}
+
+/// Download-on-demand: fetch the latest pandoc release for this platform into the
+/// app-data dir. Uses the system `curl` (fetch) and `tar` (extract) so no HTTP or
+/// archive crates are pulled in — the same shell-out approach as the rest of the
+/// app. No-op when a working pandoc is already resolvable. The extracted binary
+/// is proven with `--version` before we report success.
+///
+/// Runs the blocking work on a background thread (via `spawn_blocking`) so the
+/// several-second download never blocks the UI event loop — a synchronous command
+/// here would freeze the webview and trip the OS "app not responding" dialog.
+/// Progress is streamed to the frontend as `pandoc-download` events.
+#[tauri::command]
+async fn download_pandoc(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || download_pandoc_blocking(&app))
+        .await
+        .map_err(|e| format!("Download task failed: {e}"))?
+}
+
+fn download_pandoc_blocking(app: &AppHandle) -> Result<(), String> {
+    let run = || -> Result<(), String> {
+        if resolve_pandoc(app).is_some() {
+            emit_pandoc(app, "done", Some(100), None);
+            return Ok(());
+        }
+        let (fragment, is_targz) = pandoc_asset()?;
+
+        // 1. Resolve the asset's download URL (and byte size) from the latest release.
+        emit_pandoc(app, "query", None, None);
+        let api = Command::new("curl")
+            .args([
+                "-sSL",
+                "-H",
+                "User-Agent: sarala",
+                "-H",
+                "Accept: application/vnd.github+json",
+                "https://api.github.com/repos/jgm/pandoc/releases/latest",
+            ])
+            .output()
+            .map_err(|e| format!("Could not run curl: {e}"))?;
+        if !api.status.success() {
+            return Err(format!(
+                "Could not query pandoc releases: {}",
+                String::from_utf8_lossy(&api.stderr)
+            ));
+        }
+        let json: serde_json::Value =
+            serde_json::from_slice(&api.stdout).map_err(|e| format!("Bad release data: {e}"))?;
+        let asset = json["assets"]
+            .as_array()
+            .and_then(|assets| {
+                assets.iter().find(|a| {
+                    a["name"]
+                        .as_str()
+                        .map(|n| n.contains(fragment))
+                        .unwrap_or(false)
+                })
+            })
+            .ok_or_else(|| format!("No pandoc asset matching {fragment}"))?;
+        let url = asset["browser_download_url"]
+            .as_str()
+            .ok_or("Pandoc asset has no download URL")?
+            .to_string();
+        let total = asset["size"].as_u64().unwrap_or(0);
+
+        // 2. Fresh working dir under app-data.
+        let bin = managed_pandoc_path(app)?;
+        let dir = bin.parent().ok_or("bad pandoc path")?.to_path_buf();
+        let work = dir.join("dl");
+        let _ = fs::remove_dir_all(&work);
+        fs::create_dir_all(&work).map_err(|e| e.to_string())?;
+        let archive = work.join(if is_targz { "pandoc.tgz" } else { "pandoc.zip" });
+
+        // 3. Download, polling the on-disk size against the known total for a real
+        //    progress bar (curl's own progress meter isn't easily parseable).
+        emit_pandoc(app, "download", Some(0), None);
+        let mut child = Command::new("curl")
+            .args(["-fSL", "-H", "User-Agent: sarala", "-o"])
+            .arg(&archive)
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Could not run curl: {e}"))?;
+        loop {
+            match child.try_wait().map_err(|e| e.to_string())? {
+                Some(status) => {
+                    if !status.success() {
+                        return Err("Pandoc download failed".into());
+                    }
+                    break;
+                }
+                None => {
+                    if total > 0 {
+                        if let Ok(m) = fs::metadata(&archive) {
+                            let pct = ((m.len() as f64 / total as f64) * 100.0).min(99.0) as u8;
+                            emit_pandoc(app, "download", Some(pct), None);
+                        }
+                    }
+                    std::thread::sleep(Duration::from_millis(200));
+                }
+            }
+        }
+        emit_pandoc(app, "download", Some(100), None);
+
+        // 4. Extract (gnu tar handles .tar.gz on Linux; bsdtar reads .zip on
+        //    macOS/Windows).
+        emit_pandoc(app, "extract", None, None);
+        let extract = work.join("x");
+        fs::create_dir_all(&extract).map_err(|e| e.to_string())?;
+        let ex = Command::new("tar")
+            .arg(if is_targz { "-xzf" } else { "-xf" })
+            .arg(&archive)
+            .arg("-C")
+            .arg(&extract)
+            .output()
+            .map_err(|e| format!("Could not run tar: {e}"))?;
+        if !ex.status.success() {
+            return Err(format!(
+                "Could not extract pandoc: {}",
+                String::from_utf8_lossy(&ex.stderr)
+            ));
+        }
+
+        // 5. Install the binary and mark it executable.
+        emit_pandoc(app, "install", None, None);
+        let found = find_file(&extract, pandoc_bin_name())
+            .ok_or("pandoc binary not found in the downloaded archive")?;
+        let _ = fs::remove_file(&bin);
+        fs::copy(&found, &bin).map_err(|e| format!("Could not install pandoc: {e}"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perm = fs::metadata(&bin).map_err(|e| e.to_string())?.permissions();
+            perm.set_mode(0o755);
+            fs::set_permissions(&bin, perm).map_err(|e| e.to_string())?;
+        }
+        let _ = fs::remove_dir_all(&work);
+
+        // 6. Prove it runs before claiming success.
+        emit_pandoc(app, "verify", None, None);
+        if !Command::new(&bin)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            let _ = fs::remove_file(&bin);
+            return Err("The downloaded pandoc did not run".into());
+        }
+        Ok(())
+    };
+
+    match run() {
+        Ok(()) => {
+            emit_pandoc(app, "done", Some(100), None);
+            Ok(())
+        }
+        Err(e) => {
+            emit_pandoc(app, "error", None, Some(&e));
+            Err(e)
+        }
+    }
 }
 
 /// A Chrome/Chromium/Edge binary usable for headless PDF printing.
@@ -551,7 +784,17 @@ fn find_chromium() -> Option<String> {
 #[tauri::command]
 fn export_pdf(html: String, output: String) -> Result<(), String> {
     let chrome = find_chromium().ok_or("no_chromium")?;
-    let tmp = std::env::temp_dir().join("sarala-print.html");
+    // Write the temp HTML next to the chosen output file rather than the system
+    // temp dir. A snap-confined Chromium (Ubuntu's default) has a *private* /tmp,
+    // so it can't read a file:// URL under the host /tmp — it would silently
+    // render its file-not-found page. The output directory is a location the
+    // user just picked, so Chromium can read a sibling there. A leading dot would
+    // be hidden from snap's home interface, so the name is deliberately plain.
+    let out_path = Path::new(&output);
+    let dir = out_path.parent().filter(|p| !p.as_os_str().is_empty());
+    let tmp = dir
+        .unwrap_or_else(|| Path::new("."))
+        .join(format!("sarala-print-{}.html", std::process::id()));
     fs::write(&tmp, &html).map_err(|e| e.to_string())?;
     let url = format!("file://{}", tmp.display());
     let out = Command::new(&chrome)
@@ -696,13 +939,22 @@ fn list_shadows(app: AppHandle) -> Result<Vec<serde_json::Value>, String> {
 /// Every installed font family name (sorted, de-duplicated). Powers the font
 /// picker in Settings — the webview can't enumerate system fonts itself
 /// (WKWebView has no Local Font Access API), so it asks Rust.
-#[tauri::command]
-fn list_system_fonts() -> Vec<String> {
+fn enumerate_system_fonts() -> Vec<String> {
     use font_kit::source::SystemSource;
     let mut names = SystemSource::new().all_families().unwrap_or_default();
     names.sort_by_key(|s| s.to_lowercase());
     names.dedup();
     names
+}
+
+/// Async so the fontconfig enumeration (slow on the first call) runs on a blocking
+/// thread instead of the UI thread — otherwise the Fonts window can't paint until
+/// the scan finishes, making it look like the modal takes seconds to open.
+#[tauri::command]
+async fn list_system_fonts() -> Vec<String> {
+    tauri::async_runtime::spawn_blocking(enumerate_system_fonts)
+        .await
+        .unwrap_or_default()
 }
 
 #[derive(Serialize)]
@@ -781,8 +1033,16 @@ fn main() {
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
 
+            // Only macOS uses the native global menu bar. Linux/Windows draw an
+            // in-app menubar (src/components/MenuBar.tsx) instead, so the menu is
+            // built (keeping menu.rs fully exercised) but installed only on macOS.
+            // The menu::set_menu_*/update_*_menu commands stay registered and
+            // simply no-op where no menu is set.
             let menu = menu::build_menu(app.handle())?;
+            #[cfg(target_os = "macos")]
             app.set_menu(menu)?;
+            #[cfg(not(target_os = "macos"))]
+            drop(menu);
 
             // File watcher: one debouncer for the whole app. Its callback and the
             // commands share `hashes` (an Arc), so the callback can tell our own
@@ -862,6 +1122,7 @@ fn main() {
             reveal_in_dir,
             copy_file_to,
             has_pandoc,
+            download_pandoc,
             pandoc_import,
             pandoc_export,
             export_pdf,
@@ -883,7 +1144,7 @@ mod tests {
 
     #[test]
     fn system_fonts_enumerate_and_embed() {
-        let families = list_system_fonts();
+        let families = enumerate_system_fonts();
         assert!(
             !families.is_empty(),
             "expected some installed font families"

@@ -451,7 +451,15 @@ export function renderMarkdown(md: string, blockKey?: string): string {
   imgStash = [];
   shikiStash = [];
   mathErrored = false;
-  const raw = transformAlerts(marked.parse(md, { async: false }) as string);
+  // marked (CommonMark) rejects image destinations that contain spaces, so a
+  // dropped path like `.../Screenshot from 2026.png` renders as literal text.
+  // Wrap bare, unquoted image destinations containing whitespace in <> so they
+  // parse. Skipped for fenced code blocks so markdown examples aren't rewritten.
+  const isCodeFence = trimmed.startsWith("```") || trimmed.startsWith("~~~");
+  const src = isCodeFence
+    ? md
+    : md.replace(/(!\[[^\]\n]*\]\()([^<>()"\n]*\s[^<>()"\n]*)(\))/g, "$1<$2>$3");
+  const raw = transformAlerts(marked.parse(src, { async: false }) as string);
   let html = addHeadingIds(DOMPurify.sanitize(raw, SANITIZE_OPTS));
   // Re-inject the KaTeX markup the sanitizer left as empty placeholders, swap
   // each mermaid placeholder's numeric key for its real source (DOMPurify

@@ -1,6 +1,7 @@
 import { Show } from "solid-js";
 import { stats, doc, encodingLossy } from "../store";
 import { togglePalette, isPaletteOpen } from "./PaletteSwitcher";
+import { openSettings, isSettingsOpen } from "./SettingsModal";
 import { updatePhase, type UpdatePhase } from "../updater";
 
 function updateLabel(p: UpdatePhase): string {
@@ -41,6 +42,24 @@ export default function StatusBar() {
         <span class="update-status">{updateLabel(updatePhase())}</span>
       </Show>
       <span class="spacer" />
+      <button
+        class="palette-toggle"
+        classList={{ on: isSettingsOpen() }}
+        title="Fonts"
+        onClick={openSettings}
+      >
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+          <text
+            x="8"
+            y="12.5"
+            text-anchor="middle"
+            font-size="13"
+            font-weight="700"
+            font-family="Georgia, 'Times New Roman', serif"
+            fill="currentColor"
+          >A</text>
+        </svg>
+      </button>
       <button
         class="palette-toggle"
         classList={{ on: isPaletteOpen() }}

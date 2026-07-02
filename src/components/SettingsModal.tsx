@@ -5,13 +5,25 @@ import { setSetting } from "../settings";
 
 const [visible, setVisible] = createSignal(false);
 const [families, setFamilies] = createSignal<string[]>([]);
+const [loading, setLoading] = createSignal(false);
 let loaded = false;
+
+/** Whether the Fonts window is open (for the status-bar toggle's active state). */
+export const isSettingsOpen = visible;
 
 export function openSettings() {
   setVisible(true);
   if (!loaded) {
     loaded = true;
-    void listSystemFonts().then(setFamilies);
+    setLoading(true);
+    // Hold the loader for a perceptible minimum even when the (cached) font scan
+    // returns instantly, and only reveal the list once both resolve — otherwise a
+    // populated list would replace the spinner before the eye registers it.
+    const minVisible = new Promise<void>((r) => setTimeout(r, 500));
+    void Promise.all([listSystemFonts(), minVisible]).then(([fonts]) => {
+      setFamilies(fonts);
+      setLoading(false);
+    });
   }
 }
 
@@ -88,9 +100,19 @@ export default function SettingsModal() {
             <Show
               when={filtered().length}
               fallback={
-                <div class="settings-empty">
-                  {families().length ? "No matching fonts" : "No system fonts available"}
-                </div>
+                <Show
+                  when={loading()}
+                  fallback={
+                    <div class="settings-empty">
+                      {families().length ? "No matching fonts" : "No system fonts available"}
+                    </div>
+                  }
+                >
+                  <div class="settings-loading">
+                    <span class="settings-spinner" aria-hidden="true" />
+                    Loading fonts…
+                  </div>
+                </Show>
               }
             >
               <For each={filtered()}>

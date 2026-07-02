@@ -23,10 +23,10 @@ import {
   readFileEncoded, reopenWithEncoding, writeTextFile, type EncodedDoc,
   watchFile, clearShadow, listDirectory, openExternal,
   confirmDialog, alertDialog, renameFile, deleteFile, openNewWindow,
-  hasPandoc, pandocImport, pandocExport, exportPdf, runCommand, revealInDir,
+  pandocImport, pandocExport, exportPdf, runCommand, revealInDir,
   clipboardWriteText, clipboardReadText,
   pickImageFile, copyAsset,
-  setWindowAlwaysOnTop, toggleFullscreen,
+  setWindowAlwaysOnTop, toggleFullscreen, minimizeWindow, toggleMaximizeWindow,
 } from "./platform";
 import {
   renderMarkdown, setPreserveBreaksOption,
@@ -59,6 +59,7 @@ import { askHtmlOutline } from "./components/ExportHtmlDialog";
 import { openFind, findNext } from "./components/FindBar";
 import { openTableDialog } from "./components/TableDialog";
 import { openAbout } from "./components/AboutModal";
+import { ensurePandoc } from "./components/PandocDownloadModal";
 import { openSettings } from "./components/SettingsModal";
 import { checkForUpdates } from "./updater";
 import { skeletonTable, editTable, resizeTable, type TableEdit, type Align } from "./tabletools";
@@ -256,10 +257,7 @@ async function revertToSaved() {
 }
 
 async function importViaPandoc() {
-  if (!(await hasPandoc())) {
-    await alertDialog("Importing requires Pandoc. Install it from pandoc.org and try again.");
-    return;
-  }
+  if (!(await ensurePandoc())) return;
   if (!(await confirmDiscard())) return;
   const path = await pickImportFile();
   if (!path) return;
@@ -383,10 +381,7 @@ async function runExport(
   }
   const pf = PANDOC_FORMATS[format];
   if (!pf) return null;
-  if (!(await hasPandoc())) {
-    await alertDialog("This export format requires Pandoc. Install it from pandoc.org and try again.");
-    return null;
-  }
+  if (!(await ensurePandoc())) return null;
   try {
     await pandocExport(fullText(), out, pf, [...pandocFlagsFor(pf), ...pandocFlags]);
     return out;
@@ -810,7 +805,9 @@ async function imageInsertRef(absPath: string): Promise<string> {
 /** Insert an image reference, honoring the copy-to-folder rules. */
 export async function insertImageFromPath(absPath: string) {
   const ref = await imageInsertRef(absPath);
-  const md = `![](${ref})`;
+  // A destination with spaces must be wrapped in <> to be valid markdown.
+  const dest = /\s/.test(ref) ? `<${ref}>` : ref;
+  const md = `![](${dest})`;
   if (blockApi) blockApi.insertAtCaret(md, md.length - 1);
   else insertBlock(md, md.length - 1);
 }
@@ -969,6 +966,10 @@ const registry: Record<string, Command> = {
     await setWindowAlwaysOnTop(v);
   },
   "view.fullscreen": () => toggleFullscreen(),
+
+  // Window (in-app menubar on Linux/Windows; macOS uses native Window menu)
+  "window.minimize": () => minimizeWindow(),
+  "window.maximize": () => toggleMaximizeWindow(),
 
   // Help
   "help.readme": () => openExternal(HELP_URL),
