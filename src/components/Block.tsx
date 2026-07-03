@@ -8,6 +8,7 @@ import { isTauri, openExternal } from "../platform";
 import {
   consumeCaretRequest, consumeSelectionRequest,
   spellcheckOn, smartPunctuation, renderEpoch, mermaidEpoch,
+  setLiveCaretOffset,
 } from "../store";
 import { renderMermaidIn } from "../mermaid";
 import { renderD2In } from "../d2";
@@ -61,6 +62,8 @@ export default function Block(props: Props) {
   const reveal = (caret: number) => {
     if (!el) return;
     lastRevealCaret = caret;
+    // Surface the caret for the status bar's Ln/Col (active block only).
+    if (props.active) setLiveCaretOffset(caret);
     applyMarkerVisibility(el, props.text, caret);
   };
 
@@ -255,7 +258,9 @@ export default function Block(props: Props) {
       if (k === "b") return e.preventDefault(), executeCommand("format.strong");
       if (k === "i") return e.preventDefault(), executeCommand("format.emphasis");
       if (k === "e") return e.preventDefault(), executeCommand("format.code");
-      if (k === "k") return e.preventDefault(), executeCommand("format.hyperlink");
+      // Shift+Cmd/Ctrl+K inserts a hyperlink; bare Cmd/Ctrl+K is left for the
+      // command palette (handled globally in App), so don't preventDefault it.
+      if (k === "k" && e.shiftKey) return e.preventDefault(), executeCommand("format.hyperlink");
       if (/^[0-6]$/.test(k)) return e.preventDefault(), executeCommand(`paragraph.heading.${k}`);
       return;
     }

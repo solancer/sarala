@@ -1,7 +1,7 @@
 import { For, Show, createSignal } from "solid-js";
 import type { FileNode } from "../platform";
 import {
-  outline, doc, folderPath,
+  outline, doc, folderPath, sidebarOpen,
   sidebarWidth, setSidebarWidth, clampSidebar,
 } from "../store";
 import { setSetting } from "../settings";
@@ -41,6 +41,23 @@ const FolderIcon = () => (
   </svg>
 );
 
+// Disclosure chevron for expandable rows — rotates 90° when open.
+const Chevron = (props: { open: boolean }) => (
+  <svg
+    class="tree-chevron"
+    classList={{ open: props.open }}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2.4"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d="m9 6 6 6-6 6" />
+  </svg>
+);
+
 const TEXT_EXT = /\.(md|markdown|mdx|txt|text|rst|adoc|org)$/i;
 
 /** Leading file glyph: a lined-document for text/Markdown, else a plain document. */
@@ -71,7 +88,7 @@ function Tree(props: { nodes: FileNode[]; depth: number; onOpenFile: (p: string)
               style={{ "padding-left": `${10 + props.depth * 14}px` }}
               onClick={() => setOpen(!open())}
             >
-              <span class="twist">{open() ? "▾" : "▸"}</span>
+              <Chevron open={open()} />
               <FolderIcon /> {node.name}
             </button>
             <Show when={open()}>
@@ -103,13 +120,21 @@ export default function Sidebar(props: Props) {
   };
 
   return (
-    <aside class="sidebar" style={{ width: `${sidebarWidth()}px` }}>
+    <aside
+      class="sidebar"
+      classList={{ collapsed: !sidebarOpen() }}
+      aria-hidden={!sidebarOpen()}
+      style={{
+        width: `${sidebarWidth()}px`,
+        "margin-left": sidebarOpen() ? "0px" : `-${sidebarWidth()}px`,
+      }}
+    >
       <div class="sidebar-resize" title="Drag to resize" onPointerDown={startResize} />
 
       <div class="sidebar-body">
         <Show when={folderPath()}>
           <button class="side-section-head toggle" onClick={() => setSearchOpen(!searchOpen())}>
-            <span class="twist">{searchOpen() ? "▾" : "▸"}</span> Search
+            <Chevron open={searchOpen()} /> Search
           </button>
           <Show when={searchOpen()}>
             <SearchPanel onOpenFile={props.onOpenFile} />

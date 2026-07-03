@@ -727,7 +727,7 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             app,
             "format.hyperlink",
             "Hyperlink",
-            Some("CmdOrCtrl+K"),
+            Some("CmdOrCtrl+Shift+K"),
         )?)
         .item(&link_actions)
         .item(&image)

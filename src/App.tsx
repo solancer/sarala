@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
 import SourceView from "./components/SourceView";
 import QuickOpen from "./components/QuickOpen";
+import CommandPalette from "./components/CommandPalette";
 import FindBar from "./components/FindBar";
 import TableDialog from "./components/TableDialog";
 import ImageContextMenu from "./components/ImageContextMenu";
@@ -33,7 +34,7 @@ import {
 } from "./commands";
 import { BLOCK_TARGETED_IDS } from "./menudata";
 import { makeMenuKeyHandler } from "./shortcuts";
-import { startAutosave, findRecoverable, restoreSession, shadowBaseName } from "./autosave";
+import { startAutosave, findRecoverable, restoreSession, shadowBaseName, discardShadows } from "./autosave";
 
 export default function App() {
   let editorEl: HTMLDivElement | undefined;
@@ -66,6 +67,16 @@ export default function App() {
 
   onMount(() => {
     void initSettings();
+    // Command palette (Cmd/Ctrl+K). Bound globally on every platform — it isn't
+    // a menu accelerator, so there's no native-menu double-fire to avoid.
+    const onPaletteKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        executeCommand("menu.command_palette");
+      }
+    };
+    window.addEventListener("keydown", onPaletteKey);
+    onCleanup(() => window.removeEventListener("keydown", onPaletteKey));
     // Keyboard accelerators for the in-app menu (Linux/Windows/browser). macOS
     // gets them from its native menu, so it's excluded to avoid double-firing.
     if (!isMac) {
@@ -121,7 +132,10 @@ export default function App() {
             const ok = await confirmDialog(
               `Unsaved changes from a previous session were found for ${shadowBaseName(newest.path)}${extra}. Restore them now?`,
             );
+            // Restore the newest and keep the rest for per-file recovery; on
+            // decline, discard every candidate so this never re-prompts.
             if (ok) await restoreSession(newest);
+            else await discardShadows(cands);
           }
         }
       });
@@ -245,30 +259,56 @@ export default function App() {
             macOS has traffic lights; other platforms keep the bar left-aligned. */}
         {isTauri && isMac && <span class="topbar-traffic" aria-hidden="true" />}
         <button
-          class="topbar-toggle"
+          class="topbar-toggle icon-btn"
           title="Toggle sidebar (Shift+Cmd/Ctrl+L)"
           onClick={() => setSidebarOpen(!sidebarOpen())}
-        >☰</button>
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" />
+          </svg>
+        </button>
         <span class="topbar-file">
           <span class="topbar-dot" classList={{ dirty: doc.dirty }} />
           {fileName()}
         </span>
         <span class="spacer" />
+        <button
+          class="topbar-search"
+          title="Command palette (Cmd/Ctrl+K)"
+          onClick={() => executeCommand("menu.command_palette")}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+          </svg>
+          <span class="topbar-search-label">Search commands…</span>
+          <span class="kbd">{isMac ? "⌘K" : "Ctrl K"}</span>
+        </button>
+        <button
+          class="topbar-toggle icon-btn"
+          classList={{ on: focusMode() }}
+          title="Focus mode"
+          onClick={() => executeCommand("view.focus_mode")}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
+          </svg>
+        </button>
         <div class="view-toggle">
           <button classList={{ on: !sourceMode() }} onClick={() => setSourceMode(false)}>Live</button>
           <button classList={{ on: sourceMode() }} onClick={() => setSourceMode(true)}>Source</button>
         </div>
       </header>
       <div class="body">
-        <Show when={sidebarOpen()}>
-          <Sidebar
-            tree={fileTree()}
-            folderName={folderName()}
-            onOpenFolder={openFolder}
-            onOpenFile={openFile}
-            onJump={jumpTo}
-          />
-        </Show>
+        {/* Always mounted so the collapse can animate (margin-left slide);
+            visibility is driven by sidebarOpen() inside Sidebar. */}
+        <Sidebar
+          tree={fileTree()}
+          folderName={folderName()}
+          onOpenFolder={openFolder}
+          onOpenFile={openFile}
+          onJump={jumpTo}
+        />
         <main class="main">
           <FindBar />
           <ConflictBanner />
@@ -282,6 +322,7 @@ export default function App() {
       </div>
       <PaletteSwitcher />
       <QuickOpen />
+      <CommandPalette />
       <TableDialog />
       <ImageContextMenu />
       <AboutModal />

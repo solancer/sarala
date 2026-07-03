@@ -223,18 +223,22 @@ export default function FindBar() {
     <Show when={visible()}>
       <div class="findbar">
         <div class="findbar-row">
-          <input
-            ref={inputEl}
-            placeholder="Find"
-            value={query()}
-            classList={{ invalid: invalid() }}
-            onInput={(e) => setQuery(e.currentTarget.value)}
-            onKeyDown={onKeyDown}
-            autocomplete="off"
-            autocorrect="off"
-            autocapitalize="off"
-            spellcheck={false}
-          />
+          <div class="findbar-search" classList={{ invalid: invalid() }}>
+            <svg class="findbar-search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              ref={inputEl}
+              placeholder="Find"
+              value={query()}
+              onInput={(e) => setQuery(e.currentTarget.value)}
+              onKeyDown={onKeyDown}
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck={false}
+            />
+          </div>
           <div class="findbar-toggles">
             <button class="find-toggle" classList={{ on: caseSensitive() }}
               title="Match case" onClick={() => setCaseSensitive(!caseSensitive())}>Aa</button>

@@ -22,6 +22,12 @@ export function keyForPath(path: string): string {
 
 const baseName = (p: string) => p.replace(/\\/g, "/").split("/").pop() || p;
 
+// Shadows store the editor's normalized buffer (LF joins + a trailing newline
+// from joinBlocks). A file saved with CRLF or a different final-newline policy
+// is byte-different but not *meaningfully* changed, so compare line-ending- and
+// trailing-newline-insensitively to avoid nagging about untouched files.
+const normalizeForCompare = (s: string) => s.replace(/\r\n?/g, "\n").replace(/\n+$/, "");
+
 // The shadow key we last wrote, so we can delete it the moment the doc is saved.
 let lastKey: string | null = null;
 
@@ -68,7 +74,7 @@ export async function findRecoverable(): Promise<ShadowSession[]> {
   for (const s of shadows) {
     try {
       const ed = await readFileEncoded(s.path);
-      if (ed.content !== s.content) out.push(s);
+      if (normalizeForCompare(ed.content) !== normalizeForCompare(s.content)) out.push(s);
       else await clearShadow(keyForPath(s.path));
     } catch {
       // File is gone — its unsaved content may still be wanted.
@@ -84,7 +90,13 @@ export async function findRecoverable(): Promise<ShadowSession[]> {
 export async function shadowFor(path: string, diskContent: string): Promise<ShadowSession | null> {
   const shadows = await listShadows();
   const s = shadows.find((x) => x.path === path);
-  return s && s.content !== diskContent ? s : null;
+  return s && normalizeForCompare(s.content) !== normalizeForCompare(diskContent) ? s : null;
+}
+
+/** Delete the given sessions' shadows — used when the user declines recovery so
+ *  the prompt doesn't reappear on every launch. */
+export async function discardShadows(sessions: ShadowSession[]): Promise<void> {
+  for (const s of sessions) await clearShadow(keyForPath(s.path));
 }
 
 /** Load a recovered session into the current window, marked dirty so the

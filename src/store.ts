@@ -59,6 +59,7 @@ export const [fileTree, setFileTree] = createSignal<FileNode[]>([]);
 export const [folderName, setFolderName] = createSignal<string | null>(null);
 export const [folderPath, setFolderPath] = createSignal<string | null>(null);
 export const [quickOpenVisible, setQuickOpenVisible] = createSignal(false);
+export const [commandPaletteVisible, setCommandPaletteVisible] = createSignal(false);
 
 // Chosen system fonts (null = theme default). Persisted in settings; applied to
 // the --font-prose / --font-mono CSS variables and embedded into exports.
@@ -117,6 +118,34 @@ export const outline = createMemo(() => extractOutline(state.blocks.map((b) => b
 // eslint-disable-next-line solid/reactivity -- the provider runs inside Block's render (a tracked scope)
 setTocProvider(() => outline());
 export const stats = createMemo(() => countWords(fullText()));
+/** Estimated reading time in whole minutes (200 wpm), never below 1. */
+export const readTime = createMemo(() => Math.max(1, Math.ceil(stats().words / 200)));
+
+// Caret position, surfaced as Ln/Col in the status bar. Live mode reports the
+// active block index + in-block offset (set from Block's caret tracking);
+// Source mode reports {line,col} directly from the textarea. joinBlocks glues
+// blocks with "\n\n", so each earlier block adds its own newlines + 2.
+export const [liveCaretOffset, setLiveCaretOffset] = createSignal(0);
+export const [sourceCaret, setSourceCaret] = createSignal({ line: 1, col: 1 });
+const countNewlines = (s: string) => {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) n++;
+  return n;
+};
+export const caretLineCol = createMemo(() => {
+  if (sourceMode()) return sourceCaret();
+  const i = state.activeIndex;
+  if (i < 0) return { line: 1, col: 1 };
+  let line = 1;
+  for (let k = 0; k < i; k++) line += countNewlines(state.blocks[k]?.text ?? "") + 2;
+  const bt = state.blocks[i]?.text ?? "";
+  const o = Math.min(liveCaretOffset(), bt.length);
+  const before = bt.slice(0, o);
+  line += countNewlines(before);
+  const lastNl = before.lastIndexOf("\n");
+  const col = (lastNl === -1 ? o : o - lastNl - 1) + 1;
+  return { line, col };
+});
 export const fileName = createMemo(() =>
   state.filePath ? state.filePath.replace(/\\/g, "/").split("/").pop()! : "Untitled.md"
 );

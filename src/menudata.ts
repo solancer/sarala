@@ -76,7 +76,7 @@ const enc = (label: string, text: string): MenuNode => ({
 });
 
 // Display names for the themes (matches menu.rs; mostly a capitalized id).
-const THEME_LABELS: Record<string, string> = {
+export const THEME_LABELS: Record<string, string> = {
   sarala: "Sarala", pro: "Pro", octagon: "Octagon", machine: "Machine",
   ristretto: "Ristretto", spectrum: "Spectrum", classic: "Classic",
   paper: "Paper", graphite: "Graphite", github: "GitHub", night: "Night",
@@ -334,7 +334,7 @@ export const MENUS: TopMenu[] = [
       { id: "format.comment", label: "Comment", accel: "Ctrl+Minus" },
       { id: "format.inline_math", label: "Inline Math", accel: "Ctrl+M" },
       { sep: true },
-      { id: "format.hyperlink", label: "Hyperlink", accel: "Ctrl+K" },
+      { id: "format.hyperlink", label: "Hyperlink", accel: "Shift+Ctrl+K" },
       {
         id: "format.link",
         label: "Hyperlink Actions",

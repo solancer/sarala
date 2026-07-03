@@ -3,7 +3,7 @@ import { theme, THEMES } from "../store";
 import { executeCommand } from "../commands";
 
 // A representative dot color per theme (a distinguishing hue).
-const DOTS: Record<string, string> = {
+export const DOTS: Record<string, string> = {
   sarala: "#e0566a",
   pro: "#ff6188",
   octagon: "#5b6ee1",
