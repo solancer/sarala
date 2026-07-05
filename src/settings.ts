@@ -4,7 +4,7 @@ import {
   setFinalNewline, setAutosaveInterval,
   setCopyImageToAssets, setCopyImagesToFolder, setTableFullWidth, bumpRenderEpoch,
   setTheme, setZoom, clampZoom, THEMES, type ThemeId,
-  setSidebarWidth, clampSidebar,
+  setSidebarWidth, clampSidebar, setStatusBarVisible,
   setMathAltDelimitersSig, setMathFenceSig,
   setEmojiEnabledSig, setHighlightEnabledSig, setSubSupEnabledSig, setAutolinkEnabledSig,
   setProseFont, setMonoFont,
@@ -116,6 +116,7 @@ function hydrateStore() {
   if ((THEMES as readonly string[]).includes(savedTheme)) setTheme(savedTheme as ThemeId);
   setZoom(clampZoom(getSetting("zoom", 100)));
   setSidebarWidth(clampSidebar(getSetting("sidebarWidth", 240)));
+  setStatusBarVisible(getSetting("statusBarVisible", true));
   const altDelim = getSetting("mathAltDelimiters", false);
   setMathAltDelimitersSig(altDelim);
   setMathAltDelimiters(altDelim);

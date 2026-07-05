@@ -99,6 +99,13 @@ export async function discardShadows(sessions: ShadowSession[]): Promise<void> {
   for (const s of sessions) await clearShadow(keyForPath(s.path));
 }
 
+/** Drop the shadow for one path. Called on a *deliberate* close/discard so the
+ *  next launch doesn't offer to "recover" changes the user chose to drop; a
+ *  crash skips this path, leaving the shadow so recovery still works. */
+export async function discardShadowFor(path: string | null): Promise<void> {
+  if (path) await clearShadow(keyForPath(path));
+}
+
 /** Load a recovered session into the current window, marked dirty so the
  *  recovered content can be saved back over the file. */
 export async function restoreSession(s: ShadowSession): Promise<void> {

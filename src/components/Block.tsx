@@ -17,6 +17,7 @@ import { parseTable, cellRanges } from "../tabletools";
 import { findImages } from "../images";
 import { pasteToInsert } from "../richpaste";
 import { openImageMenu } from "./ImageContextMenu";
+import { openEditorMenu } from "./EditorContextMenu";
 import TableToolbar from "./TableToolbar";
 import CodeLangPicker from "./CodeLangPicker";
 import D2SizeControl from "./D2SizeControl";
@@ -381,13 +382,33 @@ export default function Block(props: Props) {
   const onRenderedContextMenu = (e: MouseEvent) => {
     const host = e.currentTarget as HTMLElement;
     const img = (e.target as HTMLElement).closest("img");
-    if (!img || !host.contains(img)) return;
-    const imgs = findImages(props.text);
-    const ordinal = [...host.querySelectorAll("img")].indexOf(img as HTMLImageElement);
-    const ref = imgs[ordinal];
-    if (!ref) return;
+    if (img && host.contains(img)) {
+      const imgs = findImages(props.text);
+      const ordinal = [...host.querySelectorAll("img")].indexOf(img as HTMLImageElement);
+      const ref = imgs[ordinal];
+      if (ref) {
+        e.preventDefault();
+        e.stopPropagation();
+        openImageMenu({ ...ref, blockId: props.id }, e.clientX, e.clientY);
+        return;
+      }
+    }
+    // Non-image right-click: place a caret (unless text is selected, which we
+    // keep) so Paste has a target, then open the editor context menu.
+    const sel = window.getSelection();
+    const text = sel && !sel.isCollapsed ? sel.toString() : "";
+    if (!text.trim()) activateAtPoint(host, e.clientX, e.clientY);
     e.preventDefault();
-    openImageMenu({ ...ref, blockId: props.id }, e.clientX, e.clientY);
+    e.stopPropagation();
+    openEditorMenu(e.clientX, e.clientY, text);
+  };
+
+  // Right-click inside the active (editable) block keeps the caret/selection.
+  const onSourceContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const sel = window.getSelection();
+    openEditorMenu(e.clientX, e.clientY, sel && !sel.isCollapsed ? sel.toString() : "");
   };
 
   // Task-list toggling lives on `click`, not `mousedown`: toggling rewrites the
@@ -402,6 +423,29 @@ export default function Block(props: Props) {
     const host = e.currentTarget as HTMLElement;
     const boxes = Array.from(host.querySelectorAll('input[type="checkbox"]'));
     props.onToggleTask(boxes.indexOf(t));
+  };
+
+  // Map a viewport point inside the rendered block to a source caret offset,
+  // then activate the block there.
+  const activateAtPoint = (host: HTMLElement, x: number, y: number) => {
+    let caret: number | undefined;
+    const doc = document as Document & {
+      caretRangeFromPoint?: (x: number, y: number) => Range | null;
+      caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+    };
+    let range: Range | null = null;
+    if (doc.caretRangeFromPoint) range = doc.caretRangeFromPoint(x, y);
+    else if (doc.caretPositionFromPoint) {
+      const pos = doc.caretPositionFromPoint(x, y);
+      if (pos) { range = document.createRange(); range.setStart(pos.offsetNode, pos.offset); }
+    }
+    if (range && host.contains(range.startContainer)) {
+      const pre = range.cloneRange();
+      pre.selectNodeContents(host);
+      pre.setEnd(range.startContainer, range.startOffset);
+      caret = mapRenderedPrefixToSource(props.text, pre.toString());
+    }
+    props.onActivate(caret);
   };
 
   const onRenderedClick = (e: MouseEvent) => {
@@ -419,27 +463,28 @@ export default function Block(props: Props) {
       openExternal(link.getAttribute("href")!);
       return;
     }
-    e.preventDefault();
-    // Map the clicked position in rendered text back to a source offset.
-    let caret: number | undefined;
-    const doc = document as Document & {
-      caretRangeFromPoint?: (x: number, y: number) => Range | null;
-      caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
-    };
+    if (e.button !== 0) return;
+    // Defer activation until mouseup: a plain click enters the block for editing,
+    // but a drag is left alone so the browser can extend a native selection
+    // across sibling (rendered) blocks instead of trapping it in this one once
+    // it turns into the sole contenteditable host.
     const host = e.currentTarget as HTMLElement;
-    let range: Range | null = null;
-    if (doc.caretRangeFromPoint) range = doc.caretRangeFromPoint(e.clientX, e.clientY);
-    else if (doc.caretPositionFromPoint) {
-      const pos = doc.caretPositionFromPoint(e.clientX, e.clientY);
-      if (pos) { range = document.createRange(); range.setStart(pos.offsetNode, pos.offset); }
-    }
-    if (range && host.contains(range.startContainer)) {
-      const pre = range.cloneRange();
-      pre.selectNodeContents(host);
-      pre.setEnd(range.startContainer, range.startOffset);
-      caret = mapRenderedPrefixToSource(props.text, pre.toString());
-    }
-    props.onActivate(caret);
+    const sx = e.clientX;
+    const sy = e.clientY;
+    let dragged = false;
+    const onMove = (m: MouseEvent) => {
+      if (Math.abs(m.clientX - sx) + Math.abs(m.clientY - sy) > 4) dragged = true;
+    };
+    const onUp = (u: MouseEvent) => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      const sel = window.getSelection();
+      // A drag (or any resulting non-empty selection) stays as a selection.
+      if (dragged || (sel && !sel.isCollapsed)) return;
+      activateAtPoint(host, u.clientX, u.clientY);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   };
 
   return (
@@ -483,6 +528,7 @@ export default function Block(props: Props) {
           onInput={onInput}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
+          onContextMenu={onSourceContextMenu}
           onBlur={(e) => {
             // Keep the block active when focus leaves the page itself (native
             // menu click, app switch) or moves into this block's own chrome

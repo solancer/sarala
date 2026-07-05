@@ -1526,6 +1526,47 @@ body.tables-full .rendered table { width: 100%; }
   margin-left: 2px;
 }
 
+/* ---- editor context menu (right-click) ---- */
+.ctx-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 200px;
+  padding: 5px;
+  background: var(--bg-page);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
+  font: 13px var(--font-ui);
+  color: var(--ink);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 6px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ctx-item:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.ctx-item:disabled { color: var(--ink-soft); opacity: 0.5; cursor: default; }
+.ctx-ic { width: 16px; height: 16px; flex: none; }
+.ctx-label { flex: 1; }
+.ctx-sep { height: 1px; margin: 5px 4px; background: var(--rule); }
+.ctx-sub { position: relative; }
+.ctx-caret { color: var(--ink-soft); margin-left: 12px; }
+.ctx-flyout { position: absolute; left: 100%; top: -5px; margin-left: 2px; }
+/* Submenu items have no leading icon; indent their labels to align. */
+.ctx-flyout .ctx-item { padding-left: 12px; }
+
 /* ---- About Sarala modal ---- */
 .about-backdrop {
   position: fixed;

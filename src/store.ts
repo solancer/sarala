@@ -48,6 +48,8 @@ export const [sidebarWidth, setSidebarWidth] = createSignal(240);
 export const clampSidebar = (w: number) => Math.max(180, Math.min(480, Math.round(w)));
 export const [focusMode, setFocusMode] = createSignal(false);
 export const [typewriterMode, setTypewriterMode] = createSignal(false);
+// Bottom status bar visibility (persisted via settings).
+export const [statusBarVisible, setStatusBarVisible] = createSignal(true);
 export const [alwaysOnTop, setAlwaysOnTop] = createSignal(false);
 /** Page zoom in percent, clamped to 90–180. */
 export const [zoom, setZoom] = createSignal(100);
@@ -408,6 +410,24 @@ export function removeBlock(index: number) {
       s.dirty = true;
     })
   );
+}
+
+/** Replace blocks[start..end] (inclusive) with a single block of `text` and
+ *  activate it — used to delete/replace a selection that spans blocks. */
+export function replaceBlocks(start: number, end: number, text: string) {
+  const lo = Math.max(0, Math.min(start, end));
+  const hi = Math.min(state.blocks.length - 1, Math.max(start, end));
+  if (lo > hi) return;
+  pushHistory();
+  setState(
+    produce((s) => {
+      s.blocks.splice(lo, hi - lo + 1, mkBlock(text));
+      if (s.blocks.length === 0) s.blocks.push(mkBlock(""));
+      s.activeIndex = lo;
+      s.dirty = true;
+    })
+  );
+  requestCaret(text.length);
 }
 
 /** Set heading level (0 = paragraph) on a block. */

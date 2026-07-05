@@ -11,7 +11,7 @@
 import {
   sourceMode, sidebarOpen, theme, THEMES, spellcheckOn, smartPunctuation,
   preserveBreaks, lineEnding, finalNewline, autosaveInterval, copyImageToAssets,
-  focusMode, typewriterMode, alwaysOnTop, mathAltDelimiters, mathFence,
+  focusMode, typewriterMode, statusBarVisible, alwaysOnTop, mathAltDelimiters, mathFence,
   emojiEnabled, highlightEnabled, subSupEnabled, autolinkEnabled,
   targetBlockIndex, doc,
 } from "./store";
@@ -154,7 +154,7 @@ export const MENUS: TopMenu[] = [
       { exec: "cut", label: "Cut", accel: "Ctrl+X" },
       { exec: "copy", label: "Copy", accel: "Ctrl+C" },
       { exec: "paste", label: "Paste", accel: "Ctrl+V" },
-      { exec: "selectAll", label: "Select All", accel: "Ctrl+A" },
+      { id: "edit.select_all", label: "Select All", accel: "Ctrl+A" },
       { sep: true },
       { id: "edit.copy_markdown", label: "Copy as Markdown", accel: "Shift+Ctrl+C" },
       { id: "edit.copy_html", label: "Copy as HTML Code" },
@@ -368,6 +368,7 @@ export const MENUS: TopMenu[] = [
       { id: "view.typewriter_mode", label: "Typewriter Mode", type: "check", checked: () => typewriterMode(), accel: "F9" },
       { sep: true },
       { id: "view.sidebar", label: "Toggle Sidebar", type: "check", checked: () => sidebarOpen(), accel: "Shift+Ctrl+L" },
+      { id: "view.status_bar", label: "Show Status Bar", type: "check", checked: () => statusBarVisible() },
       { id: "view.outline", label: "Outline", accel: "Ctrl+Alt+1" },
       { id: "view.file_tree", label: "File Tree", accel: "Ctrl+Alt+3" },
       { sep: true },

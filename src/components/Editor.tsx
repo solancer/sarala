@@ -1,12 +1,49 @@
-import { For } from "solid-js";
+import { For, onMount, onCleanup } from "solid-js";
 import Block from "./Block";
 import {
   doc, setActive, updateBlock, mergeWithPrevious, insertBlockAfter,
-  splitBlock, setHeading, requestCaret,
+  splitBlock, setHeading, requestCaret, replaceBlocks,
 } from "../store";
 import { toggleTask } from "../markdown";
+import { selectedBlockRange } from "../blockselect";
+import { openEditorMenu } from "./EditorContextMenu";
 
 export default function Editor() {
+  // Make a selection that spans blocks actionable (native selection can't,
+  // since each block is its own render/edit host). Single-block and collapsed
+  // selections fall through to the browser's own handling.
+  onMount(() => {
+    const clipboard = (e: ClipboardEvent, cut: boolean) => {
+      const r = selectedBlockRange();
+      if (!r) return;
+      e.preventDefault();
+      const md = doc.blocks.slice(r.start, r.end + 1).map((b) => b.text).join("\n\n");
+      e.clipboardData?.setData("text/plain", md);
+      if (cut) replaceBlocks(r.start, r.end, "");
+    };
+    const onCopy = (e: ClipboardEvent) => clipboard(e, false);
+    const onCut = (e: ClipboardEvent) => clipboard(e, true);
+    const onKeyDown = (e: KeyboardEvent) => {
+      const r = selectedBlockRange();
+      if (!r) return;
+      if (e.key === "Backspace" || e.key === "Delete" || e.key === "Enter") {
+        e.preventDefault();
+        replaceBlocks(r.start, r.end, "");
+      } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        replaceBlocks(r.start, r.end, e.key);
+      }
+    };
+    document.addEventListener("copy", onCopy);
+    document.addEventListener("cut", onCut);
+    document.addEventListener("keydown", onKeyDown);
+    onCleanup(() => {
+      document.removeEventListener("copy", onCopy);
+      document.removeEventListener("cut", onCut);
+      document.removeEventListener("keydown", onKeyDown);
+    });
+  });
+
   const navigate = (index: number, dir: -1 | 1) => {
     const next = index + dir;
     if (next < 0) return;
@@ -23,6 +60,14 @@ export default function Editor() {
   return (
     <div
       class="editor"
+      onContextMenu={(e) => {
+        // Catch-all for right-clicks in the editor (gutter/padding). Block and
+        // image handlers stopPropagation for clicks on their own content, so
+        // this only fires for the surrounding area — right-click always menus.
+        e.preventDefault();
+        const sel = window.getSelection();
+        openEditorMenu(e.clientX, e.clientY, sel && !sel.isCollapsed ? sel.toString() : "");
+      }}
       onMouseDown={(e) => {
         // Clicks that land inside a block are the block's own concern.
         const t = e.target as HTMLElement;

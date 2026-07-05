@@ -14,9 +14,11 @@ import {
   emojiEnabled, setEmojiEnabledSig, highlightEnabled, setHighlightEnabledSig,
   subSupEnabled, setSubSupEnabledSig, autolinkEnabled, setAutolinkEnabledSig,
   setSidebarTab, focusMode, setFocusMode, typewriterMode, setTypewriterMode,
+  statusBarVisible, setStatusBarVisible,
   alwaysOnTop, setAlwaysOnTop, zoom, setZoom, clampZoom,
   bumpRenderEpoch, proseFont, monoFont,
 } from "./store";
+import { selectAllDocument } from "./blockselect";
 import { fontEmbedCss } from "./fonts";
 import {
   isTauri, pickFolder, pickMarkdownFile, pickSavePath, pickImportFile,
@@ -600,6 +602,25 @@ async function pastePlain() {
   if (text && blockApi) blockApi.insertAtCaret(text);
 }
 
+/** Regular paste from the context menu: insert clipboard text at the caret. */
+async function pasteText() {
+  const text = await clipboardReadText();
+  if (text && blockApi) blockApi.insertAtCaret(text);
+}
+
+/** Copy the visible (formatted-away) text: the current selection if there is
+ *  one, else the whole document rendered to plain text. */
+async function copyPlain() {
+  const sel = window.getSelection();
+  if (sel && !sel.isCollapsed) {
+    await clipboardWriteText(sel.toString());
+    return;
+  }
+  const tmp = document.createElement("div");
+  tmp.innerHTML = await renderBody(fullText());
+  await clipboardWriteText((tmp.textContent ?? "").trim());
+}
+
 function selectLine() {
   if (!blockApi || doc.activeIndex < 0) return;
   const text = doc.blocks[doc.activeIndex].text;
@@ -851,6 +872,8 @@ const registry: Record<string, Command> = {
   "edit.redo": redo,
   "edit.copy_markdown": copyAsMarkdown,
   "edit.copy_html": async () => clipboardWriteText(await renderBody(fullText())),
+  "edit.copy_plain": copyPlain,
+  "edit.paste": pasteText,
   "edit.paste_plain": pastePlain,
   "edit.move_row_up": () => { if (doc.activeIndex >= 0) moveBlock(doc.activeIndex, -1); },
   "edit.move_row_down": () => { if (doc.activeIndex >= 0) moveBlock(doc.activeIndex, 1); },
@@ -858,6 +881,7 @@ const registry: Record<string, Command> = {
   "edit.select_block": () => {
     if (doc.activeIndex >= 0) blockApi?.selectRange(0, doc.blocks[doc.activeIndex].text.length);
   },
+  "edit.select_all": () => selectAllDocument(),
   "edit.select_line": selectLine,
   "edit.select_word": selectWord,
   "edit.find": () => { openFind(false); },
@@ -958,6 +982,11 @@ const registry: Record<string, Command> = {
   "view.search": () => { openFind(false); },
   "view.focus_mode": () => { setFocusMode(!focusMode()); },
   "view.typewriter_mode": () => { setTypewriterMode(!typewriterMode()); },
+  "view.status_bar": () => {
+    const v = !statusBarVisible();
+    setStatusBarVisible(v);
+    void setSetting("statusBarVisible", v);
+  },
   "view.zoom_in": () => changeZoom(zoom() + 10),
   "view.zoom_out": () => changeZoom(zoom() - 10),
   "view.zoom_actual": () => changeZoom(100),

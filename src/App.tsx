@@ -8,6 +8,7 @@ import CommandPalette from "./components/CommandPalette";
 import FindBar from "./components/FindBar";
 import TableDialog from "./components/TableDialog";
 import ImageContextMenu from "./components/ImageContextMenu";
+import EditorContextMenu from "./components/EditorContextMenu";
 import PaletteSwitcher from "./components/PaletteSwitcher";
 import AboutModal from "./components/AboutModal";
 import SettingsModal from "./components/SettingsModal";
@@ -20,7 +21,7 @@ import {
   doc, theme, sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
   fileName, setActive, fileTree, folderName, THEMES, targetBlockIndex,
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
-  focusMode, typewriterMode, alwaysOnTop, zoom, tableFullWidth,
+  focusMode, typewriterMode, statusBarVisible, alwaysOnTop, zoom, tableFullWidth,
   mathAltDelimiters, mathFence, bumpMermaidEpoch,
   emojiEnabled, highlightEnabled, subSupEnabled, autolinkEnabled,
   finalNewline, autosaveInterval, setExternalChange,
@@ -34,7 +35,7 @@ import {
 } from "./commands";
 import { BLOCK_TARGETED_IDS } from "./menudata";
 import { makeMenuKeyHandler } from "./shortcuts";
-import { startAutosave, findRecoverable, restoreSession, shadowBaseName, discardShadows } from "./autosave";
+import { startAutosave, findRecoverable, restoreSession, shadowBaseName, discardShadows, discardShadowFor } from "./autosave";
 
 export default function App() {
   let editorEl: HTMLDivElement | undefined;
@@ -52,6 +53,7 @@ export default function App() {
     if (!mod) return;
     const k = e.key.toLowerCase();
     if (k === "z") { e.preventDefault(); executeCommand(e.shiftKey ? "edit.redo" : "edit.undo"); }
+    if (k === "a") { e.preventDefault(); executeCommand("edit.select_all"); }
     if (k === "s") { e.preventDefault(); executeCommand("file.save"); }
     if (k === "o" && e.shiftKey) { e.preventDefault(); executeCommand("file.open_folder"); }
     else if (k === "o") { e.preventDefault(); executeCommand("file.open"); }
@@ -116,6 +118,10 @@ export default function App() {
           if (!doc.dirty) return;
           event.preventDefault();
           if (await confirmDialog(`Discard unsaved changes to ${fileName()}?`)) {
+            // Deliberately discarding — drop the autosave shadow so the next
+            // launch doesn't offer to "recover" these changes. (A crash skips
+            // this handler, so genuine crash recovery still works.)
+            await discardShadowFor(doc.filePath);
             await win.destroy();
           }
         });
@@ -181,6 +187,7 @@ export default function App() {
   createEffect(() => setMenuChecked("format.image.copy_to_folder", copyImageToAssets()));
   createEffect(() => setMenuChecked("view.focus_mode", focusMode()));
   createEffect(() => setMenuChecked("view.typewriter_mode", typewriterMode()));
+  createEffect(() => setMenuChecked("view.status_bar", statusBarVisible()));
   createEffect(() => setMenuChecked("view.always_on_top", alwaysOnTop()));
 
   // Selection-dependent enabling: block-targeted items are disabled until
@@ -317,7 +324,9 @@ export default function App() {
               <Editor />
             </Show>
           </div>
-          <StatusBar />
+          <Show when={statusBarVisible()}>
+            <StatusBar />
+          </Show>
         </main>
       </div>
       <PaletteSwitcher />
@@ -325,6 +334,7 @@ export default function App() {
       <CommandPalette />
       <TableDialog />
       <ImageContextMenu />
+      <EditorContextMenu />
       <AboutModal />
       <SettingsModal />
       <PandocDownloadModal />

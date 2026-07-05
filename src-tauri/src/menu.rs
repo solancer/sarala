@@ -386,7 +386,12 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .item(&PredefinedMenuItem::cut(app, None)?)
         .item(&PredefinedMenuItem::copy(app, None)?)
         .item(&PredefinedMenuItem::paste(app, None)?)
-        .item(&PredefinedMenuItem::select_all(app, None)?)
+        .item(&mi(
+            app,
+            "edit.select_all",
+            "Select All",
+            Some("CmdOrCtrl+A"),
+        )?)
         .separator()
         .item(&mi(
             app,
@@ -780,6 +785,7 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             true,
             Some("Shift+CmdOrCtrl+L"),
         )?)
+        .item(&ci(app, "view.status_bar", "Show Status Bar", true, None)?)
         .item(&mi(
             app,
             "view.outline",

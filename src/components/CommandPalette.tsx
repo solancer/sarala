@@ -24,6 +24,7 @@ const ICONS: Record<string, string> = {
   table: '<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 10h18M9 5v14"/>',
   hr: '<path d="M4 12h16"/>',
   sidebar: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
+  statusbar: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16h18"/>',
   focus: '<circle cx="12" cy="12" r="3"/><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>',
   type: '<path d="M5 6h14M12 6v13M9 19h6"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
@@ -65,6 +66,7 @@ const BASE: Cmd[] = [
   { group: "View", id: "view.focus_mode", label: "Toggle Focus Mode", icon: "focus" },
   { group: "View", id: "view.typewriter_mode", label: "Toggle Typewriter Mode", icon: "type" },
   { group: "View", id: "view.source_mode", label: "Toggle Source Mode", icon: "eye" },
+  { group: "View", id: "view.status_bar", label: "Toggle Status Bar", icon: "statusbar" },
   { group: "View", id: "app.settings", label: "Typography Settings", icon: "type" },
 ];
 const COMMANDS: Cmd[] = [
