@@ -42,7 +42,7 @@ export type ThemeId = (typeof THEMES)[number];
 export const [theme, setTheme] = createSignal<ThemeId>("sarala");
 export const [sourceMode, setSourceMode] = createSignal(false);
 export const [sidebarOpen, setSidebarOpen] = createSignal(true);
-export const [sidebarTab, setSidebarTab] = createSignal<"files" | "outline">("files");
+export const [sidebarTab, setSidebarTab] = createSignal<"files" | "outline" | "search">("files");
 /** Sidebar width in px, clamped to 180–480 (drag resize). */
 export const [sidebarWidth, setSidebarWidth] = createSignal(240);
 export const clampSidebar = (w: number) => Math.max(180, Math.min(480, Math.round(w)));

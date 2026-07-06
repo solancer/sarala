@@ -100,16 +100,21 @@ export default function SearchPanel(props: Props) {
 
   return (
     <div class="search-panel">
-      <input
-        class="search-input"
-        placeholder="Search in folder…"
-        value={query()}
-        onInput={(e) => setQuery(e.currentTarget.value)}
-        autocomplete="off"
-        autocorrect="off"
-        autocapitalize="off"
-        spellcheck={false}
-      />
+      <div class="search-field">
+        <svg class="search-field-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+        </svg>
+        <input
+          class="search-input"
+          placeholder="Search in folder…"
+          value={query()}
+          onInput={(e) => setQuery(e.currentTarget.value)}
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck={false}
+        />
+      </div>
       <div class="search-toggles">
         <button class="find-toggle" classList={{ on: caseSensitive() }}
           title="Match case" onClick={() => setCaseSensitive(!caseSensitive())}>Aa</button>

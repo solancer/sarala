@@ -1,3 +1,4 @@
+import { createSignal } from "solid-js";
 import { isTauri } from "./platform";
 import {
   setSpellcheckOn, setSmartPunctuation, setPreserveBreaks, setLineEnding,
@@ -27,6 +28,7 @@ export interface ExportMemo {
 
 interface SettingsData {
   recentFiles: string[];
+  pinnedFiles: string[];
   lastExport: ExportMemo | null;
   exportPresets: ExportPreset[];
   pdfExport: PdfOptions;
@@ -49,6 +51,7 @@ const DEFAULT_PRESETS: ExportPreset[] = [
 
 const DEFAULTS: SettingsData = {
   recentFiles: [],
+  pinnedFiles: [],
   lastExport: null,
   exportPresets: DEFAULT_PRESETS,
   pdfExport: DEFAULT_PDF,
@@ -104,6 +107,8 @@ export async function initSettings(): Promise<void> {
 
 /** Push persisted toggles into the reactive store on startup. */
 function hydrateStore() {
+  setRecentSig(Array.isArray(data.recentFiles) ? data.recentFiles : []);
+  setPinnedSig(Array.isArray(data.pinnedFiles) ? data.pinnedFiles : []);
   setSpellcheckOn(getSetting("spellcheck", true));
   setSmartPunctuation(getSetting("smartPunctuation", false));
   setLineEnding(getSetting<"lf" | "crlf">("lineEnding", "lf"));
@@ -158,20 +163,47 @@ export async function setSetting(key: string, value: unknown): Promise<void> {
   await persist();
 }
 
+// Recent + pinned are mirrored into signals so the sidebar re-renders on change
+// (the underlying `data` object is plain and not reactive).
+const [recentSig, setRecentSig] = createSignal<string[]>([]);
+const [pinnedSig, setPinnedSig] = createSignal<string[]>([]);
+
 export function recentFiles(): string[] {
-  return data.recentFiles;
+  return recentSig();
 }
 
 export async function addRecentFile(path: string): Promise<void> {
   data.recentFiles = [path, ...data.recentFiles.filter((p) => p !== path)].slice(0, 10);
+  setRecentSig(data.recentFiles);
   await persist();
   await syncRecentMenu();
 }
 
 export async function clearRecentFiles(): Promise<void> {
   data.recentFiles = [];
+  setRecentSig([]);
   await persist();
   await syncRecentMenu();
+}
+
+/** Pinned files, most-recently-pinned first. Reactive. */
+export function pinnedFiles(): string[] {
+  return pinnedSig();
+}
+export function isPinned(path: string): boolean {
+  return pinnedSig().includes(path);
+}
+export async function togglePin(path: string): Promise<void> {
+  data.pinnedFiles = pinnedSig().includes(path)
+    ? pinnedSig().filter((p) => p !== path)
+    : [path, ...pinnedSig()];
+  setPinnedSig(data.pinnedFiles);
+  await persist();
+}
+export async function clearPinned(): Promise<void> {
+  data.pinnedFiles = [];
+  setPinnedSig([]);
+  await persist();
 }
 
 export function lastExport(): ExportMemo | null {

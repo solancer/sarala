@@ -42,8 +42,15 @@ export default function App() {
 
   const jumpTo = (blockIndex: number) => {
     setActive(-1);
-    const el = editorEl?.querySelectorAll(".block")[blockIndex];
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Programmatic smooth scroll is silently dropped while the editor
+    // re-renders, so set scrollTop directly after the deactivation settles.
+    requestAnimationFrame(() => {
+      const el = editorEl?.querySelectorAll<HTMLElement>(".block")[blockIndex];
+      if (!el || !editorEl) return;
+      const top = el.getBoundingClientRect().top - editorEl.getBoundingClientRect().top
+        + editorEl.scrollTop - 16;
+      editorEl.scrollTo({ top: Math.max(0, top) });
+    });
   };
 
   // Browser fallback only: in Tauri these chords are native menu accelerators,

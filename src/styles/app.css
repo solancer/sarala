@@ -13,24 +13,35 @@
 
 /* Sarala — warm parchment chrome, white page, coral marker accent */
 [data-theme="sarala"] {
+  /* Warm paper palette. Surfaces without a dedicated global var (topbar, chip,
+     track, rule-soft, rail, grip, code-border/ink) are introduced here and read
+     with fallbacks in the component CSS, so only this theme is affected. */
   --mermaid-theme: default;
-  --quote-bar: #b9c4d6;
-  --tint: rgba(0, 0, 0, 0.035);
-  --bg: #e6e2d9;
-  --bg-panel: #ece9e1;
-  --bg-page: #ffffff;
-  --ink: #2c2a26;
-  --ink-soft: #9b958a;
-  --accent: #e0566a;
-  --accent-soft: rgba(224, 86, 106, 0.1);
-  --select: #4a90e2;
-  --select-soft: rgba(74, 144, 226, 0.12);
-  --rule: #ece8e0;
-  --code-bg: #f0ede6;
+  --quote-bar: #c7bca6;
+  --tint: #eae3d4;          /* subtle hover / region tint */
+  --bg: #ece5d6;            /* app root + status bar (title-bar tone) */
+  --bg-panel: #efe9dc;      /* sidebar + menus */
+  --bg-page: #faf6ef;       /* editor content + inputs */
+  --bg-topbar: #ece5d6;     /* title / top bar */
+  --chip: #f7f2e8;          /* top-bar search chip */
+  --track: #ded4c1;         /* segmented control tracks */
+  --ink: #2c2822;           /* primary text / headings */
+  --ink-soft: #8a8273;      /* secondary text, labels, icons */
+  --accent: #c25a3c;        /* terracotta */
+  --accent-soft: color-mix(in srgb, #c25a3c 15%, transparent);
+  --select: #c25a3c;        /* active-item bar */
+  --select-soft: color-mix(in srgb, #c25a3c 15%, transparent);  /* active fill */
+  --rule: #ddd3c1;          /* border */
+  --rule-soft: #d7cdba;     /* divider border */
+  --rail: #e0d6c3;          /* indent rail / hairline */
+  --grip: #c7bca6;          /* drag grip */
+  --code-bg: #f4efe4;
+  --code-border: #e6ddcc;
+  --code-ink: #413c33;
   --shadow: 0 1px 2px rgba(60, 50, 40, 0.05), 0 10px 34px rgba(60, 50, 40, 0.07);
   --marker: var(--accent);
   --marker-opacity: 0.85;
-  --link: var(--select);
+  --link: #2f6ec4;
 }
 
 /* ---- Monokai Pro filter set: coral (#ff6188-ish) markers, cyan links,
@@ -137,7 +148,7 @@ body { font-family: var(--font-ui); }
   gap: 12px;
   height: 52px;
   padding: 0 14px;
-  background: var(--bg-panel);
+  background: var(--bg-topbar, var(--bg-panel));
   border-bottom: 1px solid var(--rule);
   user-select: none;
   -webkit-user-select: none;
@@ -176,7 +187,7 @@ body { font-family: var(--font-ui); }
   padding: 0 12px;
   border: 1px solid var(--rule);
   border-radius: 9px;
-  background: var(--tint);
+  background: var(--chip, var(--tint));
   color: var(--ink-soft);
   font: 13px/1 var(--font-ui);
   cursor: pointer;
@@ -214,7 +225,7 @@ body { font-family: var(--font-ui); }
   flex: none;
   gap: 2px;
   padding: 3px;
-  background: var(--tint);
+  background: var(--track, var(--tint));
   border: 1px solid var(--rule);
   border-radius: 9px;
 }
@@ -328,90 +339,193 @@ body { font-family: var(--font-ui); }
   z-index: 5;
 }
 .sidebar-resize:hover { background: var(--accent); opacity: 0.35; }
-.sidebar-body { overflow-y: auto; padding: 6px 8px 16px; flex: 1; }
-.side-section-head {
-  padding: 14px 8px 6px;
-  font: 600 10px/1 var(--font-ui);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-.tree-item {
+/* Independently-scrolling region with a thin themed scrollbar. */
+.scrollarea { overflow: auto; }
+.scrollarea::-webkit-scrollbar { width: 8px; }
+.scrollarea::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 8px; }
+.scrollarea::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- workspace header ---------- */
+.side-ws-head {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 7px;
-  width: 100%;
-  text-align: left;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  font: 13px/1.5 var(--font-ui);
-  padding: 5px 10px;
-  border-radius: 7px;
+  gap: 9px;
+  padding: 12px 12px 10px;
+}
+.side-ws-badge {
+  width: 22px; height: 22px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  background: var(--accent); color: #fff;
+  font: 700 12px/1 var(--font-ui);
+}
+.side-ws-name { flex: 1; font: 700 13.5px/1 var(--font-ui); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-icon-btn {
+  width: 26px; height: 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 7px;
+  background: transparent; color: var(--ink-soft);
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+.side-icon-btn:hover { background: var(--tint); color: var(--ink); }
+
+/* ---------- segmented tabs ---------- */
+.side-tabs {
+  flex: none;
+  display: flex; gap: 3px;
+  margin: 0 12px 6px;
+  padding: 3px;
+  background: var(--track, var(--tint));
+  border-radius: 10px;
+}
+.side-tab {
+  flex: 1;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 0; background: transparent;
+  color: var(--ink-soft);
+  font: 600 12.5px/1 var(--font-ui);
+  padding: 7px 4px; border-radius: 8px; cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
 }
+.side-tab:hover { color: var(--ink); }
+.side-tab.on { background: var(--bg-page); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); }
+.side-tab.on .side-tab-ic { color: var(--accent); }
+.side-tab-ic { flex: none; }
+
+/* ---------- tab body ---------- */
+.side-tab-body { flex: 1; min-height: 0; padding: 4px 8px 10px; }
+.side-list-head {
+  font: 700 10.5px/1 var(--font-ui);
+  letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 8px 6px 5px;
+}
+.side-list-head-row { display: flex; align-items: center; }
+.side-clear-btn {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 0; background: transparent;
+  color: var(--ink-soft);
+  font: 700 10px/1 var(--font-ui);
+  letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 3px 5px; border-radius: 5px; cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.side-clear-btn:hover { background: var(--accent-soft); color: var(--accent); }
+.side-clear-btn svg { flex: none; }
+.side-recent, .side-tree { display: flex; flex-direction: column; gap: 1px; }
+.side-divider { height: 1px; margin: 8px 6px; background: var(--rule-soft, var(--rule)); }
+
+/* ---------- file tree ---------- */
+.tree-children {
+  margin-left: 18px;
+  padding-left: 10px;
+  /* --rule can equal --bg-panel on some themes (e.g. Sarala), so the rail
+     would vanish. Tint from --ink-soft instead — visible on every theme.
+     Width/style go through the shorthand; only the colour uses color-mix. */
+  border-left: 1px solid transparent;
+  border-left-color: var(--rail, color-mix(in srgb, var(--ink-soft) 30%, transparent));
+  display: flex; flex-direction: column; gap: 1px;
+}
+.tree-item {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  text-align: left; border: 0; background: transparent; color: var(--ink);
+  font: 13px/1.5 var(--font-ui);
+  padding: 5px 10px; border-radius: 7px; cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.tree-nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tree-item .file-icon { flex: none; color: var(--ink-soft); }
-/* Folders read as containers: accent-tinted icon so they stand out from files. */
-.tree-item .folder-icon { flex: none; color: var(--accent); opacity: 0.85; }
-/* Theme-aware hover (was a hardcoded dark overlay, invisible on dark themes). */
+.tree-item .folder-icon { flex: none; color: var(--ink-soft); }
+/* Open folders read as active containers: accent chevron + icon, bold name. */
+.tree-item.dir.open .folder-icon,
+.tree-item.dir.open .tree-chevron { color: var(--accent); }
+.tree-item.dir.open { font-weight: 600; }
 .tree-item:hover { background: var(--tint); }
-.tree-item.heading.h1 { font-weight: 600; color: var(--accent); }
-.tree-item.heading { color: var(--ink-soft); }
-.tree-item.heading .out-mark { color: var(--accent); opacity: 0.7; }
-.tree-item.dir { color: var(--ink); font-weight: 500; }
-/* Active file: tinted rounded pill with a left accent bar. */
+.tree-item.dir { color: var(--ink); }
+.tree-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Active file: tinted pill + inset accent bar + trailing unsaved dot. */
 .tree-item.file.current {
-  color: var(--ink);
-  font-weight: 600;
+  color: var(--ink); font-weight: 600;
   background: var(--select-soft, var(--accent-soft));
   box-shadow: inset 2.5px 0 0 var(--select, var(--accent));
 }
 .tree-item.file.current:hover { background: var(--select-soft, var(--accent-soft)); }
 .tree-item.file.current .file-icon { color: var(--select, var(--accent)); }
+.tree-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+/* Pin glyph — accent, shown on pinned rows and in the pin menu. */
+.pin-icon { flex: none; color: var(--accent); }
 /* Rotating disclosure chevron. */
-.tree-chevron {
-  width: 12px;
-  height: 12px;
-  flex: none;
-  color: var(--ink-soft);
-  transition: transform 0.18s ease;
-}
+.tree-chevron { width: 12px; height: 12px; flex: none; color: var(--ink-soft); transition: transform 0.18s ease; }
 .tree-chevron.open { transform: rotate(90deg); }
-.tree-item .twist { display: inline-block; width: 12px; color: var(--ink-soft); }
 .sidebar-empty { padding: 12px 10px; color: var(--ink-soft); }
 .sidebar-empty p { margin: 0 0 10px; }
-.side-outline-empty { padding: 4px 10px; color: var(--ink-soft); font-size: 12px; }
 
-/* Collapsible section heads (Search) double as buttons. */
-.side-section-head.toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
+/* ---------- outline items (Outline tab) ---------- */
+.side-out-item {
+  display: flex; align-items: center; width: 100%; text-align: left;
+  border: 0; background: transparent; color: var(--ink-soft);
+  font: 12.5px/1.4 var(--font-ui);
+  padding: 5px 10px; border-radius: 6px; cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
 }
-.side-section-head.toggle .twist { font-size: 9px; color: var(--ink-soft); }
+.side-out-item.h1 { font-weight: 600; color: var(--ink); }
+.side-out-item:hover { background: var(--accent-soft); color: var(--ink); }
+.side-out-item.active {
+  color: var(--ink); font-weight: 600;
+  background: var(--select-soft, var(--accent-soft));
+  box-shadow: inset 2px 0 0 var(--select, var(--accent));
+}
+.side-out-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ---------- footer (file/folder count) ---------- */
+.side-foot {
+  flex: none;
+  display: flex; align-items: center; gap: 7px;
+  height: 34px; padding: 0 14px;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font: 11.5px/1 var(--font-ui);
+}
+.side-foot svg { flex: none; }
 
 /* ---------- folder search panel ---------- */
 .search-panel { padding: 2px 8px 8px; }
-.search-input {
-  width: 100%;
-  box-sizing: border-box;
+/* Crisp field on the tinted panel: solid bg, clear border, accent focus ring. */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
   border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 5px 8px;
-  font: 12px var(--font-ui);
-  background: var(--code-bg);
+  border-radius: 8px;
+  background: var(--bg-page);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.search-field:hover { border-color: var(--ink-soft); }
+.search-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.search-field-ic { width: 14px; height: 14px; flex: none; color: var(--ink-soft); transition: color 120ms ease; }
+.search-field:focus-within .search-field-ic { color: var(--accent); }
+.search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 7px 0;
+  font: 13px var(--font-ui);
   color: var(--ink);
   outline: none;
 }
-.search-input:focus { border-color: var(--accent); }
+/* The .search-field wrapper shows focus; suppress the input's own outline so
+   the global :focus-visible rule doesn't draw a second inner rectangle. */
+.search-input:focus,
+.search-input:focus-visible { outline: none; }
+.search-input::placeholder { color: var(--ink-soft); }
 .search-toggles { display: flex; align-items: center; gap: 2px; margin: 5px 0 2px; }
 .search-summary { margin-left: auto; font: 11px var(--font-ui); color: var(--ink-soft); }
 .search-empty { padding: 8px 4px; font: 12px var(--font-ui); color: var(--ink-soft); }
@@ -499,7 +613,8 @@ body { font-family: var(--font-ui); }
 .source.code-block {
   font: 13.5px/1.6 var(--font-mono);
   background: var(--code-bg);
-  border: 1px solid var(--rule);
+  color: var(--code-ink, var(--ink));
+  border: 1px solid var(--code-border, var(--rule));
   border-radius: 8px;
   padding: 14px 16px;
   margin: 10.5px 0; /* rendered: 2px wrapper pad + 8.5px pre margin */
@@ -571,7 +686,8 @@ body { font-family: var(--font-ui); }
 }
 .rendered pre {
   background: var(--code-bg);
-  border: 1px solid var(--rule);
+  color: var(--code-ink, var(--ink));
+  border: 1px solid var(--code-border, var(--rule));
   border-radius: 8px;
   padding: 14px 16px;
   overflow-x: auto;
