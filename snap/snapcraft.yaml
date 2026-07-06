@@ -91,7 +91,10 @@ parts:
       craftctl set version="$(node -p "require('$CRAFT_PART_SRC/package.json').version")"
 
       rustup default stable
-      npm install -g pnpm@9
+      # Match package.json "packageManager" — pnpm 9 can't parse the pnpm-10
+      # style pnpm-workspace.yaml (no `packages:` field) and fails with
+      # "packages field missing or empty".
+      npm install -g pnpm@11.10.0
       pnpm install --frozen-lockfile
 
       # Build the .deb only — it's the cleanest way to get the binary + .desktop +
