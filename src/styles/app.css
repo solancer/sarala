@@ -378,9 +378,13 @@ body { font-family: var(--font-ui); }
   padding: 3px;
   background: var(--track, var(--tint));
   border-radius: 10px;
+  /* Clip the tabs to the track so a narrow sidebar can't let a tab (its label)
+     spill out over the editor. */
+  overflow: hidden;
 }
 .side-tab {
   flex: 1;
+  min-width: 0; /* allow tabs to shrink below their label width */
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   border: 0; background: transparent;
   color: var(--ink-soft);
@@ -388,6 +392,7 @@ body { font-family: var(--font-ui); }
   padding: 7px 4px; border-radius: 8px; cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
 }
+.side-tab span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-tab:hover { color: var(--ink); }
 .side-tab.on { background: var(--bg-page); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); }
 .side-tab.on .side-tab-ic { color: var(--accent); }

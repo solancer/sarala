@@ -153,6 +153,14 @@ const PAGE_BREAK_CSS = `
   page-break-inside: avoid; break-inside: avoid;
   page-break-after: avoid; break-after: avoid;
 }
+/* Paginated output can't scroll: wrap long code lines instead of clipping them
+   behind a (useless) horizontal scrollbar. */
+.rendered pre { overflow: visible !important; }
+.rendered pre, .rendered pre code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 `;
 
 export const EXPORT_PRINT_CSS = `
