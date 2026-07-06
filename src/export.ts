@@ -92,15 +92,26 @@ export function headerFooterContent(template: string, ctx: { title: string; date
 const isZeroMargin = (m: string) => /^0(mm|cm|in|px|pt)?$/.test(m.trim());
 
 /**
- * Always full-bleed: the @page margin area is paper-white and can't be colored
- * in CSS, so the @page margin is dropped (the theme background reaches every
- * page edge) and the configured `margin` becomes the body's text-inset padding.
- * (The @page header/footer can't be used in full-bleed — it lives in the margin
- * area — so headerFooterContent stays available for a future framed mode.)
+ * Two page modes:
+ *  - margin 0 → full-bleed: the theme background reaches every paper edge. The
+ *    @page margin area is paper-white on WebKit and can't be coloured, so the
+ *    @page margin stays 0 and the text is inset with body padding. Downside:
+ *    body padding only applies at the document start/end, so there's no
+ *    breathing room at page breaks.
+ *  - margin >0 → framed: a real @page margin, which applies to EVERY page, so
+ *    content gets space at every page break (and the margin area can hold an
+ *    @page header/footer). The margin area shows paper-white on WebKit.
+ * The default margin is non-zero, so exports get page-break spacing out of the
+ * box; set margin to 0 for edge-to-edge full-bleed.
  */
 export function pageCss(opts: PdfOptions): string {
+  // Keep @page margin 0 so the theme background is full-bleed (WebKit won't
+  // colour a @page margin). The inset lives on .rendered as padding, and
+  // box-decoration-break: clone repeats that padding on EVERY page fragment —
+  // so there's breathing room at every page break, and because the padding is
+  // transparent the full-bleed background shows through it. Full-bleed + spacing.
   const pad = isZeroMargin(opts.margin) ? "18mm 16mm" : opts.margin.trim();
-  return `@page { size: ${opts.pageSize}; margin: 0; } body { padding: ${pad}; box-sizing: border-box; }`;
+  return `@page { size: ${opts.pageSize}; margin: 0; } .rendered { padding: ${pad}; box-sizing: border-box; -webkit-box-decoration-break: clone; box-decoration-break: clone; }`;
 }
 
 /* ---------- HTML document assembly ---------- */
@@ -124,6 +135,26 @@ body.has-toc .doc-toc a:hover { text-decoration: underline; }
  * print (Chrome drops them otherwise), give the document a centered column
  * (there's no .page wrapper in the export), and resolve the body theme colors.
  */
+// Page-break rules for paginated output (PDF + printed HTML). Uses both the
+// legacy page-break-* (best WKWebView support) and modern break-* properties so
+// a list item, paragraph, image or table isn't sliced across a page boundary,
+// and a heading is never stranded at the foot of a page away from its content.
+const PAGE_BREAK_CSS = `
+/* Let tall blocks (code, quotes, long paragraphs/lists, big tables) flow across
+   pages so they don't leave a big empty gap when they don't fit the remaining
+   space; orphans/widows keep those cuts from stranding a single line. */
+.rendered p, .rendered li, .rendered blockquote, .rendered pre { orphans: 2; widows: 2; }
+/* Keep only bounded elements whole — they either fit or move as a unit. */
+.rendered img, .rendered figure, .rendered tr, .rendered .mermaid-block, .rendered .math-block {
+  page-break-inside: avoid; break-inside: avoid;
+}
+/* A heading is never stranded at the foot of a page away from its content. */
+.rendered h1, .rendered h2, .rendered h3, .rendered h4, .rendered h5, .rendered h6 {
+  page-break-inside: avoid; break-inside: avoid;
+  page-break-after: avoid; break-after: avoid;
+}
+`;
+
 export const EXPORT_PRINT_CSS = `
 html, body { height: auto !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -131,7 +162,7 @@ body { background: var(--bg); color: var(--ink); margin: 0; }
 body:not(.has-toc) .rendered { max-width: 760px; margin: 40px auto; padding: 0 28px; }
 body.has-toc { padding: 40px 28px; box-sizing: border-box; }
 .rendered { padding: 0; }
-`;
+${PAGE_BREAK_CSS}`;
 
 /**
  * PDF-specific overrides: keep the editor's theme colors (dark stays dark), but
@@ -142,11 +173,12 @@ body.has-toc { padding: 40px 28px; box-sizing: border-box; }
 export const PDF_PRINT_CSS = `
 html, body { height: auto !important; margin: 0 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+/* Background on html too: the root background is propagated to the page canvas
+   so the theme colour fills the @page margins (full-bleed at page breaks). */
+html { background: var(--bg); }
 body { background: var(--bg); color: var(--ink); }
-.rendered { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; font-size: 11pt; }
-.rendered pre, .rendered table, .rendered blockquote, .rendered img, .rendered .mermaid-block, .rendered .math-block { break-inside: avoid; }
-.rendered h1, .rendered h2, .rendered h3, .rendered h4, .rendered h5, .rendered h6 { break-after: avoid; }
-`;
+.rendered { max-width: none !important; width: 100% !important; margin: 0 !important; font-size: 11pt; }
+${PAGE_BREAK_CSS}`;
 
 export interface BuildHtmlOptions {
   title: string;

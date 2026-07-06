@@ -4,7 +4,7 @@ import {
   styleSource, getCaretOffset, getSelectionOffsets, setCaret, setSelection,
   applyMarkerVisibility, mapRenderedPrefixToSource,
 } from "../livesource";
-import { isTauri, openExternal } from "../platform";
+import { isTauri, openExternal, pickImageFile } from "../platform";
 import {
   consumeCaretRequest, consumeSelectionRequest,
   spellcheckOn, smartPunctuation, renderEpoch, mermaidEpoch,
@@ -12,7 +12,7 @@ import {
 } from "../store";
 import { renderMermaidIn } from "../mermaid";
 import { renderD2In } from "../d2";
-import { executeCommand, registerBlockApi, unregisterBlockApi, type BlockApi } from "../commands";
+import { executeCommand, registerBlockApi, unregisterBlockApi, imageInsertRef, type BlockApi } from "../commands";
 import { parseTable, cellRanges } from "../tabletools";
 import { findImages } from "../images";
 import { pasteToInsert } from "../richpaste";
@@ -21,6 +21,20 @@ import { openEditorMenu } from "./EditorContextMenu";
 import TableToolbar from "./TableToolbar";
 import CodeLangPicker from "./CodeLangPicker";
 import D2SizeControl from "./D2SizeControl";
+
+/** Caret Range at a viewport point (WebKit caretRangeFromPoint / Firefox fallback). */
+function caretRangeAt(x: number, y: number): Range | null {
+  const d = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+  if (d.caretRangeFromPoint) return d.caretRangeFromPoint(x, y);
+  if (d.caretPositionFromPoint) {
+    const p = d.caretPositionFromPoint(x, y);
+    if (p) { const r = document.createRange(); r.setStart(p.offsetNode, p.offset); return r; }
+  }
+  return null;
+}
 
 interface Props {
   id: number;
@@ -429,16 +443,7 @@ export default function Block(props: Props) {
   // then activate the block there.
   const activateAtPoint = (host: HTMLElement, x: number, y: number) => {
     let caret: number | undefined;
-    const doc = document as Document & {
-      caretRangeFromPoint?: (x: number, y: number) => Range | null;
-      caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
-    };
-    let range: Range | null = null;
-    if (doc.caretRangeFromPoint) range = doc.caretRangeFromPoint(x, y);
-    else if (doc.caretPositionFromPoint) {
-      const pos = doc.caretPositionFromPoint(x, y);
-      if (pos) { range = document.createRange(); range.setStart(pos.offsetNode, pos.offset); }
-    }
+    const range = caretRangeAt(x, y);
     if (range && host.contains(range.startContainer)) {
       const pre = range.cloneRange();
       pre.selectNodeContents(host);
@@ -448,8 +453,28 @@ export default function Block(props: Props) {
     props.onActivate(caret);
   };
 
+  // Browse for a file to fill an empty image (![]() ) placeholder's src.
+  const fillEmptyImage = async () => {
+    const target = findImages(props.text).find((im) => !im.src.trim());
+    if (!target) return;
+    const path = await pickImageFile();
+    if (!path) return;
+    const ref = await imageInsertRef(path);
+    const dest = /\s/.test(ref) ? `<${ref}>` : ref;
+    const markup = target.kind === "html"
+      ? `<img src="${dest}" alt="${target.alt}" />`
+      : `![${target.alt}](${dest})`;
+    props.onChange(props.text.slice(0, target.start) + markup + props.text.slice(target.end));
+  };
+
   const onRenderedClick = (e: MouseEvent) => {
     const t = e.target as HTMLElement;
+    // The Browse chip on an empty-image hint opens the file picker.
+    if (t.closest("[data-img-browse]")) {
+      e.preventDefault();
+      void fillEmptyImage();
+      return;
+    }
     // A checkbox is handled on click. Do NOT preventDefault here: in WebKit (the
     // macOS Tauri webview) preventDefault on a form control's mousedown can
     // suppress the following click, which is where the toggle lives. The early
@@ -482,6 +507,43 @@ export default function Block(props: Props) {
       // A drag (or any resulting non-empty selection) stays as a selection.
       if (dragged || (sel && !sel.isCollapsed)) return;
       activateAtPoint(host, u.clientX, u.clientY);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  // Drag-select starting inside the active (contenteditable) block: a native
+  // selection is trapped in this editing host, so once the drag crosses into
+  // another block, deactivate this one (every block becomes a plain rendered
+  // node) and drive the cross-block selection manually from the start point.
+  const onSourceMouseDown = (e: MouseEvent) => {
+    if (e.button !== 0) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const thisBlock = rootEl;
+    let anchor: { node: Node; offset: number } | null = null;
+    let switched = false;
+    const extendTo = (x: number, y: number) => {
+      const f = caretRangeAt(x, y);
+      const sel = window.getSelection();
+      if (anchor && f && sel) sel.setBaseAndExtent(anchor.node, anchor.offset, f.startContainer, f.startOffset);
+    };
+    const onMove = (m: MouseEvent) => {
+      if (switched) { extendTo(m.clientX, m.clientY); return; }
+      const over = (document.elementFromPoint(m.clientX, m.clientY) as HTMLElement | null)?.closest(".block");
+      if (over && over !== thisBlock) {
+        switched = true;
+        props.onDeactivate(); // → all blocks rendered; re-render lands next frame
+        requestAnimationFrame(() => {
+          const a = caretRangeAt(startX, startY);
+          anchor = a ? { node: a.startContainer, offset: a.startOffset } : null;
+          extendTo(m.clientX, m.clientY);
+        });
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -525,6 +587,7 @@ export default function Block(props: Props) {
           classList={{ "code-block": isFence() }}
           contentEditable={true}
           spellcheck={spellcheckOn()}
+          onMouseDown={onSourceMouseDown}
           onInput={onInput}
           onKeyDown={onKeyDown}
           onPaste={onPaste}

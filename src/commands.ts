@@ -52,7 +52,8 @@ import {
   buildExportHtml, pageCss, readExportOverrides, pandocFlagsFor, resolveOutputPath,
   EXPORT_PRINT_CSS, PDF_PRINT_CSS, type ExportPreset, type ExportFormat,
 } from "./export";
-import { docDir, currentFrontMatter, docBaseName } from "./images";
+import { docDir, currentFrontMatter, docBaseName, stripFrontMatter } from "./images";
+import { setImageRootPath } from "./imageactions";
 // The app stylesheet as a string (bundled at build time), so exports embed it
 // reliably — a runtime fetch of a side-effect-imported CSS file is fragile in
 // packaged builds.
@@ -304,7 +305,8 @@ function loadExportCss(): string {
  */
 async function renderBody(md: string): Promise<string> {
   const div = document.createElement("div");
-  div.innerHTML = renderMarkdown(md);
+  // Front matter is document metadata, never part of the rendered body.
+  div.innerHTML = renderMarkdown(stripFrontMatter(md));
   await renderMermaidIn(div);
   await renderD2In(div);
   return div.innerHTML;
@@ -803,14 +805,14 @@ function clearFormat() {
  * `copy-images-to` front-matter override) expands ${filename} to the
  * doc's base name. Otherwise the path is relativized against the doc dir.
  */
-async function imageInsertRef(absPath: string): Promise<string> {
+export async function imageInsertRef(absPath: string): Promise<string> {
+  const norm = (p: string) => p.replace(/\\/g, "/");
   const dir = docDir();
-  if (!dir) return absPath;
   const fm = currentFrontMatter();
   // copy-images-to enables copy for the document even if the global toggle
-  // is off.
+  // is off. Copying needs a doc dir to copy into.
   const template = fm["copy-images-to"] ?? (copyImageToAssets() ? copyImagesToFolder() : null);
-  if (template) {
+  if (dir && template) {
     const folder = template.replace(/\$\{filename\}/g, docBaseName());
     try {
       return await copyAsset(absPath, dir, folder);
@@ -818,8 +820,16 @@ async function imageInsertRef(absPath: string): Promise<string> {
       await alertDialog(String(e));
     }
   }
-  const norm = (p: string) => p.replace(/\\/g, "/");
-  if (norm(absPath).startsWith(norm(dir) + "/")) return norm(absPath).slice(norm(dir).length + 1);
+  // When an image root is set and the file lives under it, store a
+  // root-relative link (/rel) — it resolves against the root and works even
+  // for unsaved documents (which have no doc dir to be relative to).
+  const root = fm["image-root-url"];
+  if (root) {
+    const r = norm(root).replace(/\/+$/, "");
+    if (norm(absPath).startsWith(r + "/")) return "/" + norm(absPath).slice(r.length + 1);
+  }
+  // Otherwise store relative to the document folder when the file is under it.
+  if (dir && norm(absPath).startsWith(norm(dir) + "/")) return norm(absPath).slice(norm(dir).length + 1);
   return absPath;
 }
 
@@ -970,8 +980,7 @@ const registry: Record<string, Command> = {
   },
   "format.image.insert": insertImage,
   "format.image.copy_to_folder": toggleCopyImageToAssets,
-  "format.image.root_path": () => alertDialog("Image root path is not implemented yet."),
-  "format.image.upload": () => alertDialog("Image upload is not implemented yet."),
+  "format.image.root_path": () => void setImageRootPath(),
   "format.clear": clearFormat,
 
   // View

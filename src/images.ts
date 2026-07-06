@@ -23,6 +23,13 @@ export function currentFrontMatter(): Record<string, string> {
   return first.startsWith("---\n") ? parseFrontMatter(first) : {};
 }
 
+/** Drop a leading YAML front-matter block (and the blank line after it). Used
+ *  to keep metadata like `image-root-url` out of rendered exports. */
+export function stripFrontMatter(md: string): string {
+  const m = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(md);
+  return m ? md.slice(m[0].length).replace(/^\s*\n/, "") : md;
+}
+
 /* ---------- path helpers ---------- */
 
 /** Directory containing the current document, or null when unsaved. */
@@ -42,6 +49,11 @@ export function docBaseName(): string {
 }
 
 const isAbsolute = (p: string) => /^([A-Za-z]:[\\/]|\/)/.test(p);
+
+// A leading-slash path that points at a real filesystem location (a system
+// root dir), as opposed to a root-relative link like /images/x.png. Used so an
+// image root doesn't double-join an absolute path such as /Users/x/pic.png.
+const FS_ABS_ROOT = /^\/(?:Users|home|root|Applications|Library|System|Volumes|private|tmp|var|opt|usr|bin|sbin|etc|mnt|media|dev|srv)\//;
 
 /* ---------- image occurrences in block source ---------- */
 
@@ -113,7 +125,15 @@ interface ResolveCtx {
 export function toAbsImagePath(src: string, ctx: Omit<ResolveCtx, "convert">): string | null {
   const s = src.trim();
   if (!s || REMOTE.test(s) || s.startsWith("//")) return null;
-  if (s.startsWith("/")) return ctx.rootUrl ? joinPath(ctx.rootUrl, s.slice(1)) : s;
+  if (s.startsWith("/")) {
+    if (!ctx.rootUrl) return s;
+    const root = ctx.rootUrl.replace(/\\/g, "/").replace(/\/+$/, "");
+    // An absolute path (under the root, or any real filesystem path) is used
+    // as-is; only a bare root-relative link like /images/x.png is joined onto
+    // the root. Without this, /Users/x/pic.png would be double-joined.
+    if (s.startsWith(root + "/") || FS_ABS_ROOT.test(s)) return s;
+    return joinPath(root, s.slice(1));
+  }
   if (isAbsolute(s)) return s.replace(/\\/g, "/");
   return ctx.dir ? joinPath(ctx.dir, s) : null;
 }

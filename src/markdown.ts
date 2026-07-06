@@ -428,6 +428,19 @@ function renderFootnoteDefs(md: string): string {
  * Render a markdown string to sanitized HTML. `blockKey` (a block's stable id)
  * enables the last-good-on-math-error fallback for that block.
  */
+// Inline placeholder for an image with no source yet (![]() ). Injected after
+// sanitization, so its markers survive. Block.tsx wires the interactions:
+// clicking the chip activates the block to type a URL; the Browse chip opens a
+// file picker and fills the src.
+const EMPTY_IMG_HINT =
+  '<span class="img-empty" data-img-empty contenteditable="false">' +
+  '<svg class="img-empty-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">' +
+  '<rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="m21 15-4.5-4.5L5 21"/></svg>' +
+  '<span class="img-empty-label">Add an image — paste a URL, or</span>' +
+  '<span class="img-empty-browse" data-img-browse role="button" tabindex="0">' +
+  '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">' +
+  '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Browse…</span></span>';
+
 export function renderMarkdown(md: string, blockKey?: string): string {
   if (!md.trim()) return `<p class="empty-block">&nbsp;</p>`;
   const trimmed = md.trim();
@@ -444,6 +457,16 @@ export function renderMarkdown(md: string, blockKey?: string): string {
   }
   // A block of only `[^id]: text` lines renders as the footnotes section.
   if (isFootnoteDefBlock(md)) return renderFootnoteDefs(md);
+
+  // YAML front matter. The live view boxes a `---\n…` block (Block.tsx isFence),
+  // but marked would parse `---\n…\n---` as a thematic break + setext heading.
+  // Render it as a metadata code box so the active and inactive views match.
+  if (trimmed.startsWith("---\n") && /\n---$/.test(trimmed)) {
+    return DOMPurify.sanitize(
+      `<pre class="front-matter"><code>${escapeHtml(trimmed)}</code></pre>`,
+      SANITIZE_OPTS,
+    );
+  }
 
   mathStash = [];
   mermaidStash = [];
@@ -476,7 +499,8 @@ export function renderMarkdown(md: string, blockKey?: string): string {
   // above; their resolved asset URLs pass the resolver through unchanged).
   html = html.replace(/<img\b[^>]*>/gi, (tag) => {
     const m = /\ssrc\s*=\s*"([^"]*)"/i.exec(tag);
-    if (!m) return tag;
+    // An image with no source yet → an inline hint to type a URL or browse.
+    if (!m || !m[1].trim()) return EMPTY_IMG_HINT;
     const resolved = imageResolver(m[1]);
     return resolved === m[1] ? tag : tag.replace(m[0], ` src="${escapeAttr(resolved)}"`);
   });

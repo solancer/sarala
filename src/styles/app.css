@@ -755,6 +755,41 @@ body { font-family: var(--font-ui); }
 .rendered th { background: var(--tint); font-family: var(--font-prose); font-weight: 600; text-align: left; }
 .rendered hr { border: 0; border-top: 1px solid var(--rule); margin: 1.2em 0; }
 .rendered img { max-width: 100%; border-radius: 6px; }
+
+/* Inline hint for an image with no source yet (![]() ). */
+.img-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 10px;
+  border: 1px dashed var(--rule);
+  border-radius: 8px;
+  background: var(--tint);
+  color: var(--ink-soft);
+  font: 13px var(--font-ui);
+  vertical-align: middle;
+  cursor: text;
+  user-select: none;
+}
+.img-empty:hover { border-color: var(--ink-soft); }
+.img-empty-ic { flex: none; color: var(--ink-soft); }
+.img-empty-label { white-space: nowrap; }
+.img-empty-browse {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--bg-page);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  font: 600 12px var(--font-ui);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+.img-empty-browse:hover { border-color: var(--accent); color: var(--accent); }
+.img-empty-browse svg { flex: none; }
+
 .empty-block { color: var(--ink-soft); }
 
 /* ---------- status bar ---------- */

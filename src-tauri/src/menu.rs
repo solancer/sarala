@@ -693,7 +693,6 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             "Use Image Root Path…",
             None,
         )?)
-        .item(&mi(app, "format.image.upload", "Upload Image", None)?)
         .build()?;
 
     let format = SubmenuBuilder::new(app, "Format")

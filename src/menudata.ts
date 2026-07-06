@@ -350,7 +350,6 @@ export const MENUS: TopMenu[] = [
           { sep: true },
           { id: "format.image.copy_to_folder", label: "When Insert Local Image: Copy to Assets Folder", type: "check", checked: () => copyImageToAssets() },
           { id: "format.image.root_path", label: "Use Image Root Path…" },
-          { id: "format.image.upload", label: "Upload Image" },
         ],
       },
       { sep: true },

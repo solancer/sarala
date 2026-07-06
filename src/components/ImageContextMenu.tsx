@@ -1,7 +1,7 @@
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import {
   openImageLocation, copyImageTo, renameMoveImage, deleteImageFile,
-  uploadImage, setImageZoom, switchImageSyntax, type ImageTarget,
+  setImageZoom, switchImageSyntax, type ImageTarget,
 } from "../imageactions";
 
 const [target, setTarget] = createSignal<ImageTarget | null>(null);
@@ -53,7 +53,6 @@ export default function ImageContextMenu() {
           <button class="im-item" onClick={run(openImageLocation)}>Open Image Location…</button>
           <button class="im-item" onClick={run(copyImageTo)}>Copy Image to…</button>
           <button class="im-item" onClick={run(renameMoveImage)}>Rename or Move Image to…</button>
-          <button class="im-item" onClick={run(() => uploadImage())}>Upload Image</button>
           <div class="im-sep" />
           <div class="im-sub" onMouseEnter={() => setSubmenu("zoom")} onMouseLeave={() => setSubmenu(null)}>
             <button class="im-item im-parent">Zoom Image<span class="im-caret">›</span></button>

@@ -1,4 +1,4 @@
-import { doc, updateBlock } from "./store";
+import { doc, updateBlock, insertBlockAfter } from "./store";
 import {
   isTauri, revealInDir, copyFileTo, renameFile, deleteFile,
   pickFolder, pickSavePath, confirmDialog, alertDialog,
@@ -101,8 +101,37 @@ export async function deleteImageFile(t: ImageTarget) {
   updateBlock(i, text.slice(0, t.start) + text.slice(end));
 }
 
-export async function uploadImage() {
-  await alertDialog("Image upload is not configured.");
+/** Add or update a key in the document's YAML front matter (block 0). */
+function setFrontMatterKey(key: string, value: string) {
+  const entry = `${key}: "${value}"`;
+  const first = doc.blocks[0]?.text ?? "";
+  const m = /^---\n([\s\S]*?)\n---\s*$/.exec(first);
+  if (m) {
+    const lines = m[1].split("\n");
+    const re = new RegExp(`^\\s*${key}\\s*:`);
+    const idx = lines.findIndex((l) => re.test(l));
+    if (idx >= 0) lines[idx] = entry;
+    else lines.push(entry);
+    updateBlock(0, `---\n${lines.join("\n")}\n---`);
+  } else {
+    // No front matter yet — prepend a new block (insertBlockAfter(-1) → index 0).
+    insertBlockAfter(-1, `---\n${entry}\n---`);
+  }
+}
+
+/**
+ * Choose a folder to resolve root-relative image links (`/img/foo.png`)
+ * against. Stored as the `image-root-url` front-matter key that the image
+ * resolver (images.ts) already honours.
+ */
+export async function setImageRootPath() {
+  if (!isTauri) {
+    await alertDialog("Setting an image root path is only available in the desktop app.");
+    return;
+  }
+  const dir = await pickFolder();
+  if (!dir) return;
+  setFrontMatterKey("image-root-url", dir.replace(/\\/g, "/"));
 }
 
 /** Apply a zoom percentage — forces HTML syntax (markdown can't carry size). */

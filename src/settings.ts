@@ -36,8 +36,11 @@ interface SettingsData {
 }
 
 const DEFAULT_PDF: PdfOptions = {
-  // margin "0" → full-bleed: the theme background reaches the page edges (text
-  // inset via padding). Set a non-zero margin to get @page header/footer.
+  // margin "0" → full-bleed: the theme background fills every page edge-to-edge.
+  // On WebKit the @page margin area (and the page canvas under a non-zero
+  // margin) can't take the theme colour, so a non-zero margin would leave white
+  // bands. Default to full-bleed so the background stays consistent; a non-zero
+  // margin (framed, with page-break spacing) is available for those who want it.
   pageSize: "A4",
   margin: "0",
   header: "",
