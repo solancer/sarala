@@ -1,6 +1,6 @@
 [package]
 name = "sarala"
-version = "0.2.3"
+version = "0.3.0"
 description = "A seamless WYSIWYG Markdown editor"
 authors = ["Srinivas Gowda"]
 license = "GPL-3.0-or-later"
