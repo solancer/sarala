@@ -49,7 +49,9 @@ parts:
     plugin: dump
     source: .
     build-snaps:
-      - node/20/stable
+      # Node 22: pnpm 11.10.0 requires Node >=22.13 (it uses the node:sqlite
+      # builtin); Node 20 crashes with ERR_UNKNOWN_BUILTIN_MODULE.
+      - node/22/stable
       - rustup/latest/stable
     build-packages:
       - libwebkit2gtk-4.1-dev
