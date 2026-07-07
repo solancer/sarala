@@ -168,7 +168,7 @@ export type TableEdit =
   | { kind: "row_above" }
   | { kind: "row_below" }
   | { kind: "delete_row" }
-  | { kind: "add_col" }
+  | { kind: "add_col"; before?: boolean }
   | { kind: "delete_col" }
   | { kind: "align"; align: Align };
 
@@ -192,10 +192,12 @@ export function editTable(text: string, offset: number, edit: TableEdit): string
       if (row === 0 || t.rows.length <= 2) return text;
       t.rows.splice(row, 1);
       break;
-    case "add_col":
-      t.align.splice(col + 1, 0, null);
-      for (const r of t.rows) r.splice(col + 1, 0, "  ");
+    case "add_col": {
+      const at = edit.before ? col : col + 1;
+      t.align.splice(at, 0, null);
+      for (const r of t.rows) r.splice(at, 0, "  ");
       break;
+    }
     case "delete_col":
       if (t.align.length <= 1) return text;
       t.align.splice(col, 1);
@@ -206,4 +208,39 @@ export function editTable(text: string, offset: number, edit: TableEdit): string
       break;
   }
   return serializeTable(t);
+}
+
+/**
+ * Reformat table source so every column's pipes line up: cells are padded to
+ * the widest value in their column and the separator dashes fill that width,
+ * keeping any alignment colons.
+ *   prettifyTable("|a|bb|\n|-|-|\n|ccc|d|")
+ *     → "| a   | bb |\n| --- | -- |\n| ccc | d  |"
+ */
+export function prettifyTable(text: string): string | null {
+  const t = parseTable(text);
+  if (!t) return null;
+  const widths = t.align.map((_, c) =>
+    Math.max(3, ...t.rows.map((r) => (r[c] ?? "").trim().length)),
+  );
+  const pad = (s: string, w: number, a: Align) => {
+    const v = s.trim();
+    const extra = w - v.length;
+    if (a === "right") return " ".repeat(extra) + v;
+    if (a === "center") {
+      const left = Math.floor(extra / 2);
+      return " ".repeat(left) + v + " ".repeat(extra - left);
+    }
+    return v + " ".repeat(extra);
+  };
+  const row = (cells: string[]) =>
+    "| " + cells.map((c, i) => pad(c ?? "", widths[i], t.align[i])).join(" | ") + " |";
+  const sep = "| " + t.align.map((a, i) => {
+    const w = widths[i];
+    if (a === "center") return ":" + "-".repeat(w - 2) + ":";
+    if (a === "right") return "-".repeat(w - 1) + ":";
+    if (a === "left") return ":" + "-".repeat(w - 1);
+    return "-".repeat(w);
+  }).join(" | ") + " |";
+  return [row(t.rows[0]), sep, ...t.rows.slice(1).map(row)].join("\n");
 }

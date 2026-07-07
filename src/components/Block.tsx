@@ -1,4 +1,4 @@
-import { Show, createEffect, on, onCleanup } from "solid-js";
+import { Show, createEffect, createSignal, on, onCleanup } from "solid-js";
 import { renderMarkdown, hasOpenFence } from "../markdown";
 import {
   styleSource, getCaretOffset, getSelectionOffsets, setCaret, setSelection,
@@ -18,6 +18,8 @@ import { findImages } from "../images";
 import { pasteToInsert } from "../richpaste";
 import { openImageMenu } from "./ImageContextMenu";
 import { openEditorMenu } from "./EditorContextMenu";
+import ImageHoverTools from "./ImageHoverTools";
+import type { ImageTarget } from "../imageactions";
 import TableToolbar from "./TableToolbar";
 import CodeLangPicker from "./CodeLangPicker";
 import D2SizeControl from "./D2SizeControl";
@@ -391,6 +393,46 @@ export default function Block(props: Props) {
     );
   };
 
+  // Hover toolbar anchored to a rendered image's top-right corner. Shown on
+  // image hover, kept alive while the pointer is over the toolbar, and hidden
+  // on a short delay so moving from image → toolbar doesn't flicker it away.
+  const [imgTool, setImgTool] = createSignal<
+    { target: ImageTarget; top: number; left: number } | null
+  >(null);
+  let hideTimer: number | undefined;
+  const cancelHide = () => { clearTimeout(hideTimer); hideTimer = undefined; };
+  const scheduleHide = () => {
+    cancelHide();
+    hideTimer = window.setTimeout(() => setImgTool(null), 140);
+  };
+  onCleanup(cancelHide);
+
+  // Map the <img> under the pointer to its source ImageRef and anchor the
+  // toolbar at the image's top-right (inset), positioned within the block.
+  const imageRefFor = (img: HTMLImageElement): ImageTarget | null => {
+    const imgs = findImages(props.text);
+    const ordinal = [...(renderedEl?.querySelectorAll("img") ?? [])].indexOf(img);
+    const ref = imgs[ordinal];
+    return ref ? { ...ref, blockId: props.id } : null;
+  };
+  const onRenderedMouseOver = (e: MouseEvent) => {
+    const img = (e.target as HTMLElement).closest("img");
+    if (!img || !renderedEl?.contains(img) || !rootEl) return;
+    const target = imageRefFor(img as HTMLImageElement);
+    if (!target) return;
+    cancelHide();
+    const br = rootEl.getBoundingClientRect();
+    const ir = img.getBoundingClientRect();
+    // Anchor at the image's top-left corner (inset): aligns with the text
+    // column, and its menu/fields open rightward into open space.
+    setImgTool({ target, top: ir.top - br.top + 8, left: ir.left - br.left + 8 });
+  };
+  const onRenderedMouseOut = (e: MouseEvent) => {
+    const to = e.relatedTarget as HTMLElement | null;
+    if (to && (to.closest("img") || to.closest(".img-tools"))) return;
+    scheduleHide();
+  };
+
   // Right-click an image in the rendered view → image context menu. The
   // nth <img> maps to the nth image occurrence in this block's source.
   const onRenderedContextMenu = (e: MouseEvent) => {
@@ -403,6 +445,9 @@ export default function Block(props: Props) {
       if (ref) {
         e.preventDefault();
         e.stopPropagation();
+        // WebKit selects the image on right-click; drop that selection so the
+        // whole image doesn't flash blue behind the menu.
+        window.getSelection()?.removeAllRanges();
         openImageMenu({ ...ref, blockId: props.id }, e.clientX, e.clientY);
         return;
       }
@@ -414,7 +459,7 @@ export default function Block(props: Props) {
     if (!text.trim()) activateAtPoint(host, e.clientX, e.clientY);
     e.preventDefault();
     e.stopPropagation();
-    openEditorMenu(e.clientX, e.clientY, text);
+    openEditorMenu(e.clientX, e.clientY, text, !!parseTable(props.text));
   };
 
   // Right-click inside the active (editable) block keeps the caret/selection.
@@ -422,7 +467,7 @@ export default function Block(props: Props) {
     e.preventDefault();
     e.stopPropagation();
     const sel = window.getSelection();
-    openEditorMenu(e.clientX, e.clientY, sel && !sel.isCollapsed ? sel.toString() : "");
+    openEditorMenu(e.clientX, e.clientY, sel && !sel.isCollapsed ? sel.toString() : "", !!parseTable(props.text));
   };
 
   // Task-list toggling lives on `click`, not `mousedown`: toggling rewrites the
@@ -488,6 +533,10 @@ export default function Block(props: Props) {
       openExternal(link.getAttribute("href")!);
       return;
     }
+    // Clicking an image no longer drops the block into raw ![](…) source — the
+    // hover toolbar owns image edits. Leave surrounding text clickable so the
+    // rest of the paragraph still enters edit mode normally.
+    if (t.closest("img")) { e.preventDefault(); return; }
     if (e.button !== 0) return;
     // Defer activation until mouseup: a plain click enters the block for editing,
     // but a drag is left alone so the browser can extend a native selection
@@ -567,9 +616,28 @@ export default function Block(props: Props) {
               onMouseDown={onRenderedClick}
               onClick={onRenderedCheckboxClick}
               onContextMenu={onRenderedContextMenu}
+              onMouseOver={onRenderedMouseOver}
+              onMouseOut={onRenderedMouseOut}
               // eslint-disable-next-line solid/no-innerhtml -- renderMarkdown output is DOMPurify-sanitized
               innerHTML={(renderEpoch(), mermaidEpoch(), renderMarkdown(props.text, String(props.id)))}
             />
+            <Show when={imgTool()}>
+              {(it) => (
+                <ImageHoverTools
+                  target={it().target}
+                  top={it().top}
+                  left={it().left}
+                  onEnter={cancelHide}
+                  onLeave={scheduleHide}
+                  onClose={() => setImgTool(null)}
+                  onShowSource={() => {
+                    const start = it().target.start;
+                    setImgTool(null);
+                    props.onActivate(start);
+                  }}
+                />
+              )}
+            </Show>
             <Show when={isD2()}>
               <D2SizeControl
                 zoom={d2Zoom()}

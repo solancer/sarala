@@ -144,3 +144,15 @@ export function switchImageSyntax(t: ImageTarget, to: "md" | "html") {
   if (to === t.kind) return;
   rewrite(t, imageMarkup(t.src, t.alt, to));
 }
+
+/** Replace the image's source, preserving its alt text and syntax kind. */
+export function setImageSource(t: ImageTarget, src: string) {
+  if (src === t.src) return;
+  rewrite(t, imageMarkup(src, t.alt, t.kind));
+}
+
+/** Replace the image's alt text, preserving its source and syntax kind. */
+export function setImageAlt(t: ImageTarget, alt: string) {
+  if (alt === t.alt) return;
+  rewrite(t, imageMarkup(t.src, alt, t.kind));
+}

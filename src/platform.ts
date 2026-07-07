@@ -14,6 +14,13 @@ export const isMac =
   typeof navigator !== "undefined" &&
   /Mac/i.test(navigator.userAgent || (navigator as { platform?: string }).platform || "");
 
+// Linux (WebKitGTK under Tauri) renders fonts ~100 weight units heavier than
+// specified, so text looks too bold. Used to gate a Linux-only weight step-down.
+export const isLinux =
+  typeof navigator !== "undefined" &&
+  /Linux/i.test(navigator.userAgent || (navigator as { platform?: string }).platform || "") &&
+  !/Android/i.test(navigator.userAgent || "");
+
 async function tauriCore() {
   return await import("@tauri-apps/api/core");
 }

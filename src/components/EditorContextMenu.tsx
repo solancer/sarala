@@ -8,6 +8,7 @@ const ICONS: Record<string, string> = {
   copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
   paste: '<rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
   copyAs: '<rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8"/><path d="M8 16h5"/>',
+  table: '<path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/>',
 };
 
 function Icon(props: { name: string }) {
@@ -31,13 +32,15 @@ interface MenuState {
   y: number;
   /** Selected text captured when the menu opened (drives Look Up / Search etc.). */
   selection: string;
+  /** Right-click landed inside a table block → show the Table submenu. */
+  inTable: boolean;
 }
 
 const [state, setState] = createSignal<MenuState | null>(null);
 
 /** Open the editor context menu at a screen position, with the current selection. */
-export function openEditorMenu(x: number, y: number, selection: string) {
-  setState({ x, y, selection });
+export function openEditorMenu(x: number, y: number, selection: string, inTable = false) {
+  setState({ x, y, selection, inTable });
 }
 export function closeEditorMenu() {
   setState(null);
@@ -45,6 +48,7 @@ export function closeEditorMenu() {
 
 export default function EditorContextMenu() {
   const [subOpen, setSubOpen] = createSignal(false);
+  const [tableOpen, setTableOpen] = createSignal(false);
 
   onMount(() => {
     const onDown = (e: MouseEvent) => {
@@ -103,6 +107,31 @@ export default function EditorContextMenu() {
                 </div>
               </Show>
             </div>
+            <Show when={s().inTable}>
+              <div class="ctx-sep" />
+              <div class="ctx-sub" onMouseEnter={() => setTableOpen(true)} onMouseLeave={() => setTableOpen(false)}>
+                <button class="ctx-item ctx-parent">
+                  <Icon name="table" /><span class="ctx-label">Table</span><span class="ctx-caret">›</span>
+                </button>
+                <Show when={tableOpen()}>
+                  <div class="ctx-menu ctx-flyout">
+                    <button class="ctx-item" onMouseDown={cmd("paragraph.table.row_above")}><span class="ctx-label">Add Row Above</span></button>
+                    <button class="ctx-item" onMouseDown={cmd("paragraph.table.row_below")}><span class="ctx-label">Add Row Below</span></button>
+                    <div class="ctx-sep" />
+                    <button class="ctx-item" onMouseDown={cmd("paragraph.table.add_col_before")}><span class="ctx-label">Add Column Before</span></button>
+                    <button class="ctx-item" onMouseDown={cmd("paragraph.table.add_col")}><span class="ctx-label">Add Column After</span></button>
+                    <div class="ctx-sep" />
+                    <button class="ctx-item" onMouseDown={cmd("paragraph.table.delete_row")}><span class="ctx-label">Delete Row</span></button>
+                    <button class="ctx-item" onMouseDown={cmd("paragraph.table.delete_col")}><span class="ctx-label">Delete Column</span></button>
+                    <div class="ctx-sep" />
+                    <button class="ctx-item" onMouseDown={cmd("paragraph.table.copy")}><span class="ctx-label">Copy Table</span></button>
+                    <button class="ctx-item" onMouseDown={cmd("paragraph.table.prettify")}><span class="ctx-label">Prettify Source Code</span></button>
+                    <div class="ctx-sep" />
+                    <button class="ctx-item" onMouseDown={cmd("edit.delete_block")}><span class="ctx-label">Delete Table</span></button>
+                  </div>
+                </Show>
+              </div>
+            </Show>
           </div>
         );
       }}

@@ -137,22 +137,41 @@ function isTableSeparator(raw: string): boolean {
   return cells.length >= 1 && cells.every((c) => /^\s*:?-+:?\s*$/.test(c));
 }
 
+type ColAlign = "left" | "center" | "right" | null;
+
+/** Per-column alignment from a separator line's `:` markers (`:-:` → center). */
+function columnAligns(sep: string): ColAlign[] {
+  const cells = sep.trim().replace(/^\|/, "").replace(/\|$/, "").split("|");
+  return cells.map((c) => {
+    const s = c.trim();
+    const left = s.startsWith(":");
+    const right = s.endsWith(":");
+    if (left && right) return "center";
+    if (right) return "right";
+    if (left) return "left";
+    return null;
+  });
+}
+
 /**
  * One table source line as a CSS table row: pipes become hidden .md-pipe
  * marks, cell content becomes .md-tcell (laid out as table cells), and the
  * separator row is display:none entirely. Split/join on "|" keeps the row's
  * textContent identical to the source line.
  */
-function styleTableRow(raw: string, isSep: boolean): string {
+function styleTableRow(raw: string, isSep: boolean, aligns: ColAlign[]): string {
   const line = esc(raw);
   const parts = line.split("|");
   let html = `<span class="md-trow${isSep ? " md-tsep" : ""}">`;
+  let col = 0; // index into aligns — advances once per emitted cell
   for (let i = 0; i < parts.length; i++) {
     if (i > 0) html += `<span class="md-mark md-pipe">|</span>`;
     // Empty text outside the outermost pipes isn't a cell — keeping it bare
     // avoids phantom empty columns.
     if ((i === 0 || i === parts.length - 1) && parts[i] === "") continue;
-    html += `<span class="md-tcell">${isSep ? mark(parts[i]) : inline(parts[i])}</span>`;
+    const a = aligns[col++];
+    const style = a ? ` style="text-align:${a}"` : "";
+    html += `<span class="md-tcell"${style}>${isSep ? mark(parts[i]) : inline(parts[i])}</span>`;
   }
   return html + "</span>";
 }
@@ -201,10 +220,11 @@ export function styleSource(src: string): string {
     // table via CSS. Rows are joined with "\n" INSIDE the wrapper so the
     // block's overall textContent is unchanged.
     if (raw.includes("|") && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+      const aligns = columnAligns(lines[i + 1]);
       const rows: string[] = [];
       let j = i;
       while (j < lines.length && lines[j].includes("|")) {
-        rows.push(styleTableRow(lines[j], j === i + 1));
+        rows.push(styleTableRow(lines[j], j === i + 1, aligns));
         j++;
       }
       out.push(`<span class="md-table">${rows.join("\n")}</span>`);

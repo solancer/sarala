@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
-import { tableDims } from "../tabletools";
+import { tableDims, parseTable, columnAtOffset } from "../tabletools";
 import { executeCommand, resizeActiveTable, toggleTableFullWidth } from "../commands";
-import { tableFullWidth } from "../store";
+import { tableFullWidth, liveCaretOffset } from "../store";
 
 interface Props {
   text: string;
@@ -24,6 +24,15 @@ export default function TableToolbar(props: Props) {
   const [inputCols, setInputCols] = createSignal<number | null>(null);
 
   const shown = () => hover() ?? { rows: inputRows() ?? dims().rows, cols: inputCols() ?? dims().cols };
+
+  // Alignment of the column the caret sits in, so its toolbar button lights up.
+  // A column with no explicit `:` markers is left-aligned by default.
+  const activeAlign = createMemo(() => {
+    const t = parseTable(props.text);
+    if (!t) return null;
+    const col = Math.min(columnAtOffset(props.text, liveCaretOffset()), t.align.length - 1);
+    return t.align[col] ?? "left";
+  });
 
   const apply = (rows: number, cols: number) => {
     setPickerOpen(false);
@@ -49,13 +58,13 @@ export default function TableToolbar(props: Props) {
         >
           <svg viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z" opacity=".75"/></svg>
         </button>
-        <button class="tt-btn" title="Align column left" onClick={() => executeCommand("paragraph.table.align_left")}>
+        <button class="tt-btn" classList={{ on: activeAlign() === "left" }} title="Align column left" onClick={() => executeCommand("paragraph.table.align_left")}>
           <svg viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M2 3h12v1.6H2zM2 7.2h8v1.6H2zM2 11.4h12v1.6H2z"/></svg>
         </button>
-        <button class="tt-btn" title="Align column center" onClick={() => executeCommand("paragraph.table.align_center")}>
+        <button class="tt-btn" classList={{ on: activeAlign() === "center" }} title="Align column center" onClick={() => executeCommand("paragraph.table.align_center")}>
           <svg viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M2 3h12v1.6H2zM4 7.2h8v1.6H4zM2 11.4h12v1.6H2z"/></svg>
         </button>
-        <button class="tt-btn" title="Align column right" onClick={() => executeCommand("paragraph.table.align_right")}>
+        <button class="tt-btn" classList={{ on: activeAlign() === "right" }} title="Align column right" onClick={() => executeCommand("paragraph.table.align_right")}>
           <svg viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M2 3h12v1.6H2zM6 7.2h8v1.6H6zM2 11.4h12v1.6H2z"/></svg>
         </button>
         <button

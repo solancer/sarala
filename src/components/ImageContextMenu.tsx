@@ -1,4 +1,4 @@
-import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import {
   openImageLocation, copyImageTo, renameMoveImage, deleteImageFile,
   setImageZoom, switchImageSyntax, type ImageTarget,
@@ -20,6 +20,27 @@ const ZOOMS = [25, 50, 75, 100, 150, 200];
 
 export default function ImageContextMenu() {
   const [submenu, setSubmenu] = createSignal<"zoom" | "syntax" | null>(null);
+  // Position clamped into the viewport, and whether submenu flyouts must open
+  // leftward (measured after mount so the raw click point can overflow an edge).
+  const [place, setPlace] = createSignal<{ x: number; y: number; flip: boolean }>({ x: 0, y: 0, flip: false });
+  let menuEl: HTMLDivElement | undefined;
+
+  createEffect(() => {
+    if (!target()) return;
+    const { x, y } = pos();
+    setPlace({ x, y, flip: false });
+    // Measure once laid out, then nudge fully on-screen (before paint).
+    queueMicrotask(() => {
+      if (!menuEl) return;
+      const r = menuEl.getBoundingClientRect();
+      const m = 8; // viewport margin
+      const nx = Math.max(m, Math.min(x, window.innerWidth - r.width - m));
+      const ny = Math.max(m, Math.min(y, window.innerHeight - r.height - m));
+      // Flip flyouts left when a ~210px submenu wouldn't fit to the right.
+      const flip = nx + r.width + 210 > window.innerWidth - m;
+      setPlace({ x: nx, y: ny, flip });
+    });
+  });
 
   onMount(() => {
     const onDown = (e: MouseEvent) => {
@@ -47,7 +68,9 @@ export default function ImageContextMenu() {
       {(t) => (
         <div
           class="img-menu"
-          style={{ left: `${pos().x}px`, top: `${pos().y}px` }}
+          classList={{ "im-flip": place().flip }}
+          ref={menuEl}
+          style={{ left: `${place().x}px`, top: `${place().y}px` }}
           onContextMenu={(e) => e.preventDefault()}
         >
           <button class="im-item" onClick={run(openImageLocation)}>Open Image Location…</button>

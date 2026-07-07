@@ -65,7 +65,7 @@ import { openAbout } from "./components/AboutModal";
 import { ensurePandoc } from "./components/PandocDownloadModal";
 import { openSettings } from "./components/SettingsModal";
 import { checkForUpdates } from "./updater";
-import { skeletonTable, editTable, resizeTable, type TableEdit, type Align } from "./tabletools";
+import { skeletonTable, editTable, resizeTable, prettifyTable, parseTable, type TableEdit, type Align } from "./tabletools";
 
 const HELP_URL = "https://github.com/solancer/sarala#readme";
 
@@ -565,6 +565,24 @@ export async function toggleTableFullWidth() {
   await setSetting("tableFullWidth", v);
 }
 
+/** Copy the active table's Markdown source to the clipboard. */
+async function copyActiveTable() {
+  const i = targetBlockIndex();
+  if (i < 0 || !parseTable(doc.blocks[i].text)) return;
+  await clipboardWriteText(doc.blocks[i].text);
+}
+
+/** Realign the active table's pipes so its source reads cleanly. */
+function prettifyActiveTable() {
+  const i = targetBlockIndex();
+  if (i < 0) return;
+  const text = doc.blocks[i].text;
+  const next = prettifyTable(text);
+  if (next == null || next === text) return;
+  requestCaret(Math.min(blockApi?.caretOffset() ?? 0, next.length));
+  updateBlock(i, next);
+}
+
 /** Called by the table toolbar's grid picker. Rows include the header. */
 export function resizeActiveTable(rows: number, cols: number) {
   const i = targetBlockIndex();
@@ -931,7 +949,10 @@ const registry: Record<string, Command> = {
   "paragraph.table.row_below": () => applyTableEdit({ kind: "row_below" }),
   "paragraph.table.delete_row": () => applyTableEdit({ kind: "delete_row" }),
   "paragraph.table.add_col": () => applyTableEdit({ kind: "add_col" }),
+  "paragraph.table.add_col_before": () => applyTableEdit({ kind: "add_col", before: true }),
   "paragraph.table.delete_col": () => applyTableEdit({ kind: "delete_col" }),
+  "paragraph.table.copy": () => void copyActiveTable(),
+  "paragraph.table.prettify": prettifyActiveTable,
   "paragraph.table.align_left": tableAlign("left"),
   "paragraph.table.align_center": tableAlign("center"),
   "paragraph.table.align_right": tableAlign("right"),

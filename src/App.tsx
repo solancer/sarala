@@ -27,7 +27,7 @@ import {
   finalNewline, autosaveInterval, setExternalChange,
 } from "./store";
 import {
-  isTauri, isMac, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS,
+  isTauri, isMac, isLinux, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS,
   onExternalChange,
 } from "./platform";
 import {
@@ -259,7 +259,7 @@ export default function App() {
     <div
       class="app"
       data-theme={theme()}
-      classList={{ "focus-mode": focusMode(), "tables-full": tableFullWidth(), "is-tauri": isTauri, "is-mac": isMac }}
+      classList={{ "focus-mode": focusMode(), "tables-full": tableFullWidth(), "is-tauri": isTauri, "is-mac": isMac, "is-linux": isTauri && isLinux }}
       style={{ "--zoom": `${zoom()}%` }}
     >
       {/* In-app menubar strip, replacing the OS menu bar (not on macOS). */}
