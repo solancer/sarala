@@ -480,12 +480,14 @@ assert(!styleSource("| lone | row |").includes("md-table"),
 
   // @page CSS.
   // Always full-bleed: @page margin 0 (theme fills the page), the configured
-  // margin becomes the body's text-inset padding, no @page footer.
+  // margin becomes a text-inset padding on .rendered — repeated at every page
+  // break via box-decoration-break: clone — and there's no @page footer.
   const css = ex.pageCss({ pageSize: "A4", margin: "20mm", footer: "${pageNo}" });
-  assert(css.includes("@page { size: A4; margin: 0;") && css.includes("body { padding: 20mm;") && !css.includes("@bottom-center"),
-    `pageCss is full-bleed; margin becomes body padding (${css})`);
+  assert(css.includes("@page { size: A4; margin: 0;") && css.includes(".rendered { padding: 20mm;")
+    && css.includes("box-decoration-break: clone") && !css.includes("@bottom-center"),
+    `pageCss is full-bleed; margin becomes .rendered padding cloned per page (${css})`);
   const fb = ex.pageCss({ pageSize: "A4", margin: "0" });
-  assert(fb.includes("margin: 0;") && fb.includes("body { padding: 18mm"),
+  assert(fb.includes("margin: 0;") && fb.includes(".rendered { padding: 18mm"),
     `margin 0 → full-bleed with a default text inset (${fb})`);
 
   // HTML with outline sidebar.
