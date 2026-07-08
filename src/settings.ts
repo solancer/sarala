@@ -176,7 +176,11 @@ export function recentFiles(): string[] {
 }
 
 export async function addRecentFile(path: string): Promise<void> {
-  data.recentFiles = [path, ...data.recentFiles.filter((p) => p !== path)].slice(0, 10);
+  // Leave a file that's already listed in place — reopening a Recent entry
+  // shouldn't make it jump to the top under the user's cursor. Only files not
+  // yet in the list are added, at the front (newest first).
+  if (data.recentFiles.includes(path)) return;
+  data.recentFiles = [path, ...data.recentFiles].slice(0, 10);
   setRecentSig(data.recentFiles);
   await persist();
   await syncRecentMenu();

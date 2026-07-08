@@ -2,6 +2,7 @@ import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import { MENUS, BLOCK_TARGETED_IDS, blockTargetsEnabled, type MenuNode, type MenuLeaf } from "../menudata";
 import { executeCommand } from "../commands";
 import { recentFiles, exportPresets } from "../settings";
+import { ICONS, MENU_ICONS } from "../menuicons";
 
 // Which top-level menu is open (null = none). Module-level so it can be closed
 // from anywhere, but only one menubar exists per window.
@@ -40,6 +41,30 @@ function runNode(n: MenuLeaf) {
   else if (n.id) executeCommand(n.id);
 }
 
+/** The Ctrl/Cmd+K icon key for a menu node (native clipboard items are keyed by
+ *  `exec:*`), or undefined when the item has no mapped icon. */
+function iconKey(n: MenuLeaf): string | undefined {
+  const key = n.id ?? (n.exec ? `exec:${n.exec}` : undefined);
+  return key ? MENU_ICONS[key] : undefined;
+}
+
+/** Row icon; always rendered (empty when unmapped) to keep labels aligned. */
+function MenuIcon(props: { k?: string }) {
+  return (
+    <svg
+      class="menu-ic"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+      ref={(el) => (el.innerHTML = props.k ? ICONS[props.k] ?? "" : "")}
+    />
+  );
+}
+
 /** A single dropdown level: separators, leaves, and (recursive) submenus. */
 function MenuList(props: { items: MenuNode[] }) {
   // Flatten dynamic slots into real nodes for this render pass.
@@ -60,7 +85,9 @@ function MenuList(props: { items: MenuNode[] }) {
               disabled={disabled()}
               onClick={() => runNode(n)}
             >
-              <span class="menu-check">{n.checked?.() ? "✓" : ""}</span>
+              <span class="menu-gutter">
+                <Show when={n.checked?.()} fallback={<MenuIcon k={iconKey(n)} />}>✓</Show>
+              </span>
               <span class="menu-label">{n.label}</span>
               <Show when={n.accel}>
                 <span class="menu-accel">{fmtAccel(n.accel!)}</span>
@@ -80,7 +107,7 @@ function MenuSub(props: { node: MenuLeaf }) {
   return (
     <div class="menu-sub" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
       <button class="menu-item menu-parent" classList={{ disabled: disabled() }} disabled={disabled()}>
-        <span class="menu-check" />
+        <span class="menu-gutter"><MenuIcon k={iconKey(props.node)} /></span>
         <span class="menu-label">{props.node.label}</span>
         <span class="menu-caret">›</span>
       </button>
