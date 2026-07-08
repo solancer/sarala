@@ -10,22 +10,13 @@
   /* One bundled font for the whole GUI so it looks identical on every OS. */
   --font-ui: "Open Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
-  /* Font-weight scale (used everywhere via var). Default = real values, so
-     macOS/Windows are unchanged. Linux steps each down (see .is-linux). */
+  /* Font-weight scale (used everywhere via var). Identical on every OS so
+     Linux (WebKitGTK) renders at the same spec as macOS/Windows. */
   --fw-regular: 400;
   --fw-medium: 500;
   --fw-semibold: 600;
   --fw-bold: 700;
 }
-/* WebKitGTK (Tauri on Linux) rasterizes ~100 weight units heavier than
-   specified, so text looks too bold. Step every weight down one notch. */
-.is-linux {
-  --fw-regular: 300;
-  --fw-medium: 400;
-  --fw-semibold: 500;
-  --fw-bold: 600;
-}
-.is-linux body { font-weight: var(--fw-regular); }
 
 /* Sarala — warm parchment chrome, white page, coral marker accent */
 [data-theme="sarala"] {
@@ -2008,6 +1999,22 @@ body.tables-full .rendered table { width: 100%; }
 .pandoc-dl-hint {
   margin: 0 0 16px;
   font: var(--fw-regular) 12px var(--font-ui);
+  color: var(--ink-soft);
+}
+/* Release notes in the update modal: left-aligned, scrolls if long. */
+.update-notes {
+  margin: 0 auto 18px;
+  max-width: 320px;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--code-bg);
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: var(--fw-regular) 12.5px/1.5 var(--font-ui);
   color: var(--ink-soft);
 }
 .pandoc-bar {
