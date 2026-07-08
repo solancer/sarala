@@ -1,13 +1,19 @@
 import { createSignal } from "solid-js";
-import { isTauri, confirmDialog, alertDialog, relaunchApp } from "./platform";
+import type { Update } from "@tauri-apps/plugin-updater";
+import { isTauri, alertDialog, relaunchApp } from "./platform";
 
 /**
- * Opt-in auto-updater flow (Help ▸ Check for Updates…). The whole sequence runs
- * in TypeScript via the JS updater plugin — check, prompt, download, install —
- * and then asks Rust to `app.restart()` so the new version takes effect. Progress
- * is published through `updatePhase()` and shown in the StatusBar.
+ * Auto-updater flow. On launch the app silently checks the updater endpoint (a
+ * gist serving latest.json) via `autoCheckForUpdates()`; when a newer version
+ * exists, an in-app modal (UpdateModal) offers to download + install it. The
+ * same modal backs the manual Help ▸ Check for Updates… entry, which — unlike
+ * the startup check — also reports when you're already up to date.
  *
- * Browser-mode (`pnpm dev`) has no updater: the entry point just says so.
+ * Download/install run through the JS updater plugin, publishing progress via
+ * `updatePhase()` (shown both in the modal and the StatusBar), then ask Rust to
+ * `app.restart()` so the new version takes effect.
+ *
+ * Browser-mode (`pnpm dev`) has no updater: the manual entry just says so.
  */
 export type UpdatePhase =
   | { kind: "idle" }
@@ -18,40 +24,94 @@ export type UpdatePhase =
 const [updatePhase, setUpdatePhase] = createSignal<UpdatePhase>({ kind: "idle" });
 export { updatePhase };
 
-// Guard against re-entry if the menu item is triggered while a check is running.
+export interface UpdateInfo {
+  version: string;
+  /** Release notes from the manifest; may be empty. */
+  notes: string;
+}
+
+// When set, UpdateModal renders the "update available" prompt for this version.
+const [availableUpdate, setAvailableUpdate] = createSignal<UpdateInfo | null>(null);
+export { availableUpdate };
+
+// Non-empty while the modal should show an install failure (keeps it open for a
+// Retry). Cleared on each fresh attempt.
+const [updateError, setUpdateError] = createSignal("");
+export { updateError };
+
+// The plugin's Update handle for the pending version; carries downloadAndInstall.
+let pending: Update | null = null;
+// Guards against overlapping checks/installs (menu re-click, startup race, …).
 let inFlight = false;
 
+/** Dismiss the update prompt ("Later"). No-op mid-download so we never orphan
+ *  an install that's already writing to disk. */
+export function dismissUpdate(): void {
+  const kind = updatePhase().kind;
+  if (kind === "downloading" || kind === "installing") return;
+  setAvailableUpdate(null);
+  setUpdateError("");
+  pending = null;
+}
+
+/** Manual check (Help ▸ Check for Updates…): reports "up to date" and surfaces
+ *  errors, since the user explicitly asked. */
 export async function checkForUpdates(): Promise<void> {
+  await runCheck(false);
+}
+
+/** Startup check: opens the modal only when an update exists, and stays silent
+ *  otherwise (no "up to date" nag, no error dialog on a flaky network). */
+export async function autoCheckForUpdates(): Promise<void> {
+  await runCheck(true);
+}
+
+async function runCheck(silent: boolean): Promise<void> {
   if (!isTauri) {
-    await alertDialog("Updates are only available in the desktop app.", "Update");
+    if (!silent) await alertDialog("Updates are only available in the desktop app.", "Update");
     return;
   }
-  if (inFlight) return;
+  // Don't stack a check on top of a running check/download, or re-prompt while
+  // the modal is already showing an available update.
+  if (inFlight || availableUpdate() || updatePhase().kind !== "idle") return;
   inFlight = true;
   setUpdatePhase({ kind: "checking" });
   try {
     const { check } = await import("@tauri-apps/plugin-updater");
     const update = await check();
-
     if (!update) {
-      await alertDialog("You're up to date.", "Update");
+      if (!silent) await alertDialog("You're up to date.", "Update");
       return;
     }
+    pending = update;
+    setUpdateError("");
+    setAvailableUpdate({ version: update.version, notes: (update.body ?? "").trim() });
+  } catch (err) {
+    if (!silent) {
+      await alertDialog(
+        `Update check failed: ${err instanceof Error ? err.message : String(err)}`,
+        "Update",
+      );
+    }
+  } finally {
+    inFlight = false;
+    setUpdatePhase({ kind: "idle" });
+  }
+}
 
-    const notes = update.body?.trim();
-    const ok = await confirmDialog(
-      `Sarala ${update.version} is available.` +
-        (notes ? `\n\n${notes}` : "") +
-        `\n\nDownload and install now? The app will restart when it's ready.`,
-      "Update available",
-    );
-    if (!ok) return;
+/** Download + install the pending update, then relaunch. Drives `updatePhase`
+ *  for the modal/StatusBar; on failure records the message and reopens for a
+ *  Retry. Invoked by the modal's "Update now" button. */
+export async function startInstall(): Promise<void> {
+  if (!pending || inFlight) return;
+  inFlight = true;
+  setUpdateError("");
 
-    // Stream the download into a percentage, then install.
-    let total = 0;
-    let received = 0;
-    setUpdatePhase({ kind: "downloading", percent: 0 });
-    await update.downloadAndInstall((event) => {
+  let total = 0;
+  let received = 0;
+  setUpdatePhase({ kind: "downloading", percent: 0 });
+  try {
+    await pending.downloadAndInstall((event) => {
       switch (event.event) {
         case "Started":
           total = event.data.contentLength ?? 0;
@@ -69,16 +129,12 @@ export async function checkForUpdates(): Promise<void> {
           break;
       }
     });
-
     // Installed — relaunch into the new version (Rust app.restart()).
     await relaunchApp();
   } catch (err) {
-    await alertDialog(
-      `Update failed: ${err instanceof Error ? err.message : String(err)}`,
-      "Update",
-    );
-  } finally {
-    inFlight = false;
+    setUpdateError(err instanceof Error ? err.message : String(err));
     setUpdatePhase({ kind: "idle" });
+    inFlight = false;
+    // Modal stays open (availableUpdate still set) so the user can Retry.
   }
 }

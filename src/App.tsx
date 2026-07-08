@@ -13,10 +13,12 @@ import PaletteSwitcher from "./components/PaletteSwitcher";
 import AboutModal from "./components/AboutModal";
 import SettingsModal from "./components/SettingsModal";
 import PandocDownloadModal from "./components/PandocDownloadModal";
+import UpdateModal from "./components/UpdateModal";
 import ExportHtmlDialog from "./components/ExportHtmlDialog";
 import ConflictBanner from "./components/ConflictBanner";
 import MenuBar from "./components/MenuBar";
 import { initSettings } from "./settings";
+import { autoCheckForUpdates } from "./updater";
 import {
   doc, theme, sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
   fileName, setActive, fileTree, folderName, THEMES, targetBlockIndex,
@@ -27,7 +29,7 @@ import {
   finalNewline, autosaveInterval, setExternalChange,
 } from "./store";
 import {
-  isTauri, isMac, isLinux, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS,
+  isTauri, isMac, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS,
   onExternalChange,
 } from "./platform";
 import {
@@ -150,6 +152,11 @@ export default function App() {
             if (ok) await restoreSession(newest);
             else await discardShadows(cands);
           }
+
+          // Once per launch (main window only, after any recovery prompt),
+          // quietly check the updater endpoint; opens UpdateModal if a newer
+          // release exists, stays silent otherwise.
+          void autoCheckForUpdates();
         }
       });
 
@@ -259,7 +266,7 @@ export default function App() {
     <div
       class="app"
       data-theme={theme()}
-      classList={{ "focus-mode": focusMode(), "tables-full": tableFullWidth(), "is-tauri": isTauri, "is-mac": isMac, "is-linux": isTauri && isLinux }}
+      classList={{ "focus-mode": focusMode(), "tables-full": tableFullWidth(), "is-tauri": isTauri, "is-mac": isMac }}
       style={{ "--zoom": `${zoom()}%` }}
     >
       {/* In-app menubar strip, replacing the OS menu bar (not on macOS). */}
@@ -345,6 +352,7 @@ export default function App() {
       <AboutModal />
       <SettingsModal />
       <PandocDownloadModal />
+      <UpdateModal />
       <ExportHtmlDialog />
     </div>
   );
