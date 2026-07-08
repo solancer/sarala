@@ -50,6 +50,13 @@ jobs:
       - name: Install Linux build dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
+          # The GitHub-hosted ubuntu-22.04 image ships Microsoft/Azure apt repos
+          # whose InRelease signatures intermittently break and fail the whole
+          # `apt-get update` with exit 100 (this sank the v0.4.0 Linux build). We
+          # don't need them, so remove them before updating.
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list \
+                     /etc/apt/sources.list.d/azure-cli.list \
+                     /etc/apt/sources.list.d/microsoft.list
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
