@@ -11,7 +11,7 @@ import { isTauri } from "./platform";
 
 // The theme's default stacks (kept in sync with :root in styles/app.css), used
 // as the fallback tail after a chosen family.
-const PROSE_FALLBACK = `"Open Sans", "Clear Sans", "Helvetica Neue", Helvetica, Arial, sans-serif`;
+const PROSE_FALLBACK = `"Inter", "Helvetica Neue", Helvetica, Arial, sans-serif`;
 const MONO_FALLBACK = `ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace`;
 
 let cachedFamilies: string[] | null = null;

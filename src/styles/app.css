@@ -2,13 +2,13 @@
    Sarala — design tokens
    Paper: cool ivory page, graphite text, deep teal "ink" accent
    Graphite: charcoal page, warm off-white text, sea-glass accent
-   Type: Open Sans prose · system-ui chrome · mono source
+   Type: Inter prose + chrome (bundled, identical on every OS) · mono source
    ============================================================ */
 
 :root {
-  --font-prose: "Open Sans", "Clear Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-prose: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
   /* One bundled font for the whole GUI so it looks identical on every OS. */
-  --font-ui: "Open Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
   /* Font-weight scale (used everywhere via var). Identical on every OS so
      Linux (WebKitGTK) renders at the same spec as macOS/Windows. */
@@ -295,7 +295,7 @@ body { font-family: var(--font-ui); }
 
 .menu-item {
   display: grid;
-  grid-template-columns: 18px 1fr auto;
+  grid-template-columns: 16px 1fr auto;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -311,7 +311,10 @@ body { font-family: var(--font-ui); }
 }
 .menu-item:hover:not(.disabled) { background: var(--accent-soft); color: var(--accent); }
 .menu-item.disabled { color: var(--ink-soft); opacity: 0.5; cursor: default; }
-.menu-check { width: 18px; text-align: center; color: var(--accent); font-size: 12px; }
+/* One leading gutter: shows the ✓ for checked items, otherwise the row icon. */
+.menu-gutter { display: inline-flex; align-items: center; justify-content: center; width: 16px; color: var(--accent); font-size: 12px; }
+.menu-ic { width: 16px; height: 16px; color: var(--ink-soft); }
+.menu-item:hover:not(.disabled) .menu-ic { color: var(--accent); }
 .menu-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .menu-accel { color: var(--ink-soft); font-size: 12px; padding-left: 16px; }
 .menu-caret { justify-self: end; color: var(--ink-soft); }
@@ -445,7 +448,9 @@ body { font-family: var(--font-ui); }
   text-align: left; border: 0; background: transparent; color: var(--ink);
   font: var(--fw-regular) 13px/1.5 var(--font-ui);
   padding: 5px 10px; border-radius: 7px; cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  /* No hover transition: on WebKitGTK animating the row repaint flips text from
+     subpixel to grayscale AA (looks lighter/blurry). Instant hover keeps it on
+     one rendering path. */
 }
 .tree-nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tree-item .file-icon { flex: none; color: var(--ink-soft); }
@@ -480,7 +485,7 @@ body { font-family: var(--font-ui); }
   border: 0; background: transparent; color: var(--ink-soft);
   font: var(--fw-regular) 12.5px/1.4 var(--font-ui);
   padding: 5px 10px; border-radius: 6px; cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  /* Instant hover (see .tree-item) to avoid WebKitGTK's subpixel→grayscale flip. */
 }
 .side-out-item.h1 { font-weight: var(--fw-semibold); color: var(--ink); }
 .side-out-item:hover { background: var(--accent-soft); color: var(--ink); }

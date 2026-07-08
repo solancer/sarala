@@ -4,36 +4,7 @@ import { executeCommand } from "../commands";
 import { MENUS, THEME_LABELS, type MenuNode, type MenuLeaf } from "../menudata";
 import { DOTS } from "./PaletteSwitcher";
 import { isMac } from "../platform";
-
-// Icon path data (24×24, stroked), lifted from the design spec.
-const ICONS: Record<string, string> = {
-  file: '<path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/>',
-  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
-  save: '<path d="M5 3h11l3 3v15H5zM8 3v6h8"/>',
-  download: '<path d="M12 3v12m-4-4 4 4 4-4M5 21h14"/>',
-  bold: '<path d="M7 5h7a3.5 3.5 0 0 1 0 7H7zM7 12h8a3.5 3.5 0 0 1 0 7H7z"/>',
-  italic: '<path d="M19 5h-6M11 19H5M15 5 9 19"/>',
-  underline: '<path d="M6 4v6a6 6 0 0 0 12 0V4M4 20h16"/>',
-  strike: '<path d="M5 12h14M8 7a4 3 0 0 1 8 0M8 17a4 3 0 0 0 8 0"/>',
-  code: '<path d="m9 8-4 4 4 4M15 8l4 4-4 4"/>',
-  link: '<path d="M9 15l6-6M10 6l1-1a4 4 0 0 1 6 6l-1 1M14 18l-1 1a4 4 0 0 1-6-6l1-1"/>',
-  image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
-  math: '<path d="M18 7V4H6l6 8-6 8h12v-3"/>',
-  clear: '<path d="m7 21-4.3-4.3a2 2 0 0 1 0-2.8l9.6-9.6a2 2 0 0 1 2.8 0l4.8 4.8a2 2 0 0 1 0 2.8L13 21M22 21H7m-2-10 9 9"/>',
-  check: '<path d="m3 7 2 2 4-4M3 17l2 2 4-4M13 6h8M13 12h8M13 18h8"/>',
-  h1: '<path d="M4 6v12M12 6v12M4 12h8"/><path d="M17 10l3-2v10"/>',
-  h2: '<path d="M4 6v12M12 6v12M4 12h8"/><path d="M17 9a2 2 0 1 1 3 1.6L17 18h4"/>',
-  h3: '<path d="M4 6v12M12 6v12M4 12h8"/><path d="M17 8h3l-2 3a2 2 0 1 1-1 3.5"/>',
-  quote: '<path d="M6 17h3l2-4V7H5v6h3zM14 17h3l2-4V7h-6v6h3z"/>',
-  list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
-  table: '<rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 10h18M9 5v14"/>',
-  hr: '<path d="M4 12h16"/>',
-  sidebar: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
-  statusbar: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16h18"/>',
-  focus: '<circle cx="12" cy="12" r="3"/><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>',
-  type: '<path d="M5 6h14M12 6v13M9 19h6"/>',
-  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
-};
+import { ICONS } from "../menuicons";
 
 interface Cmd {
   group: string;

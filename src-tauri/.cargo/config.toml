@@ -1,0 +1,7 @@
+# Linux dev only: WebKitGTK's DMABUF renderer fails on some Mesa/Zink drivers
+# (libEGL "failed to create dri2 screen"), which crashes `tauri dev` before the
+# window opens. Disabling it forces a working render path. This is a runtime,
+# WebKitGTK-only flag: a no-op on macOS/Windows, and it never reaches release
+# builds (those use `cargo build`/`tauri build`, not `cargo run`).
+[env]
+WEBKIT_DISABLE_DMABUF_RENDERER = "1"
