@@ -76,8 +76,11 @@ flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
 
 ## Submitting to Flathub
 
+> **Status:** submitted — [flathub/flathub#9267](https://github.com/flathub/flathub/pull/9267).
+> Iterate by pushing to the `io.github.solancer.Sarala` branch on the `solancer/flathub` fork.
+
 Flathub builds from a **fixed** commit, so the manifest's app source must point at
-a published tag that already contains this `flatpak/` directory.
+a published tag/commit that already contains this `flatpak/` directory.
 
 1. Commit the `flatpak/` files and cut a release (e.g. `pnpm release 0.4.3`). Then
    set the manifest's `tag:` (and pin the `commit:` sha) to that release.
