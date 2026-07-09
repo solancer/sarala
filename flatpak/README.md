@@ -43,9 +43,9 @@ Install the toolchain (once):
 
 ```bash
 flatpak install -y flathub org.flatpak.Builder \
-  org.gnome.Platform//48 org.gnome.Sdk//48 \
-  org.freedesktop.Sdk.Extension.rust-stable//24.08 \
-  org.freedesktop.Sdk.Extension.node22//24.08
+  org.gnome.Platform//50 org.gnome.Sdk//50 \
+  org.freedesktop.Sdk.Extension.rust-stable//25.08 \
+  org.freedesktop.Sdk.Extension.node22//25.08
 ```
 
 To build against your **local working tree** (fastest iteration), edit the app
@@ -98,6 +98,19 @@ Reference: <https://docs.flathub.org/docs/for-app-authors/submission>
 
 ## Notes / follow-ups
 
+- **Production build flag:** the app is compiled with
+  `cargo build --features tauri/custom-protocol`. Without it Tauri emits a *dev*
+  binary that loads `devUrl` (`http://localhost:1420`) and shows
+  "Could not connect to localhost" instead of the embedded `dist/`. The Tauri CLI
+  sets this automatically for `tauri build`; the manifest's raw `cargo build` must
+  pass it explicitly.
+- **Blank window / DMABUF:** WebKitGTK's DMABUF renderer fails ("Failed to create
+  GBM buffer") on some GPU/driver/VM combos inside the runtime, leaving a blank
+  window. The manifest sets `--env=WEBKIT_DISABLE_DMABUF_RENDERER=1` in
+  `finish-args` to force the reliable software/GL path. Flatpak-only; the native
+  build uses the host WebKitGTK and is unaffected.
+- **Runtime:** targets GNOME `50` (freedesktop `25.08` SDK extensions). Keep this
+  on a supported GNOME runtime — Flathub CI rejects end-of-life runtimes.
 - **Auto-updater:** disabled for the Flatpak build. The manifest sets
   `SARALA_FLATPAK=1`, which Vite bakes in (`__SARALA_FLATPAK__`); `updater.ts`
   then skips the startup check and points the manual "Check for Updates…" entry

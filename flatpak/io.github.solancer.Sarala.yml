@@ -12,7 +12,7 @@
 
 id: io.github.solancer.Sarala
 runtime: org.gnome.Platform
-runtime-version: '48'
+runtime-version: '50'
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
@@ -25,6 +25,12 @@ finish-args:
   - --socket=wayland
   - --socket=fallback-x11
   - --device=dri
+  # WebKitGTK's DMABUF renderer fails ("Failed to create GBM buffer") on a range
+  # of GPU/driver/VM combos inside the sandboxed runtime, leaving a blank window.
+  # The native (deb/AppImage) build uses the host WebKitGTK and is unaffected, so
+  # this is scoped to the Flatpak only. Software/GL fallback is plenty for an
+  # editor and renders reliably everywhere.
+  - --env=WEBKIT_DISABLE_DMABUF_RENDERER=1
   # Auto-updater check (the gist manifest) and remote images in previews.
   - --share=network
   # Open and save Markdown files. The native picker runs through the xdg-desktop
@@ -34,10 +40,8 @@ finish-args:
 
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin
-  build-args:
-    # Belt-and-suspenders: the offline caches below already remove any need for
-    # the network, but keep it explicit so a stray fetch fails loudly.
-    - --share=network=false
+  # No build-args: build steps have NO network by default (that is what the
+  # vendored cargo-/node-sources are for), so a stray fetch fails loudly on its own.
   env:
     # Suppress the in-app auto-updater: Flathub manages updates, and the Flatpak
     # binary is read-only so it can't self-replace. Baked in by Vite's `define`.
@@ -75,7 +79,12 @@ modules:
       - npm run build
       # 3. Compile the Rust app against the vendored crate registry. This reads
       #    dist/ (frontendDist) and produces the `sarala` binary.
+      #    --features tauri/custom-protocol is REQUIRED: without it Tauri builds a
+      #    "dev" binary that loads devUrl (http://localhost:1420) instead of
+      #    embedding dist/. The Tauri CLI sets this for `tauri build`; a raw cargo
+      #    build must pass it explicitly (see tauri build.rs: dev = !custom_protocol).
       - cargo build --release --offline --manifest-path src-tauri/Cargo.toml
+        --features tauri/custom-protocol
       # 4. Install the binary, desktop entry, AppStream metainfo and icons.
       - install -Dm755 src-tauri/target/release/sarala /app/bin/sarala
       - install -Dm644 flatpak/io.github.solancer.Sarala.desktop
