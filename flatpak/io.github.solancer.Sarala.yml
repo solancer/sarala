@@ -33,10 +33,11 @@ finish-args:
   - --env=WEBKIT_DISABLE_DMABUF_RENDERER=1
   # Auto-updater check (the gist manifest) and remote images in previews.
   - --share=network
-  # Open and save Markdown files. The native picker runs through the xdg-desktop
-  # portal, but the app reopens recently used files on launch, which needs
-  # persistent read/write to the user's documents — mirror the Snap's `home` plug.
-  - --filesystem=home
+  # Opening/saving anywhere works through the xdg-desktop portal (native picker)
+  # with no static filesystem access. This narrower grant only adds persistent
+  # read/write to ~/Documents so the "reopen recent files on launch" feature works
+  # there without re-prompting. Flathub flags broader --filesystem=home.
+  - --filesystem=xdg-documents:rw
 
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin
