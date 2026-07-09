@@ -58,7 +58,7 @@ modules:
       # For local testing you can swap this for:  - type: dir\n    path: ..
       - type: git
         url: https://github.com/solancer/sarala.git
-        commit: 63d80f583c550108761c4d5db74cb2df59154245
+        tag: v0.4.3
       # Vendored dependency sets (generated — see ./gen-sources.sh).
       - cargo-sources.json
       - node-sources.json

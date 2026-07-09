@@ -74,6 +74,11 @@
   </keywords>
 
   <releases>
+    <release version="0.4.3" date="2026-07-09">
+      <description>
+        <p>Each Monokai theme variant now has its own distinct signature accent. First release available as a Flatpak on Flathub.</p>
+      </description>
+    </release>
     <release version="0.4.2" date="2026-07-09">
       <description>
         <p>UI polish: Inter font across all platforms, crisp sidebar hover, a stable Recent Files list and icons in the menu bar dropdowns.</p>
