@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Sarala
+GenericName=Markdown Editor
+Comment=A seamless WYSIWYG Markdown editor
+Exec=sarala %U
+Icon=io.github.solancer.Sarala
+Terminal=false
+Categories=Office;TextEditor;
+MimeType=text/markdown;text/x-markdown;
+Keywords=Markdown;Editor;WYSIWYG;Writing;Notes;
+StartupNotify=true
+StartupWMClass=Sarala

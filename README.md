@@ -38,7 +38,8 @@ brew install --cask sarala
 **Other platforms** — grab an installer from the
 [latest release](https://github.com/solancer/sarala/releases/latest): `.dmg` (macOS),
 `.exe`/`.msi` (Windows), or `.AppImage`/`.deb`/`.rpm` (Linux). Linux users can also
-install the [snap](https://snapcraft.io/sarala).
+install the [snap](https://snapcraft.io/sarala). A [Flatpak](flatpak/README.md)
+package (for Flathub) is in preparation.
 
 ## Features
 

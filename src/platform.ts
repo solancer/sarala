@@ -8,6 +8,13 @@ export interface FileNode {
 export const isTauri =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+// Replaced at build time by Vite's `define`. True only in the Flathub build
+// (SARALA_FLATPAK=1); Flatpak delivers its own updates, so the in-app updater is
+// suppressed there (see updater.ts).
+declare const __SARALA_FLATPAK__: boolean;
+export const isFlatpak =
+  typeof __SARALA_FLATPAK__ !== "undefined" && __SARALA_FLATPAK__ === true;
+
 // macOS keeps its native global menu bar; every other platform (and the browser
 // dev build) uses the in-app menubar, so this gates which menu the UI renders.
 export const isMac =

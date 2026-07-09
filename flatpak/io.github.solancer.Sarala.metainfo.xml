@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 Srinivas Gowda -->
+<component type="desktop-application">
+  <id>io.github.solancer.Sarala</id>
+
+  <name>Sarala</name>
+  <summary>Seamless WYSIWYG Markdown editor</summary>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <developer id="io.github.solancer">
+    <name>Srinivas Gowda</name>
+  </developer>
+
+  <description>
+    <p>
+      Sarala is a fast, distraction-free WYSIWYG Markdown editor with no preview
+      pane and no split view — the editing surface is the preview. Every
+      paragraph, heading, list, quote, table and code fence is a live block:
+      click into one and it opens to raw Markdown, click away and it renders in
+      place. One parser, one theme, one window — what you see while writing is
+      exactly what exports.
+    </p>
+    <p>
+      Files are read and written as plain Markdown, so your documents are never
+      locked into a proprietary format.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Live block editing — Markdown styles itself as you type, with dimmed syntax markers that render fully on Enter or when the caret moves away</li>
+      <li>Smart Enter that continues lists, numbering, task items and blockquotes, and auto-closes code fences</li>
+      <li>GitHub Flavored Markdown: tables, task lists, strikethrough, and syntax-highlighted fenced code</li>
+      <li>Math with KaTeX (inline and block) and diagrams with Mermaid and D2</li>
+      <li>Find and replace, an Open Quickly fuzzy finder, and a command palette</li>
+      <li>Sidebar with a file tree and a live document outline</li>
+      <li>Source, Focus and Typewriter modes</li>
+      <li>Export to HTML and PDF, plus docx, odt, rtf, epub, LaTeX and more via Pandoc</li>
+      <li>Built-in themes: Paper, Graphite, GitHub, Night, Newsprint and Whitey</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.github.solancer.Sarala.desktop</launchable>
+
+  <content_rating type="oars-1.1" />
+
+  <url type="homepage">https://github.com/solancer/sarala</url>
+  <url type="bugtracker">https://github.com/solancer/sarala/issues</url>
+  <url type="vcs-browser">https://github.com/solancer/sarala</url>
+
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/solancer/sarala/main/docs/screenshot.png</image>
+      <caption>Editing a Markdown document with live blocks, an outline sidebar and the theme palette</caption>
+    </screenshot>
+  </screenshots>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#f4f1ea</color>
+    <color type="primary" scheme_preference="dark">#2b2b2b</color>
+  </branding>
+
+  <categories>
+    <category>Office</category>
+    <category>Utility</category>
+  </categories>
+
+  <keywords>
+    <keyword>Markdown</keyword>
+    <keyword>Editor</keyword>
+    <keyword>WYSIWYG</keyword>
+    <keyword>Writing</keyword>
+    <keyword>Notes</keyword>
+  </keywords>
+
+  <releases>
+    <release version="0.4.2" date="2026-07-09">
+      <description>
+        <p>UI polish: Inter font across all platforms, crisp sidebar hover, a stable Recent Files list and icons in the menu bar dropdowns.</p>
+      </description>
+    </release>
+    <release version="0.4.1" date="2026-07-09">
+      <description>
+        <p>Linux font parity with macOS and Windows, and an on-launch check that offers to install a newer release when one is available.</p>
+      </description>
+    </release>
+    <release version="0.4.0" date="2026-07-08">
+      <description>
+        <p>Auto-updater and a range of editor refinements.</p>
+      </description>
+    </release>
+    <release version="0.3.0" date="2026-07-07">
+      <description>
+        <p>Diagram support (Mermaid and D2), export presets and additional themes.</p>
+      </description>
+    </release>
+    <release version="0.2.0" date="2026-06-17">
+      <description>
+        <p>Find and replace, Open Quickly fuzzy finder, and the sidebar file tree and outline.</p>
+      </description>
+    </release>
+    <release version="0.1.0" date="2026-06-16">
+      <description>
+        <p>First public release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

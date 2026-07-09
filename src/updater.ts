@@ -1,6 +1,6 @@
 import { createSignal } from "solid-js";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { isTauri, alertDialog, relaunchApp } from "./platform";
+import { isTauri, isFlatpak, alertDialog, relaunchApp } from "./platform";
 
 /**
  * Auto-updater flow. On launch the app silently checks the updater endpoint (a
@@ -13,7 +13,8 @@ import { isTauri, alertDialog, relaunchApp } from "./platform";
  * `updatePhase()` (shown both in the modal and the StatusBar), then ask Rust to
  * `app.restart()` so the new version takes effect.
  *
- * Browser-mode (`pnpm dev`) has no updater: the manual entry just says so.
+ * Browser-mode (`pnpm dev`) has no updater: the manual entry just says so. The
+ * Flatpak build (isFlatpak) also opts out — Flathub delivers its own updates.
  */
 export type UpdatePhase =
   | { kind: "idle" }
@@ -69,6 +70,18 @@ export async function autoCheckForUpdates(): Promise<void> {
 async function runCheck(silent: boolean): Promise<void> {
   if (!isTauri) {
     if (!silent) await alertDialog("Updates are only available in the desktop app.", "Update");
+    return;
+  }
+  // Flathub owns updates for the Flatpak build: the binary is read-only, so the
+  // updater can't replace it. Skip the startup check silently; tell a user who
+  // explicitly asks where updates come from.
+  if (isFlatpak) {
+    if (!silent) {
+      await alertDialog(
+        "Sarala was installed via Flathub — updates are delivered through your software center.",
+        "Update",
+      );
+    }
     return;
   }
   // Don't stack a check on top of a running check/download, or re-prompt while

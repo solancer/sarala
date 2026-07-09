@@ -5,3 +5,10 @@ CLAUDE.local.md
 tests/.build/
 .DS_Store
 .claude/
+
+# Flatpak: throwaway generator venv + local build artifacts
+flatpak/.venv/
+flatpak/.gen.log
+flatpak/.flatpak-builder/
+flatpak/build-dir/
+flatpak/repo/
