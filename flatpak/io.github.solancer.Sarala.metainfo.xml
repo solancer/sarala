@@ -50,8 +50,24 @@
 
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/solancer/sarala/main/docs/screenshot.png</image>
-      <caption>Editing a Markdown document with live blocks, an outline sidebar and the theme palette</caption>
+      <image>https://raw.githubusercontent.com/solancer/sarala/main/docs/screenshots/editing.png</image>
+      <caption>Editing a Markdown document with the file tree, live-rendered blocks and a table</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/solancer/sarala/main/docs/screenshots/command-palette.png</image>
+      <caption>The command palette puts every action and shortcut a keystroke away</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/solancer/sarala/main/docs/screenshots/themes.png</image>
+      <caption>Built-in light and dark themes</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/solancer/sarala/main/docs/screenshots/fonts.png</image>
+      <caption>Choose the editor and code fonts</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/solancer/sarala/main/docs/screenshots/dark.png</image>
+      <caption>A dark theme for low-light writing</caption>
     </screenshot>
   </screenshots>
 
