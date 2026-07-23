@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="screenshots/header.png" alt="Sarala — Markdown that reads like a finished document" width="820" />
-
 <h1>Sarala</h1>
 
 **A seamless WYSIWYG Markdown editor — no preview pane, no split view.**
@@ -17,6 +15,10 @@ The editing surface *is* the preview. Every paragraph, heading, list, quote, tab
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#run-it)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg?logo=tauri&logoColor=white)](https://tauri.app)
 [![SolidJS](https://img.shields.io/badge/SolidJS-2C4F7C.svg?logo=solid&logoColor=white)](https://www.solidjs.com)
+
+<br />
+
+<img src="screenshots/header.png" alt="Sarala — Markdown that reads like a finished document" width="820" />
 
 </div>
 
