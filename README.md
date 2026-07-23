@@ -1,66 +1,96 @@
 <div align="center">
 
-<img src="src-tauri/icons/icon.png" alt="Sarala" width="128" height="128" />
+<img src="screenshots/header.png" alt="Sarala — Markdown that reads like a finished document" width="820" />
 
-# Sarala
+<h1>Sarala</h1>
 
 **A seamless WYSIWYG Markdown editor — no preview pane, no split view.**
 
-The editing surface *is* the preview. Every paragraph, heading, list, quote, table and code fence is a live block: click into one and it opens to raw Markdown, click away and it renders in place. One parser, one theme, one window — what you see while writing is exactly what exports.
+The editing surface *is* the preview. Every paragraph, heading, list, quote, table, and code fence is a live block: click into one and it opens to raw Markdown, click away and it renders in place. One parser, one theme, one window — what you see while writing is exactly what exports.
 
-[![Release](https://github.com/solancer/sarala/actions/workflows/release.yml/badge.svg)](https://github.com/solancer/sarala/actions/workflows/release.yml)
-[![Latest release](https://img.shields.io/github/v/release/solancer/sarala?sort=semver)](https://github.com/solancer/sarala/releases/latest)
+<br />
+
+[![Latest release](https://img.shields.io/github/v/release/solancer/sarala?sort=semver&label=release&color=6C5CE7)](https://github.com/solancer/sarala/releases/latest)
+[![Build](https://github.com/solancer/sarala/actions/workflows/release.yml/badge.svg)](https://github.com/solancer/sarala/actions/workflows/release.yml)
+[![Snap Store](https://snapcraft.io/sarala/badge.svg)](https://snapcraft.io/sarala)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#run-it)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg?logo=tauri&logoColor=white)](https://tauri.app)
 [![SolidJS](https://img.shields.io/badge/SolidJS-2C4F7C.svg?logo=solid&logoColor=white)](https://www.solidjs.com)
 
-<br />
+</div>
 
-<img src="docs/screenshot.png" alt="Sarala editing a Markdown document — live blocks, outline sidebar, and theme palette" width="900" />
+---
+
+## See it
+
+<div align="center">
+
+<img src="screenshots/feature.png" alt="Sarala editing a Markdown document in the light theme — file tree and outline sidebar, a live-rendered table, and syntax-highlighted C" width="880" />
+
+<sub>*Light theme — rendered tables and Shiki-highlighted code, with the file tree and outline in the sidebar.*</sub>
+
+<br /><br />
+
+<img src="screenshots/feature-2-dark.png" alt="Sarala in the Night theme showing a welcome document with clickable task-list checkboxes and the theme palette" width="880" />
+
+<sub>*Night theme — clickable task lists, live-styled inline formatting, and the quick theme palette.*</sub>
 
 </div>
 
+---
+
 ## Install
 
-**macOS (Homebrew)** — the easiest way to get Sarala on a Mac:
+### 🍎 macOS — Homebrew
+
+The easiest way to get Sarala on a Mac:
 
 ```bash
 brew tap solancer/sarala https://github.com/solancer/sarala
 brew install --cask sarala
 ```
 
-> Sarala's universal build is ad-hoc signed (so it runs natively on both Apple Silicon
-> and Intel) but isn't Apple-notarized. The cask clears the quarantine attribute on
-> install so Gatekeeper won't block the first launch — no extra flags needed. Upgrade
-> later with `brew upgrade --cask sarala`.
+> Sarala's universal build is ad-hoc signed (so it runs natively on both Apple Silicon and Intel) but isn't Apple-notarized. The cask clears the quarantine attribute on install so Gatekeeper won't block the first launch — no extra flags needed. Upgrade later with `brew upgrade --cask sarala`.
 
-**Other platforms** — grab an installer from the
-[latest release](https://github.com/solancer/sarala/releases/latest): `.dmg` (macOS),
-`.exe`/`.msi` (Windows), or `.AppImage`/`.deb`/`.rpm` (Linux). Linux users can also
-install the [snap](https://snapcraft.io/sarala). A [Flatpak](flatpak/README.md)
-package (for Flathub) is in preparation.
+### 🐧 Linux — Snap Store
+
+[![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/sarala)
+
+```bash
+sudo snap install sarala
+```
+
+A [Flatpak](flatpak/README.md) package (for Flathub) is in preparation.
+
+### 📦 Every platform — direct download
+
+Grab an installer from the [latest release](https://github.com/solancer/sarala/releases/latest):
+
+| Platform | Files |
+| --- | --- |
+| **macOS** | `.dmg` (universal) |
+| **Windows** | `.exe` · `.msi` |
+| **Linux** | `.AppImage` · `.deb` · `.rpm` · [snap](https://snapcraft.io/sarala) |
 
 ## Features
 
-- **Live block editing** — type Markdown and the active block styles itself *as you type*: syntax markers stay visible but dimmed (the gray `##` next to a live-styled heading, gray `[ ]( )` around a blue link), and the block fully renders when you press **Enter** or move the caret away
+- **Live block editing** — type Markdown and the active block styles itself *as you type*: syntax markers stay visible but dimmed (the gray `##` next to a heading, gray `[ ]( )` around a blue link), and the block fully renders when you press **Enter** or move the caret away
 - **Smart Enter** — continues lists (with auto-numbering and unchecked task carry-over), continues blockquotes, ends a list on an empty item, auto-closes a just-opened code fence, and inserts plain newlines inside fences; `Shift+Enter` for a soft break
-- Click anywhere in rendered text and the caret lands at that spot in the source (rendered→source position mapping)
-- Merge on backspace at block start, arrow-key navigation across blocks, IME-safe (composition events respected)
-- **GFM**: tables, task lists (clickable checkboxes), strikethrough, fenced code highlighted by [Shiki](https://shiki.style) (TextMate grammars + VS Code themes; light/dark via CSS variables, self-contained inline styles in export)
-- **Math** (KaTeX): inline `$…$` and block `$$…$$`, rendered in inactive blocks and shown as raw source while editing; optional `\(…\)` / `\[…\]` delimiters and a `` ```math `` block (both preference-gated, off by default); a broken formula keeps its last good render with an error rather than blanking
-- **Diagrams** (Mermaid): `` ```mermaid `` blocks render every diagram type (flowchart, sequence, gantt, class, state, pie, ER, gitGraph, mindmap, timeline, quadrant, sankey, XY, block, kanban, architecture); invalid syntax shows an inline error and keeps the last good diagram; a `--mermaid-theme` CSS var follows the app's light/dark theme
+- **Click-to-edit anywhere** — click into rendered text and the caret lands at that exact spot in the source (rendered→source position mapping); merge on backspace at block start, arrow-key navigation across blocks, IME-safe (composition events respected)
+- **GFM** — tables, task lists (clickable checkboxes), strikethrough, and fenced code highlighted by [Shiki](https://shiki.style) (TextMate grammars + VS Code themes; light/dark via CSS variables, self-contained inline styles in export)
+- **Math** (KaTeX) — inline `$…$` and block `$$…$$`, rendered in inactive blocks and shown as raw source while editing; optional `\(…\)` / `\[…\]` delimiters and a `` ```math `` block (preference-gated, off by default); a broken formula keeps its last good render with an error rather than blanking
+- **Diagrams** (Mermaid) — `` ```mermaid `` blocks render every diagram type (flowchart, sequence, gantt, class, state, pie, ER, gitGraph, mindmap, timeline, quadrant, sankey, XY, block, kanban, architecture); invalid syntax shows an inline error and keeps the last good diagram; the diagram theme follows the app's light/dark theme
+- **Find & replace** (`Cmd/Ctrl+F`, replace one or all) and an **Open Quickly** fuzzy finder (`Shift+Cmd/Ctrl+P`)
+- **Sidebar** — file tree (open a folder, browse `.md` files) and a live outline (click a heading to jump)
+- **Distraction-free modes** — **Source mode** (`Cmd/Ctrl+/`) as an escape hatch to the full raw document, plus **Focus** (`F8`) and **Typewriter** (`F9`)
 - **Native menu bar** (File, Edit, Paragraph, Format, View, Themes, Window, Help) — every item dispatches through one frontend command bus shared with the keyboard shortcuts
-- **Find & replace** (`Cmd/Ctrl+F`, replace one or all) and **Open Quickly** fuzzy finder (`Shift+Cmd/Ctrl+P`)
-- **Sidebar**: file tree (open a folder, browse `.md` files) and live outline (click a heading to jump)
-- **Source mode** (`Cmd/Ctrl+/`) as an escape hatch to the full raw document; **Focus** (`F8`) and **Typewriter** (`F9`) modes
-- **Paragraph tools**: heading levels, pipe-table editing (insert/rows/columns/alignment), lists and task toggles, quotes, math/code blocks, `[TOC]`, footnotes, GFM alerts
-- **Themes**: Paper, Graphite, GitHub, Night, Newsprint, Whitey — pure CSS variables, add your own in `src/styles/app.css`
-- **Export**: HTML (with an outline sidebar), real PDF (headless Chromium with configurable page size, margins, and header/footer using `${pageNo}`/`${totalPages}`/`${title}`/`${date}`; falls back to the print dialog), and docx/odt/rtf/epub/LaTeX/MediaWiki/rst/Textile/OPML via [Pandoc](https://pandoc.org) (with sensible flags — docx reference doc, epub TOC/chapters). **Named presets** store a format, output path, after-export action (reveal/open/run a command) and pandoc flags; **Export with Previous** re-runs the last. Per-document YAML keys (`export_filename`, `export_pdf_margin`, …) override settings. Import via Pandoc too
-- **Local images**: relative `src` paths resolve against the document's folder (via Tauri's asset protocol) and render inline; inserting an image can copy it into a configurable folder (with a `${filename}` variable), and the per-document `copy-images-to` / `image-root-url` YAML keys override the copy folder and image root
-- **Recent files**, settings persisted to disk, smart punctuation, LF/CRLF line endings; **save is atomic** (temp file + rename)
-- **Auto-update** (opt-in): **Help ▸ Check for Updates…** checks a manifest, then downloads, verifies (minisign), installs, and relaunches — signed artifacts from GitHub Releases, see [Releasing](#releasing)
-- Word/character count, dirty indicator (window title shows *— Edited*), confirm-on-close, keyboard-first
+- **Paragraph tools** — heading levels, pipe-table editing (insert/rows/columns/alignment), lists and task toggles, quotes, math/code blocks, `[TOC]`, footnotes, GFM alerts
+- **Themes** — Paper, Graphite, GitHub, Night, Newsprint, Whitey — pure CSS variables; add your own in `src/styles/app.css`
+- **Export** — HTML (with an outline sidebar), real PDF (headless Chromium with configurable page size, margins, and header/footer using `${pageNo}`/`${totalPages}`/`${title}`/`${date}`; falls back to the print dialog), and docx/odt/rtf/epub/LaTeX/MediaWiki/rst/Textile/OPML via [Pandoc](https://pandoc.org). **Named presets** store a format, output path, after-export action (reveal/open/run a command), and pandoc flags; **Export with Previous** re-runs the last. Per-document YAML keys (`export_filename`, `export_pdf_margin`, …) override settings. Import via Pandoc too
+- **Local images** — relative `src` paths resolve against the document's folder (via Tauri's asset protocol) and render inline; inserting an image can copy it into a configurable folder (with a `${filename}` variable), and per-document `copy-images-to` / `image-root-url` YAML keys override the copy folder and image root
+- **Built for daily writing** — recent files, settings persisted to disk, smart punctuation, LF/CRLF line endings, word/character count, a dirty indicator (window title shows *— Edited*), confirm-on-close, and **atomic saves** (temp file + rename)
+- **Auto-update** (opt-in) — **Help ▸ Check for Updates…** checks a manifest, then downloads, verifies (minisign), installs, and relaunches — signed artifacts from GitHub Releases, see [Releasing](#releasing)
 
 ## Shortcuts
 
@@ -96,31 +126,7 @@ pnpm tauri dev      # desktop app
 pnpm tauri build    # installers in src-tauri/target/release/bundle
 ```
 
-The frontend also runs standalone in a browser (`pnpm dev`) with an in-memory
-demo document — file dialogs are desktop-only, and Save downloads the file instead.
-
-## Releasing
-
-Releases are automated — bump the version and push a tag, and CI does the rest:
-
-```bash
-pnpm release 0.2.0          # bump manifests + commit + tag v0.2.0
-pnpm release 0.2.0 --push   # ...and push main + the tag in one go
-```
-
-Pushing the `vX.Y.Z` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which:
-
-1. builds and signs on macOS (universal), Windows, and Linux via `tauri-action`;
-2. publishes the **GitHub Release** `vX.Y.Z` with the installers and updater
-   artifacts (`.app.tar.gz`, `-setup.exe`, `.AppImage`, each with a `.sig`);
-3. writes the generated `latest.json` to the updater gist — the moment existing
-   installs start seeing the update (**Help ▸ Check for Updates…**).
-
-The updater verifies each download against the minisign public key in
-`src-tauri/tauri.conf.json`. One-time setup (signing key, CI secrets:
-`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, `GIST_TOKEN`),
-the `latest.json` shape, the macOS notarization caveat, and a no-CI manual
-fallback are all documented in [RELEASING.md](RELEASING.md).
+The frontend also runs standalone in a browser (`pnpm dev`) with an in-memory demo document — file dialogs are desktop-only, and Save downloads the file instead.
 
 ## Architecture
 
@@ -133,12 +139,12 @@ src/
   settings.ts        persisted settings (recent files, theme, zoom, toggles)
   tabletools.ts      pipe-table parse/serialize + caret-positioned edits
   platform.ts        Tauri invoke bridge with graceful browser fallback
+  livesource.ts      the live styler: dims markers, styles content in real
+                     time; caret offset get/set; click-position mapping
   components/
     Editor.tsx       block list + click-to-append behavior
     Block.tsx        the hybrid cell: rendered HTML ⇄ live-styled
                      contenteditable source (Enter semantics, caret logic)
-  livesource.ts      the live styler: dims markers, styles content in
-                     real time; caret offset get/set; click-position mapping
     Sidebar.tsx      file tree + outline tabs
     SourceView.tsx   whole-document raw mode
     StatusBar.tsx    counts, theme + mode toggles
@@ -152,15 +158,26 @@ src-tauri/
                      event — no editing logic in Rust
 ```
 
-### Design notes
+**Design notes**
 
-- **Block model over character model.** The document is an array of Markdown blocks (code fences and YAML front matter are kept whole). The active block is a `contenteditable` whose innerHTML is re-styled by `styleSource()` on every input — a key invariant is that the styled HTML's `textContent` is byte-identical to the source, which is what makes caret save/restore by text offset exact (verified by roundtrip tests).
+- **Block model over character model.** The document is an array of Markdown blocks (code fences and YAML front matter are kept whole). The active block is a `contenteditable` whose innerHTML is re-styled by `styleSource()` on every input — the key invariant is that the styled HTML's `textContent` is byte-identical to the source, which is what makes caret save/restore by text offset exact (verified by roundtrip tests).
 - **One pipeline.** The same `renderMarkdown()` renders editor blocks and the HTML export, so editing view and output can never diverge.
 - **Normalization on save** falls out of the model: blocks re-join with exactly one blank line between them.
 
-## Roadmap (from the PRD)
+## Releasing
 
-Autosave + crash recovery, file watching, custom CSS theme folder.
+Releases are automated — bump the version, push a tag, and CI does the rest:
+
+```bash
+pnpm release 0.2.0          # bump manifests + commit + tag v0.2.0
+pnpm release 0.2.0 --push   # ...and push main + the tag in one go
+```
+
+Pushing the `vX.Y.Z` tag triggers [`release.yml`](.github/workflows/release.yml): it builds and signs on macOS (universal), Windows, and Linux; publishes the **GitHub Release** with installers and updater artifacts (each with a `.sig`); and writes `latest.json` to the updater gist — the moment existing installs start seeing the update. The full signing-key setup, CI secrets, `latest.json` shape, and the macOS notarization caveat live in [RELEASING.md](RELEASING.md).
+
+## Roadmap
+
+Custom CSS theme folder.
 
 ## License
 
