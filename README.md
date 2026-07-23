@@ -63,8 +63,6 @@ brew install --cask sarala
 sudo snap install sarala
 ```
 
-A [Flatpak](flatpak/README.md) package (for Flathub) is in preparation.
-
 ### 📦 Every platform — direct download
 
 Grab an installer from the [latest release](https://github.com/solancer/sarala/releases/latest):
