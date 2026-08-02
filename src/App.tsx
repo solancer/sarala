@@ -293,53 +293,6 @@ export default function App() {
       <Show when={!isMac}>
         <MenuBar />
       </Show>
-      {/* Full-width top bar: filename + status dot left, Live/Source right. */}
-      <header class="topbar" data-tauri-drag-region>
-        {/* Non-draggable gap over the native macOS traffic lights — a drag
-            region here would swallow their clicks (close/minimize/zoom). Only
-            macOS has traffic lights; other platforms keep the bar left-aligned. */}
-        {isTauri && isMac && <span class="topbar-traffic" aria-hidden="true" />}
-        <button
-          class="topbar-toggle icon-btn"
-          title="Toggle sidebar (Shift+Cmd/Ctrl+L)"
-          onClick={() => setSidebarOpen(!sidebarOpen())}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-            <rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" />
-          </svg>
-        </button>
-        <span class="topbar-file">
-          <span class="topbar-dot" classList={{ dirty: doc.dirty }} />
-          {fileName()}
-        </span>
-        <span class="spacer" />
-        <button
-          class="topbar-search"
-          title="Command palette (Cmd/Ctrl+K)"
-          onClick={() => executeCommand("menu.command_palette")}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
-          </svg>
-          <span class="topbar-search-label">Search commands…</span>
-          <span class="kbd">{isMac ? "⌘K" : "Ctrl K"}</span>
-        </button>
-        <button
-          class="topbar-toggle icon-btn"
-          classList={{ on: focusMode() }}
-          title="Focus mode"
-          onClick={() => executeCommand("view.focus_mode")}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
-          </svg>
-        </button>
-        <div class="view-toggle">
-          <button classList={{ on: !sourceMode() }} onClick={() => setSourceMode(false)}>Live</button>
-          <button classList={{ on: sourceMode() }} onClick={() => setSourceMode(true)}>Source</button>
-        </div>
-      </header>
       <div class="body">
         {/* Always mounted so the collapse can animate (margin-left slide);
             visibility is driven by sidebarOpen() inside Sidebar. */}
@@ -351,6 +304,75 @@ export default function App() {
           onJump={jumpTo}
         />
         <main class="main">
+          {/* Controls float directly on the editor surface — no bar, no border.
+              The sidebar now owns the full window height beside it, so the
+              content pane reads as one continuous sheet instead of a boxed
+              region under a band. A gradient mask (see .topfloat::before) keeps
+              them legible as content scrolls underneath. */}
+          {/* "deep" rather than a bare attribute: Tauri's drag script only
+              treats a bare region as draggable when the click lands on that
+              exact element (`el === composedPath[0]`), so clicks on the filename
+              or the flex spacer inside it were not drag targets. "deep" makes
+              the whole strip draggable while still exempting real controls —
+              the script blocks dragging at any clickable element it walks past. */}
+          <header class="topfloat" aria-label="Document" data-tauri-drag-region="deep">
+            {/* Spacer over the native macOS traffic lights, which sit above the
+                sidebar — it only takes width when the sidebar is collapsed and
+                they would otherwise land on these controls. A drag region here
+                would swallow their clicks (close/minimize/zoom). */}
+            {isTauri && isMac && <span class="topbar-traffic" aria-hidden="true" />}
+            <button
+              class="topbar-toggle icon-btn"
+              title="Toggle sidebar (Shift+Cmd/Ctrl+L)"
+              onClick={() => setSidebarOpen(!sidebarOpen())}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" />
+              </svg>
+            </button>
+            <span class="topbar-file" title={doc.filePath ?? "Not saved to a file yet"}>
+              {fileName()}
+              {/* Shown only when dirty. It used to render always and merely
+                  change colour between --select and --accent — which are the
+                  same value on the default theme, and on the five themes that
+                  never define --select, so "unsaved" was pixel-identical to
+                  "saved" on 6 of 13 themes. Absence is the unambiguous signal. */}
+              <Show when={doc.dirty}>
+                <span class="topbar-dot" title="Unsaved changes" aria-label="Unsaved changes" />
+              </Show>
+            </span>
+            <span class="spacer" />
+            <button
+              class="topbar-search"
+              title="Command palette (Cmd/Ctrl+K)"
+              onClick={() => executeCommand("menu.command_palette")}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+              </svg>
+              <span class="topbar-search-label">Search commands…</span>
+              <span class="kbd">{isMac ? "⌘K" : "Ctrl K"}</span>
+            </button>
+            {/* Divides the global action (command palette) from the controls
+                that act on this view. Focus mode sits with Live/Source because
+                it *is* a view mode; beside the palette it read as unrelated. */}
+            <span class="topfloat-sep" aria-hidden="true" />
+            <button
+              class="topbar-toggle icon-btn"
+              classList={{ on: focusMode() }}
+              title="Focus mode"
+              onClick={() => executeCommand("view.focus_mode")}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
+              </svg>
+            </button>
+            <div class="view-toggle">
+              <button classList={{ on: !sourceMode() }} onClick={() => setSourceMode(false)}>Live</button>
+              <button classList={{ on: sourceMode() }} onClick={() => setSourceMode(true)}>Source</button>
+            </div>
+          </header>
           <FindBar />
           <ConflictBanner />
           <div class="scroll" ref={editorEl}>
