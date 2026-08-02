@@ -164,6 +164,39 @@ export function cellRanges(text: string): { start: number; end: number }[] {
   return out;
 }
 
+/**
+ * Append an empty row at the bottom / an empty column at the right, plus the
+ * tab-order index of the first cell of what was added — the edge "+" rails
+ * drop the caret there so you can type straight into the new cell.
+ *
+ * Unlike `editTable`, these take no caret offset: the rails act on the table's
+ * edge, not on wherever the caret happens to be.
+ */
+export interface TableAppend {
+  text: string;
+  /** Index into `cellRanges(text)` of the new row's / column's first cell. */
+  cell: number;
+}
+
+export function appendTableRow(text: string): TableAppend | null {
+  const t = parseTable(text);
+  if (!t) return null;
+  const cols = t.align.length;
+  const rowIndex = t.rows.length;
+  t.rows.push(Array.from({ length: cols }, () => "  "));
+  return { text: serializeTable(t), cell: rowIndex * cols };
+}
+
+export function appendTableColumn(text: string): TableAppend | null {
+  const t = parseTable(text);
+  if (!t) return null;
+  if (t.align.length >= 16) return null;
+  t.align.push(null);
+  for (const r of t.rows) r.push("  ");
+  // The new column's header cell: last cell of the first row, now one wider.
+  return { text: serializeTable(t), cell: t.align.length - 1 };
+}
+
 export type TableEdit =
   | { kind: "row_above" }
   | { kind: "row_below" }

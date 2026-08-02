@@ -67,8 +67,13 @@ import { openTableDialog } from "./components/TableDialog";
 import { openAbout } from "./components/AboutModal";
 import { ensurePandoc } from "./components/PandocDownloadModal";
 import { openSettings } from "./components/SettingsModal";
+import { openThemePicker } from "./components/ThemePicker";
+import { openThemeEditor } from "./components/ThemeEditor";
 import { checkForUpdates } from "./updater";
-import { skeletonTable, editTable, resizeTable, prettifyTable, parseTable, type TableEdit, type Align } from "./tabletools";
+import {
+  skeletonTable, editTable, resizeTable, prettifyTable, parseTable, cellRanges,
+  appendTableRow, appendTableColumn, type TableAppend, type TableEdit, type Align,
+} from "./tabletools";
 
 const HELP_URL = "https://github.com/solancer/sarala#readme";
 
@@ -554,6 +559,25 @@ function applyTableEdit(edit: TableEdit) {
 }
 
 const tableAlign = (align: Align) => () => applyTableEdit({ kind: "align", align });
+
+/**
+ * Grow the active table from its edge "+" rails, landing the caret in the new
+ * cell. `cellRanges` is recomputed on the *new* source, so the tab-order index
+ * the append reports resolves to a real offset.
+ */
+function growActiveTable(grow: (text: string) => TableAppend | null) {
+  const i = targetBlockIndex();
+  if (i < 0) return;
+  const text = doc.blocks[i].text;
+  const next = grow(text);
+  if (next == null || next.text === text) return;
+  const cell = cellRanges(next.text)[next.cell];
+  requestCaret(cell ? cell.end : next.text.length);
+  updateBlock(i, next.text);
+}
+
+export const appendRowToActiveTable = () => growActiveTable(appendTableRow);
+export const appendColumnToActiveTable = () => growActiveTable(appendTableColumn);
 
 /** Called by the TableDialog overlay with the chosen dimensions. */
 export function insertTable(rows: number, cols: number) {

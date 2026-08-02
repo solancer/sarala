@@ -12,15 +12,19 @@ import {
 } from "../store";
 import { renderMermaidIn } from "../mermaid";
 import { renderD2In } from "../d2";
-import { executeCommand, registerBlockApi, unregisterBlockApi, imageInsertRef, type BlockApi } from "../commands";
+import { executeCommand, registerBlockApi, unregisterBlockApi, imageInsertRef, followLink, type BlockApi } from "../commands";
 import { parseTable, cellRanges } from "../tabletools";
 import { findImages } from "../images";
 import { pasteToInsert } from "../richpaste";
 import { openImageMenu } from "./ImageContextMenu";
 import { openEditorMenu } from "./EditorContextMenu";
 import ImageHoverTools from "./ImageHoverTools";
+import ImageProperties from "./ImageProperties";
+import LinkHoverTools from "./LinkHoverTools";
 import type { ImageTarget } from "../imageactions";
+import { linkForHref, type LinkTarget } from "../links";
 import TableToolbar from "./TableToolbar";
+import TableRails from "./TableRails";
 import CodeLangPicker from "./CodeLangPicker";
 import D2SizeControl from "./D2SizeControl";
 
@@ -602,6 +606,7 @@ export default function Block(props: Props) {
     <div class="block" classList={{ active: props.active }} ref={rootEl}>
       <Show when={props.active && parseTable(props.text)}>
         <TableToolbar text={props.text} />
+        <TableRails text={props.text} />
       </Show>
       <Show when={props.active && isCodeFence()}>
         <CodeLangPicker current={fenceLang()} onSelect={setFenceLang} onCancel={() => el?.focus()} />
