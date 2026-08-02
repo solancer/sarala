@@ -43,36 +43,43 @@ export default function StatusBar() {
   const fontLabel = () => proseFont() ?? "Default";
 
   return (
-    <footer class="statusbar">
-      <span class="sb-stat">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-          <path d="M4 7h16M4 12h16M4 17h10" />
-        </svg>
-        <b>{stats().words}</b> words
-      </span>
-      <span class="sb-dot" />
-      <span class="sb-stat"><b>{stats().chars}</b> characters</span>
-      <span class="sb-dot" />
-      <span class="sb-stat">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
-        </svg>
-        <b>{readTime()}</b> min read
-      </span>
-      <span class="sb-dot" />
-      <span class="sb-stat sb-cursor">Ln {caretLineCol().line}, Col {caretLineCol().col}</span>
-      <Show when={updatePhase().kind !== "idle"}>
-        <span class="sb-dot" />
-        <span class="update-status">{updateLabel(updatePhase())}</span>
-      </Show>
+    <footer class="statusbar" aria-label="Document status">
+      {/* Stats carry no icons now. Two of the four had them (words, read time)
+          and two did not, which read as arbitrary; at 12px the labels already
+          say what each number is. */}
+      <div class="sb-stats">
+        <span class="sb-stat"><b>{stats().words}</b> words</span>
+        <span class="sb-dot" aria-hidden="true" />
+        <span class="sb-stat"><b>{stats().chars}</b> characters</span>
+        <span class="sb-dot" aria-hidden="true" />
+        <span class="sb-stat"><b>{readTime()}</b> min read</span>
+        <span class="sb-dot" aria-hidden="true" />
+        <span class="sb-stat sb-cursor">Ln {caretLineCol().line}, Col {caretLineCol().col}</span>
+        <Show when={updatePhase().kind !== "idle"}>
+          <span class="sb-dot" aria-hidden="true" />
+          <span class="update-status">{updateLabel(updatePhase())}</span>
+        </Show>
+      </div>
 
       <span class="spacer" />
 
       <div class="status-right">
-        <span class="sb-saved" classList={{ dirty: !saved() }} title={savedTitle()}>
-          <span class="sync-dot" />
+        {/* A real button: it looked exactly like the theme/font buttons beside
+            it but did nothing. Clicking now does the thing the label implies. */}
+        <button
+          class="sb-saved"
+          classList={{ dirty: !saved() }}
+          title={saved() ? savedTitle() : `${savedTitle()} — click to save`}
+          disabled={saved()}
+          aria-live="polite"
+          onClick={() => executeCommand("file.save")}
+        >
+          <span class="sync-dot" aria-hidden="true" />
           {saved() ? "Saved" : "Unsaved"}
-        </span>
+        </button>
+        {/* Deliberately NOT a button: changing encoding is a reopen, which
+            lives in the Edit menu. Styled as a plain readout so it stops
+            impersonating the controls next to it. */}
         <span
           class="sb-fmt"
           classList={{ lossy: encodingLossy() }}
@@ -82,7 +89,7 @@ export default function StatusBar() {
               : "Text encoding — change via Edit ▸ Reopen with Encoding"
           }
         >
-          Markdown · {doc.encoding}
+          {formatLabel(doc.filePath)} · {doc.encoding}
           <Show when={doc.hadBom}> BOM</Show>
           <Show when={encodingLossy()}> ⚠</Show>
         </span>
