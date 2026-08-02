@@ -86,6 +86,34 @@ build service**, which is connected to this repo and builds `snap/snapcraft.yaml
 > <https://forum.snapcraft.io/c/store-requests>. After it's approved, later
 > revisions publish without manual steps.
 
+#### Security rebuilds
+
+Canonical's security bot scans published snaps daily and emails when a staged
+`.deb` has since received a USN — for example *"sarala contains outdated Ubuntu
+packages"* naming `gstreamer1.0-plugins-good`.
+
+Nothing in this repo is at fault when that arrives. Those packages are **not**
+listed in `snapcraft.yaml`; they come in transitively via `libwebkit2gtk-4.1-0`
+and are frozen at whatever the Ubuntu archive held **on the day the revision was
+built**. There is no version to bump and no automatic rebuild — the fix is
+simply to build again so apt pulls the patched versions:
+
+1. Trigger a build at <https://snapcraft.io/sarala/builds> (**Trigger new build**),
+   or push any commit to `main` — the build service watches the repo.
+2. When the new revisions land in **edge**, promote them:
+
+   ```sh
+   snapcraft release sarala <revision> stable
+   ```
+
+   Both architectures need promoting; the email names one revision per arch
+   (e.g. r17 amd64, r18 arm64).
+
+Because the packages are pinned at build time, a snap that goes unreleased for a
+while will drift again. Rebuilding every month or two — or whenever one of these
+emails lands — keeps the published revision current without needing an app
+release.
+
 > **Auto-updater note:** a snap is a read-only image that the Snap Store keeps
 > updated, so Tauri's in-app updater can't (and shouldn't) replace the binary
 > there. The **Check for Updates…** action will simply fail to install inside the
