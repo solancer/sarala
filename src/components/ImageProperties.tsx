@@ -86,10 +86,18 @@ export default function ImageProperties(props: Props) {
   };
 
   // Debounced commit for typed fields, so a rewrite lands once per pause rather
-  // than once per character.
-  let timer: number | undefined;
+  // than once per character. One timer *per field*: a shared one lets a second
+  // field cancel the first one's pending commit, and that edit is then only in
+  // the input's local draft state — it never reaches the source. (`timer` below
+  // is the size control's own; width and height are a single control there.)
+  const fieldTimers = new Map<string, number>();
+  const clearFieldTimer = (name: string) => {
+    const t = fieldTimers.get(name);
+    if (t !== undefined) clearTimeout(t);
+    fieldTimers.delete(name);
+  };
   const commitSoon = (name: string, value: string) => {
-    clearTimeout(timer);
+    clearFieldTimer(name);
     // Deliberate imperative read: the target must be re-read when the timer
     // fires, not captured now, so a commit lands against the occurrence's
     // current offsets rather than the ones it had when the keystroke happened.
@@ -97,13 +105,22 @@ export default function ImageProperties(props: Props) {
     // after it, it was disabling the following *comment* line and the real
     // warning went unsuppressed.)
     // eslint-disable-next-line solid/reactivity
-    timer = window.setTimeout(() => commit(name, value), COMMIT_MS);
+    fieldTimers.set(name, window.setTimeout(() => {
+      fieldTimers.delete(name);
+      commit(name, value);
+    }, COMMIT_MS));
   };
   const commitNow = (name: string, value: string) => {
-    clearTimeout(timer);
+    clearFieldTimer(name);
     commit(name, value);
   };
-  onCleanup(() => clearTimeout(timer));
+
+  // The size control's timer: width and height are one control, so one timer.
+  let timer: number | undefined;
+  onCleanup(() => {
+    clearTimeout(timer);
+    fieldTimers.forEach((t) => clearTimeout(t));
+  });
 
   /* --- dismissal: Escape, or a click anywhere outside the card --- */
   onMount(() => {

@@ -446,6 +446,9 @@ export default function Block(props: Props) {
     cancelLinkShow();
     // Already open on this same link — keep it, don't re-animate.
     if (linkTool()?.target.start === state.target.start) return;
+    // A different link: drop the open card now rather than leaving it pointing
+    // at the link you just left for the length of the hover delay.
+    if (linkTool()) setLinkTool(null);
     linkShowTimer = window.setTimeout(() => setLinkTool(state), LINK_HOVER_MS);
   };
   const hideLinkNow = () => {
@@ -515,9 +518,15 @@ export default function Block(props: Props) {
   };
   const onRenderedMouseOut = (e: MouseEvent) => {
     const to = e.relatedTarget as HTMLElement | null;
-    if (to && (to.closest("a") || to.closest(".link-tools"))) return;
+    // Every hold-open test below is scoped to *this* block. A link or a hover
+    // card belonging to a neighbouring block is somewhere else as far as this
+    // one is concerned: keeping our helper alive for it would strand it, since
+    // the next mouseout arrives on that block, not here.
+    const inBlock = !!to && !!rootEl?.contains(to);
+    if (inBlock && (to!.closest("a") || to!.closest(".link-tools"))) return;
     hideLinkNow();
-    if (to && (to.closest("img") || to.closest(".img-tools") || to.closest(".img-props"))) return;
+    if (inBlock && (to!.closest("img") || to!.closest(".img-tools") || to!.closest(".img-props")))
+      return;
     scheduleHide();
   };
 

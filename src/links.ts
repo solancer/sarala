@@ -109,6 +109,12 @@ export function setLinkUrl(t: LinkTarget, url: string) {
 
 /** Anything carrying a scheme is the OS's business, not ours. */
 const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+/**
+ * `C:\docs\README.md` satisfies HAS_SCHEME as well, so a Windows drive letter
+ * has to be ruled out before the scheme test — otherwise every absolute path on
+ * Windows is handed to the OS as a URL and no local document ever opens.
+ */
+const WIN_DRIVE = /^[A-Za-z]:[\\/]/;
 /** Documents Sarala can open itself, matching what the file tree lists. */
 const OPENABLE = /\.(md|markdown|mdown|txt)$/i;
 
@@ -136,12 +142,12 @@ export function linkDestination(href: string, dir = docDir()): LinkDestination {
   const raw = href.trim();
   if (!raw) return { kind: "unknown" };
   if (raw.startsWith("#")) return { kind: "anchor", id: raw.slice(1) };
-  if (HAS_SCHEME.test(raw)) return { kind: "external", url: raw };
+  if (!WIN_DRIVE.test(raw) && HAS_SCHEME.test(raw)) return { kind: "external", url: raw };
 
   // Strip a fragment/query before touching the filesystem.
   const path = raw.split(/[?#]/)[0];
   if (!path) return { kind: "unknown" };
-  const abs = /^([A-Za-z]:[\\/]|\/)/.test(path)
+  const abs = WIN_DRIVE.test(path) || path.startsWith("/")
     ? path.replace(/\\/g, "/")
     : dir
       ? joinPath(dir, path)
