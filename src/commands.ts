@@ -1197,6 +1197,8 @@ const registry: Record<string, Command> = {
   "format.image.copy_to_folder": toggleCopyImageToAssets,
   "format.image.root_path": () => void setImageRootPath(),
   "format.clear": clearFormat,
+  "themes.picker": () => openThemePicker(),
+  "themes.custom": () => openThemeEditor(),
 
   // View
   "view.source_mode": () => { setSourceMode(!sourceMode()); },

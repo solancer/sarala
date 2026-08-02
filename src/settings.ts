@@ -8,7 +8,7 @@ import {
   setSidebarWidth, clampSidebar, setStatusBarVisible,
   setMathAltDelimitersSig, setMathFenceSig,
   setEmojiEnabledSig, setHighlightEnabledSig, setSubSupEnabledSig, setAutolinkEnabledSig,
-  setProseFont, setMonoFont,
+  setProseFont, setMonoFont, setOpenFolders, openFolders, setCustomScheme, customScheme,
 } from "./store";
 import { applyProseFont, applyMonoFont } from "./fonts";
 import {
@@ -17,6 +17,7 @@ import {
 } from "./markdown";
 import { setLiveHighlight, setLiveSubSup } from "./livesource";
 import type { ExportPreset, PdfOptions } from "./export";
+import type { Base16Scheme } from "./base16";
 
 export interface ExportMemo {
   /** Menu id of the export command, e.g. "file.export.docx". */
@@ -124,6 +125,8 @@ function hydrateStore() {
   if ((THEMES as readonly string[]).includes(savedTheme)) setTheme(savedTheme as ThemeId);
   setZoom(clampZoom(getSetting("zoom", 100)));
   setSidebarWidth(clampSidebar(getSetting("sidebarWidth", 240)));
+  setOpenFolders(new Set<string>(getSetting<string[]>("openFolders", [])));
+  setCustomScheme(getSetting<Base16Scheme | null>("customScheme", null));
   setStatusBarVisible(getSetting("statusBarVisible", true));
   const altDelim = getSetting("mathAltDelimiters", false);
   setMathAltDelimitersSig(altDelim);
@@ -181,6 +184,24 @@ export async function addRecentFile(path: string): Promise<void> {
   // yet in the list are added, at the front (newest first).
   if (data.recentFiles.includes(path)) return;
   data.recentFiles = [path, ...data.recentFiles].slice(0, 10);
+  setRecentSig(data.recentFiles);
+  await persist();
+  await syncRecentMenu();
+}
+
+/** Persist the imported/edited base16 scheme behind the Custom theme. */
+export async function saveCustomScheme(): Promise<void> {
+  await setSetting("customScheme", customScheme());
+}
+
+/** Persist the expanded-folder set (debounced by the caller's own cadence). */
+export async function saveOpenFolders(): Promise<void> {
+  await setSetting("openFolders", [...openFolders()]);
+}
+
+/** Drop one path from Recent (the row's own "Remove" action). */
+export async function removeRecentFile(path: string): Promise<void> {
+  data.recentFiles = data.recentFiles.filter((p) => p !== path);
   setRecentSig(data.recentFiles);
   await persist();
   await syncRecentMenu();

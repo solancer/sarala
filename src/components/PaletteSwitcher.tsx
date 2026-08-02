@@ -1,6 +1,8 @@
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
-import { theme, THEMES } from "../store";
+import { theme, THEMES, customScheme } from "../store";
 import { executeCommand } from "../commands";
+import { openThemeEditor } from "./ThemeEditor";
+import { openThemePicker } from "./ThemePicker";
 
 // One dot per theme — mirrors each theme's real signature --accent so the
 // popover is an honest preview of what you get. Kept in sync with app.css.
@@ -18,6 +20,9 @@ export const DOTS: Record<string, string> = {
   night: "#6cb2f7",     // sky blue
   newsprint: "#3f6079", // printer's-ink slate
   whitey: "#3a3f45",    // graphite (monochrome)
+  // The Custom slot has no fixed signature — its dot follows the imported
+  // scheme's accent (base0D), falling back to a neutral when none is set.
+  custom: "#81a2be",
 };
 
 const [paletteVisible, setPaletteVisible] = createSignal(false);
@@ -50,13 +55,32 @@ export default function PaletteSwitcher() {
           {(id) => (
             <button
               class="palette-dot"
-              classList={{ on: theme() === id }}
-              title={id}
-              style={{ background: DOTS[id] }}
-              onClick={() => executeCommand(`themes.set.${id}`)}
+              classList={{ on: theme() === id, custom: id === "custom" }}
+              title={id === "custom"
+                ? `Custom${customScheme() ? ` — ${customScheme()!.name}` : " (click to set up)"}`
+                : id}
+              style={{
+                background: id === "custom"
+                  ? (customScheme()?.palette.base0D ?? DOTS.custom)
+                  : DOTS[id],
+              }}
+              onClick={() => {
+                // With no scheme yet there is nothing to switch to, so the dot
+                // opens the editor instead of applying an empty theme.
+                if (id === "custom" && !customScheme()) { openThemeEditor(); return; }
+                executeCommand(`themes.set.${id}`);
+              }}
+              onDblClick={() => id === "custom" && openThemeEditor()}
             />
           )}
         </For>
+        <button
+          class="palette-more"
+          title="All themes…"
+          onClick={() => { setPaletteVisible(false); openThemePicker(); }}
+        >
+          All themes…
+        </button>
       </div>
     </Show>
   );

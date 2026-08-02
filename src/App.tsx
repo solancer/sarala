@@ -183,6 +183,21 @@ export default function App() {
     }
   });
 
+  // The Custom theme has no hand-authored [data-theme] block — its tokens are
+  // derived from the base16 scheme and injected as a stylesheet, so importing or
+  // editing a swatch restyles the app without a reload.
+  createEffect(() => {
+    const scheme = customScheme();
+    let el = document.getElementById("custom-theme") as HTMLStyleElement | null;
+    if (!scheme) { el?.remove(); return; }
+    if (!el) {
+      el = document.createElement("style");
+      el.id = "custom-theme";
+      document.head.appendChild(el);
+    }
+    el.textContent = base16ToCss(scheme);
+  });
+
   // Window title: "Notes.md — Edited".
   createEffect(() => {
     const title = `${fileName()}${doc.dirty ? " — Edited" : ""}`;
