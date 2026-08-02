@@ -29,6 +29,8 @@ export interface ExportMemo {
 
 interface SettingsData {
   recentFiles: string[];
+  /** Expanded folder paths, so the tree looks the same after a restart. */
+  openFolders: string[];
   pinnedFiles: string[];
   lastExport: ExportMemo | null;
   exportPresets: ExportPreset[];
@@ -55,6 +57,7 @@ const DEFAULT_PRESETS: ExportPreset[] = [
 
 const DEFAULTS: SettingsData = {
   recentFiles: [],
+  openFolders: [],
   pinnedFiles: [],
   lastExport: null,
   exportPresets: DEFAULT_PRESETS,

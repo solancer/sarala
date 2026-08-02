@@ -64,6 +64,67 @@ export const clampZoom = (z: number) => Math.max(90, Math.min(180, z));
 // Workspace folder shown in the sidebar (lifted out of App so the command
 // bus can drive "Open Folder…").
 export const [fileTree, setFileTree] = createSignal<FileNode[]>([]);
+
+/**
+ * Expanded folders, keyed by path.
+ *
+ * Deliberately NOT per-row component state: `refreshTree()` replaces the whole
+ * FileNode array with fresh objects from Rust, so Solid recreates every row —
+ * signals held inside a row would reset, collapsing the tree on every Save As /
+ * Rename / Delete. Keying by path survives that, and survives a restart once
+ * persisted.
+ */
+export const [openFolders, setOpenFolders] = createSignal<ReadonlySet<string>>(new Set());
+export const isFolderOpen = (path: string) => openFolders().has(path);
+export function setFolderOpen(path: string, open: boolean) {
+  setOpenFolders((prev) => {
+    if (prev.has(path) === open) return prev;
+    const next = new Set(prev);
+    if (open) next.add(path);
+    else next.delete(path);
+    return next;
+  });
+}
+export const toggleFolder = (path: string) => setFolderOpen(path, !isFolderOpen(path));
+/** Open every folder on a path's ancestor chain (used by reveal-active-file). */
+export function openAncestors(filePath: string, root: string | null) {
+  const norm = (p: string) => p.replace(/\\/g, "/");
+  const file = norm(filePath);
+  const base = root ? norm(root) : "";
+  if (base && !file.startsWith(base + "/")) return;
+  const rel = base ? file.slice(base.length + 1) : file;
+  const segs = rel.split("/").slice(0, -1);
+  if (!segs.length) return;
+  setOpenFolders((prev) => {
+    const next = new Set(prev);
+    let acc = base;
+    for (const seg of segs) {
+      acc = acc ? `${acc}/${seg}` : seg;
+      next.add(acc);
+    }
+    return next;
+  });
+}
+export function collapseAllFolders() {
+  setOpenFolders(new Set<string>());
+}
+/**
+ * Recent/Pinned paths whose file no longer resolves on disk. Entries are marked
+ * rather than dropped: an unplugged external drive or an unmounted network
+ * share would otherwise silently destroy the list, and the file comes back.
+ */
+export const [missingFiles, setMissingFiles] = createSignal<ReadonlySet<string>>(new Set<string>());
+export const isMissing = (path: string) => missingFiles().has(path);
+export function markMissing(path: string, missing: boolean) {
+  setMissingFiles((prev) => {
+    if (prev.has(path) === missing) return prev;
+    const next = new Set(prev);
+    if (missing) next.add(path);
+    else next.delete(path);
+    return next;
+  });
+}
+
 export const [folderName, setFolderName] = createSignal<string | null>(null);
 export const [folderPath, setFolderPath] = createSignal<string | null>(null);
 export const [quickOpenVisible, setQuickOpenVisible] = createSignal(false);

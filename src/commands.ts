@@ -29,7 +29,7 @@ import {
   watchFile, clearShadow, listDirectory, openExternal,
   confirmDialog, alertDialog, renameFile, deleteFile, openNewWindow,
   pandocImport, pandocExport, exportPdf, runCommand, revealInDir,
-  clipboardWriteText, clipboardReadText,
+  clipboardWriteText, clipboardReadText, pathExists,
   pickImageFile, copyAsset,
   setWindowAlwaysOnTop, toggleFullscreen, minimizeWindow, toggleMaximizeWindow,
 } from "./platform";
@@ -48,8 +48,8 @@ import { setLiveHighlight, setLiveSubSup } from "./livesource";
 import { shadowFor, restoreSession, keyForPath } from "./autosave";
 import { stripControlChars } from "./richpaste";
 import {
-  recentFiles, addRecentFile, clearRecentFiles, lastExport, setLastExport,
-  exportPresets, pdfOptions, setSetting,
+  recentFiles, addRecentFile, clearRecentFiles, removeRecentFile, pinnedFiles,
+  lastExport, setLastExport, exportPresets, pdfOptions, setSetting,
 } from "./settings";
 import {
   buildExportHtml, pageCss, readExportOverrides, pandocFlagsFor, resolveOutputPath,
@@ -143,10 +143,52 @@ async function applyOpened(p: string, ed: EncodedDoc) {
   await watchFile(p);
 }
 
+/**
+ * Re-check every Recent/Pinned path and flag the ones whose file is gone, so a
+ * dead row looks dead. Cheap (one stat per entry) and safe to call often.
+ */
+export async function validateRecentPaths() {
+  const paths = [...new Set([...recentFiles(), ...pinnedFiles()])];
+  await Promise.all(
+    paths.map(async (p) => markMissing(p, !(await pathExists(p)))),
+  );
+}
+
+/**
+ * Open a Recent/Pinned entry whose file has gone missing: say so, and offer to
+ * drop it from the list. Returns true when the caller should stop.
+ */
+async function handleMissingFile(p: string): Promise<boolean> {
+  markMissing(p, true);
+  const name = fileName0(p);
+  if (await confirmDialog(`${name} no longer exists at:\n${p}\n\nRemove it from Recent?`)) {
+    await removeRecentFile(p);
+    markMissing(p, false);
+  }
+  return true;
+}
+
 export async function openFile(path?: string) {
   const p = path ?? (await pickMarkdownFile());
   if (!p) return;
-  const ed = await readFileEncoded(p);
+  // A Recent entry can point at a file that has since been deleted or moved.
+  // Without this the invoke below rejects unhandled and the click does nothing.
+  if (!(await pathExists(p))) {
+    await handleMissingFile(p);
+    return;
+  }
+  let ed: EncodedDoc;
+  try {
+    ed = await readFileEncoded(p);
+  } catch (e) {
+    // Raced with a delete, or unreadable for another reason (permissions).
+    if (!(await pathExists(p))) {
+      await handleMissingFile(p);
+      return;
+    }
+    await alertDialog(String(e));
+    return;
+  }
   // Offer to recover newer autosaved content from a previous session.
   const shadow = await shadowFor(p, ed.content);
   if (shadow && (await confirmDialog(
