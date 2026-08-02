@@ -18,6 +18,7 @@ const ICONS: Record<string, string> = {
   alt: '<path d="M5 6h14M12 6v13M9 19h6"/>',
   code: '<path d="m9 8-4 4 4 4M15 8l4 4-4 4"/>',
   more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
+  props: '<path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h10M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/>',
 };
 
 function Icon(props: { name: string }) {
@@ -48,6 +49,8 @@ interface Props {
   onClose: () => void;
   /** Flip the block to its raw ![alt](src) markdown source, caret on the image. */
   onShowSource: () => void;
+  /** Swap the toolbar for the full Image Properties panel. */
+  onProperties: () => void;
 }
 
 export default function ImageHoverTools(props: Props) {
@@ -104,6 +107,9 @@ export default function ImageHoverTools(props: Props) {
         </button>
         <button class="iht-btn" title="Show source code" onClick={() => props.onShowSource()}>
           <Icon name="code" />
+        </button>
+        <button class="iht-btn" title="Image properties…" onClick={() => props.onProperties()}>
+          <Icon name="props" />
         </button>
         <span class="iht-sep" />
         <button class="iht-btn" title="More…" onClick={openMenu}>

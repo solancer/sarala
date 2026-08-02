@@ -4,6 +4,7 @@ import {
   pickFolder, pickSavePath, confirmDialog, alertDialog,
 } from "./platform";
 import { imageFsPath, docDir, type ImageRef } from "./images";
+import { imageMarkup, needsHtmlSyntax } from "./imageattrs";
 
 /** A right-clicked image: where it lives in the document and its parsed form. */
 export interface ImageTarget extends ImageRef {
@@ -20,13 +21,9 @@ function refForPath(absPath: string): string {
   return norm(absPath);
 }
 
-/** Render an image occurrence in the requested syntax. */
-function imageMarkup(src: string, alt: string, kind: "md" | "html", style?: string): string {
-  if (kind === "html") {
-    const styleAttr = style ? ` style="${style}"` : "";
-    return `<img src="${src}" alt="${alt}"${styleAttr} />`;
-  }
-  return `![${alt}](${src})`;
+/** Re-render an image occurrence, carrying its other attributes across. */
+function remark(t: ImageTarget, src = t.src, alt = t.alt, attrs = t.attrs ?? {}): string {
+  return imageMarkup(src, alt, t.kind, attrs);
 }
 
 /** Replace the image's source span with new text. */
@@ -63,7 +60,7 @@ export async function copyImageTo(t: ImageTarget) {
   if (!dest) return;
   try {
     const newAbs = await copyFileTo(fs, dest);
-    rewrite(t, imageMarkup(refForPath(newAbs), t.alt, t.kind));
+    rewrite(t, remark(t, refForPath(newAbs)));
   } catch (e) {
     await alertDialog(String(e));
   }
@@ -77,7 +74,7 @@ export async function renameMoveImage(t: ImageTarget) {
   if (!to || to === fs) return;
   try {
     await renameFile(fs, to);
-    rewrite(t, imageMarkup(refForPath(to), t.alt, t.kind));
+    rewrite(t, remark(t, refForPath(to)));
   } catch (e) {
     await alertDialog(String(e));
   }
@@ -136,23 +133,49 @@ export async function setImageRootPath() {
 
 /** Apply a zoom percentage — forces HTML syntax (markdown can't carry size). */
 export function setImageZoom(t: ImageTarget, percent: number) {
-  const style = percent === 100 ? "" : `zoom: ${percent}%`;
-  rewrite(t, imageMarkup(t.src, t.alt, "html", style));
+  const attrs = { ...(t.attrs ?? {}) };
+  if (percent === 100) delete attrs.style;
+  else attrs.style = `zoom: ${percent}%`;
+  rewrite(t, imageMarkup(t.src, t.alt, "html", attrs));
 }
 
 export function switchImageSyntax(t: ImageTarget, to: "md" | "html") {
   if (to === t.kind) return;
-  rewrite(t, imageMarkup(t.src, t.alt, to));
+  // Going back to markdown discards what markdown cannot carry, so say so.
+  rewrite(t, imageMarkup(t.src, t.alt, to, to === "md" ? {} : (t.attrs ?? {})));
 }
 
-/** Replace the image's source, preserving its alt text and syntax kind. */
+/** Replace the image's source, preserving its alt text and every attribute. */
 export function setImageSource(t: ImageTarget, src: string) {
   if (src === t.src) return;
-  rewrite(t, imageMarkup(src, t.alt, t.kind));
+  rewrite(t, remark(t, src));
 }
 
-/** Replace the image's alt text, preserving its source and syntax kind. */
+/** Replace the image's alt text, preserving its source and every attribute. */
 export function setImageAlt(t: ImageTarget, alt: string) {
   if (alt === t.alt) return;
-  rewrite(t, imageMarkup(t.src, alt, t.kind));
+  rewrite(t, remark(t, t.src, alt));
+}
+
+/**
+ * Apply a batch of property edits from the Image Properties panel. An empty
+ * value clears the attribute; setting anything markdown cannot express
+ * promotes the occurrence to `<img>` syntax.
+ */
+export function setImageProps(t: ImageTarget, patch: Record<string, string>) {
+  const attrs: Record<string, string> = { ...(t.attrs ?? {}) };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v.trim() === "") delete attrs[k];
+    else attrs[k] = k === "alt" ? v : v.trim();
+  }
+  const src = patch.src !== undefined ? patch.src.trim() : t.src;
+  const alt = patch.alt !== undefined ? patch.alt : t.alt;
+  delete attrs.src;
+  delete attrs.alt;
+  const kind = t.kind === "html" || needsHtmlSyntax(attrs) ? "html" : "md";
+  const next = imageMarkup(src, alt, kind, attrs);
+  const i = blockIndexOf(t.blockId);
+  if (i < 0) return;
+  if (next === doc.blocks[i].text.slice(t.start, t.end)) return;
+  rewrite(t, next);
 }

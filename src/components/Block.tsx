@@ -401,39 +401,123 @@ export default function Block(props: Props) {
   // image hover, kept alive while the pointer is over the toolbar, and hidden
   // on a short delay so moving from image → toolbar doesn't flicker it away.
   const [imgTool, setImgTool] = createSignal<
-    { target: ImageTarget; top: number; left: number } | null
+    {
+      target: ImageTarget; ordinal: number; top: number; left: number;
+      /** Intrinsic pixel size, so the properties panel can bound its size
+       *  slider and offer "back to natural" rather than guessing. */
+      natural: { w: number; h: number };
+      /** Already-resolved URL of the rendered image, so the panel can show a
+       *  thumbnail without re-running the asset-protocol path resolution. */
+      resolvedSrc: string;
+    } | null
   >(null);
+  // Swaps the hover toolbar for the full Image Properties panel. The panel is
+  // a click-to-open surface, so it ignores the hover-out timer.
+  const [imgProps, setImgProps] = createSignal(false);
   let hideTimer: number | undefined;
   const cancelHide = () => { clearTimeout(hideTimer); hideTimer = undefined; };
   const scheduleHide = () => {
     cancelHide();
+    if (imgProps()) return;
     hideTimer = window.setTimeout(() => setImgTool(null), 140);
   };
   onCleanup(cancelHide);
 
-  // Map the <img> under the pointer to its source ImageRef and anchor the
-  // toolbar at the image's top-right (inset), positioned within the block.
-  const imageRefFor = (img: HTMLImageElement): ImageTarget | null => {
-    const imgs = findImages(props.text);
-    const ordinal = [...(renderedEl?.querySelectorAll("img") ?? [])].indexOf(img);
-    const ref = imgs[ordinal];
+  // Same hover model as images, but resolved by href rather than ordinal: the
+  // renderer emits anchors with no link behind them (footnote refs, [TOC]), so
+  // counting anchors would drift off the source.
+  const [linkTool, setLinkTool] = createSignal<
+    { target: LinkTarget; top: number; left: number } | null
+  >(null);
+  /**
+   * Hover intent. Text is full of links, and a helper that appears the instant
+   * the pointer crosses one flickers on every sweep of the mouse. So it waits
+   * for the pointer to *rest* — and leaves the moment you go elsewhere, since
+   * a lingering popover over prose is worse than a slow one.
+   *
+   * Nothing is needed to bridge the gap to the card: the card's wrapper starts
+   * flush against the link and pads itself down, so travelling into it never
+   * crosses dead space (see .link-tools / .lht-card).
+   */
+  const LINK_HOVER_MS = 380;
+  let linkShowTimer: number | undefined;
+  const cancelLinkShow = () => { clearTimeout(linkShowTimer); linkShowTimer = undefined; };
+  const showLinkAfterRest = (state: { target: LinkTarget; top: number; left: number }) => {
+    cancelLinkShow();
+    // Already open on this same link — keep it, don't re-animate.
+    if (linkTool()?.target.start === state.target.start) return;
+    linkShowTimer = window.setTimeout(() => setLinkTool(state), LINK_HOVER_MS);
+  };
+  const hideLinkNow = () => {
+    cancelLinkShow();
+    setLinkTool(null);
+  };
+  onCleanup(cancelLinkShow);
+
+  /**
+   * Re-resolve an image occurrence against the block's current text. Committing
+   * a property rewrites the source, which shifts every offset after it, so the
+   * ImageTarget captured on hover is stale from the first edit onward. The
+   * image's ordinal within the block is what stays put, so that is the key.
+   */
+  const imageAt = (ordinal: number): ImageTarget | null => {
+    const ref = findImages(props.text)[ordinal];
     return ref ? { ...ref, blockId: props.id } : null;
   };
+
+  // Map the <img> under the pointer to its source ImageRef and anchor the
+  // toolbar at the image's top-right (inset), positioned within the block.
+  const ordinalOf = (img: HTMLImageElement) =>
+    [...(renderedEl?.querySelectorAll("img") ?? [])].indexOf(img);
   const onRenderedMouseOver = (e: MouseEvent) => {
+    const anchor = (e.target as HTMLElement).closest("a");
+    if (anchor && renderedEl?.contains(anchor) && rootEl && !imgProps()) {
+      const href = anchor.getAttribute("href") ?? "";
+      // Which occurrence of this href is it? Repeated links to one URL still
+      // resolve to the right span.
+      const same = [...renderedEl.querySelectorAll("a")].filter(
+        (a) => a.getAttribute("href") === href,
+      );
+      const ref = href ? linkForHref(props.text, href, same.indexOf(anchor)) : null;
+      if (ref) {
+        const br = rootEl.getBoundingClientRect();
+        const ar = anchor.getBoundingClientRect();
+        showLinkAfterRest({
+          target: { ...ref, blockId: props.id },
+          // Flush to the link's underside; the card pads itself away, so the
+          // pointer can travel into it without leaving the element.
+          top: ar.bottom - br.top,
+          left: ar.left - br.left,
+        });
+        return;
+      }
+    }
     const img = (e.target as HTMLElement).closest("img");
     if (!img || !renderedEl?.contains(img) || !rootEl) return;
-    const target = imageRefFor(img as HTMLImageElement);
+    if (imgProps()) return; // the properties panel owns the surface
+    const ordinal = ordinalOf(img as HTMLImageElement);
+    const target = imageAt(ordinal);
     if (!target) return;
     cancelHide();
     const br = rootEl.getBoundingClientRect();
     const ir = img.getBoundingClientRect();
     // Anchor at the image's top-left corner (inset): aligns with the text
     // column, and its menu/fields open rightward into open space.
-    setImgTool({ target, top: ir.top - br.top + 8, left: ir.left - br.left + 8 });
+    const el = img as HTMLImageElement;
+    setImgTool({
+      target,
+      ordinal,
+      natural: { w: el.naturalWidth || 0, h: el.naturalHeight || 0 },
+      resolvedSrc: el.currentSrc || el.src,
+      top: ir.top - br.top + 8,
+      left: ir.left - br.left + 8,
+    });
   };
   const onRenderedMouseOut = (e: MouseEvent) => {
     const to = e.relatedTarget as HTMLElement | null;
-    if (to && (to.closest("img") || to.closest(".img-tools"))) return;
+    if (to && (to.closest("a") || to.closest(".link-tools"))) return;
+    hideLinkNow();
+    if (to && (to.closest("img") || to.closest(".img-tools") || to.closest(".img-props"))) return;
     scheduleHide();
   };
 
@@ -628,18 +712,50 @@ export default function Block(props: Props) {
             />
             <Show when={imgTool()}>
               {(it) => (
-                <ImageHoverTools
-                  target={it().target}
-                  top={it().top}
-                  left={it().left}
-                  onEnter={cancelHide}
-                  onLeave={scheduleHide}
-                  onClose={() => setImgTool(null)}
-                  onShowSource={() => {
-                    const start = it().target.start;
-                    setImgTool(null);
-                    props.onActivate(start);
-                  }}
+                <Show
+                  when={!imgProps()}
+                  fallback={
+                    <ImageProperties
+                      // Re-read the occurrence from the live block text: a
+                      // committed edit rewrites the source, so the target
+                      // captured on hover is stale by the next keystroke.
+                      target={imageAt(it().ordinal) ?? it().target}
+                      natural={it().natural}
+                      preview={it().resolvedSrc}
+                      top={it().top}
+                      left={it().left}
+                      onEnter={cancelHide}
+                      onLeave={scheduleHide}
+                      onClose={() => { setImgProps(false); setImgTool(null); }}
+                    />
+                  }
+                >
+                  <ImageHoverTools
+                    target={it().target}
+                    top={it().top}
+                    left={it().left}
+                    onEnter={cancelHide}
+                    onLeave={scheduleHide}
+                    onClose={() => setImgTool(null)}
+                    onProperties={() => setImgProps(true)}
+                    onShowSource={() => {
+                      const start = it().target.start;
+                      setImgTool(null);
+                      props.onActivate(start);
+                    }}
+                  />
+                </Show>
+              )}
+            </Show>
+            <Show when={linkTool()}>
+              {(lt) => (
+                <LinkHoverTools
+                  target={lt().target}
+                  top={lt().top}
+                  left={lt().left}
+                  onEnter={cancelLinkShow}
+                  onLeave={hideLinkNow}
+                  onClose={hideLinkNow}
                 />
               )}
             </Show>

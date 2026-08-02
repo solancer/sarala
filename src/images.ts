@@ -2,6 +2,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { doc } from "./store";
 import { isTauri } from "./platform";
 import { setImageResolver } from "./markdown";
+import { parseImgAttrs } from "./imageattrs";
 
 /* ---------- document front matter ---------- */
 
@@ -63,6 +64,8 @@ export interface ImageRef {
   src: string;
   alt: string;
   kind: "md" | "html";
+  /** Every attribute on an HTML `<img>`, so a rewrite can preserve them. */
+  attrs?: Record<string, string>;
 }
 
 /** All image occurrences (markdown and HTML) in a block, in document order. */
@@ -78,19 +81,21 @@ export function findImages(text: string): ImageRef[] {
   const html = /<img\s[^>]*?\/?>/gi;
   while ((m = html.exec(text))) {
     const tag = m[0];
+    const attrs = parseImgAttrs(tag);
     out.push({
       start: m.index,
       end: m.index + tag.length,
-      src: /\bsrc\s*=\s*["']([^"']*)["']/i.exec(tag)?.[1] ?? "",
-      alt: /\balt\s*=\s*["']([^"']*)["']/i.exec(tag)?.[1] ?? "",
+      src: attrs.src ?? "",
+      alt: attrs.alt ?? "",
       kind: "html",
+      attrs,
     });
   }
   return out.sort((a, b) => a.start - b.start);
 }
 
 /** Join a base dir and a relative path, normalizing `.` and `..`. */
-function joinPath(base: string, rel: string): string {
+export function joinPath(base: string, rel: string): string {
   const combined = base.replace(/\\/g, "/").replace(/\/+$/, "") + "/" + rel.replace(/\\/g, "/");
   const out: string[] = [];
   for (const seg of combined.split("/")) {
