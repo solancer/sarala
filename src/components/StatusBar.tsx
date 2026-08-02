@@ -3,7 +3,17 @@ import { stats, doc, encodingLossy, readTime, caretLineCol, theme, proseFont } f
 import { THEME_LABELS } from "../menudata";
 import { togglePalette, isPaletteOpen } from "./PaletteSwitcher";
 import { openSettings, isSettingsOpen } from "./SettingsModal";
+import { executeCommand } from "../commands";
 import { updatePhase, type UpdatePhase } from "../updater";
+
+/** Human name for the open file's format, from its extension.
+ *  Was hardcoded to "Markdown", which is wrong for the .txt files the app
+ *  happily opens (drag-drop, and the Rust tree walker lists them). */
+function formatLabel(path: string | null): string {
+  const ext = (path ?? "").split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "txt" || ext === "text") return "Plain text";
+  return "Markdown";
+}
 
 function updateLabel(p: UpdatePhase): string {
   switch (p.kind) {
@@ -90,8 +100,8 @@ export default function StatusBar() {
         <button
           class="sb-font"
           classList={{ on: isSettingsOpen() }}
-          title={`Font: ${fontLabel()} — click for typography settings`}
-          onClick={openSettings}
+          title={`Font: ${fontLabel()} — click for settings`}
+          onClick={() => openSettings("fonts")}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
             <path d="M5 6h14M12 6v13M9 19h6" />
