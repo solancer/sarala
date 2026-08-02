@@ -4,7 +4,7 @@ import {
   styleSource, getCaretOffset, getSelectionOffsets, setCaret, setSelection,
   applyMarkerVisibility, mapRenderedPrefixToSource,
 } from "../livesource";
-import { isTauri, openExternal, pickImageFile } from "../platform";
+import { isTauri, pickImageFile } from "../platform";
 import {
   consumeCaretRequest, consumeSelectionRequest,
   spellcheckOn, smartPunctuation, renderEpoch, mermaidEpoch,
@@ -618,7 +618,7 @@ export default function Block(props: Props) {
     const link = t.closest("a");
     if (link?.getAttribute("href") && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      openExternal(link.getAttribute("href")!);
+      void followLink(link.getAttribute("href")!);
       return;
     }
     // Clicking an image no longer drops the block into raw ![](…) source — the
