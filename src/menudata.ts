@@ -322,7 +322,9 @@ export const MENUS: TopMenu[] = [
         items: [
           { id: "paragraph.alert.note", label: "Note" },
           { id: "paragraph.alert.tip", label: "Tip" },
+          { id: "paragraph.alert.important", label: "Important" },
           { id: "paragraph.alert.warning", label: "Warning" },
+          { id: "paragraph.alert.caution", label: "Caution" },
         ],
       },
     ],

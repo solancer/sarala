@@ -497,11 +497,17 @@ function mutateCaretLine(fn: (line: string) => string) {
   });
 }
 
-/** Insert a fresh block after the target (or at the end) and focus it. */
+/**
+ * Insert a fresh block after the target (or at the end) and focus it. An empty
+ * target block *becomes* the new block instead of being left behind above it —
+ * that is what the slash menu needs (it fires from an otherwise-blank line),
+ * and it is what the Paragraph menu should have been doing all along.
+ */
 function insertBlock(text: string, caretWithin = text.length) {
   const at = targetBlockIndex();
   requestCaret(caretWithin);
-  insertBlockAfter(at >= 0 ? at : doc.blocks.length - 1, text);
+  if (at >= 0 && doc.blocks[at].text.trim() === "") updateBlock(at, text);
+  else insertBlockAfter(at >= 0 ? at : doc.blocks.length - 1, text);
 }
 
 function shiftHeading(delta: number) {
@@ -1166,7 +1172,9 @@ const registry: Record<string, Command> = {
   "paragraph.footnote": insertFootnote,
   "paragraph.alert.note": () => insertBlock("> [!NOTE]\n> "),
   "paragraph.alert.tip": () => insertBlock("> [!TIP]\n> "),
+  "paragraph.alert.important": () => insertBlock("> [!IMPORTANT]\n> "),
   "paragraph.alert.warning": () => insertBlock("> [!WARNING]\n> "),
+  "paragraph.alert.caution": () => insertBlock("> [!CAUTION]\n> "),
 
   // Format — inline wraps at the caret of the active block
   "format.strong": wrap("**"),

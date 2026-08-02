@@ -41,6 +41,16 @@ export const ICONS: Record<string, string> = {
   window: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
   trash: '<path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/>',
   pencil: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  // Added for the slash menu (same stroked style).
+  paragraph: '<path d="M13 4v16M17 4v16M19 4H9.5a4.5 4.5 0 0 0 0 9H13"/>',
+  listOrdered: '<path d="M10 6h11M10 12h11M10 18h11M4 6h1v4M4 10h2M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/>',
+  listTask: '<path d="M13 5h8M13 12h8M13 19h8M3 17l2 2 4-4M3 7l2 2 4-4"/>',
+  codeBlock: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M10 9.5 8 12l2 2.5M14 9.5l2 2.5-2 2.5"/>',
+  diagram: '<rect x="3" y="3" width="7" height="5" rx="1"/><rect x="14" y="16" width="7" height="5" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/><path d="M6.5 8v8M17.5 16V12H6.5"/>',
+  alert: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>',
+  footnote: '<path d="M4 5h11M4 10h11M4 15h7"/><path d="M17 13h3l-3 4h3"/>',
+  toc: '<path d="M4 6h1M4 12h1M4 18h1M9 6h11M9 12h11M9 18h11"/>',
+  frontMatter: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 13h6M7 16h10"/>',
 };
 
 // Menu command-id → icon key. Reuses the same glyphs the Ctrl/Cmd+K palette
