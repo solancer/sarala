@@ -9,22 +9,27 @@ import FindBar from "./components/FindBar";
 import TableDialog from "./components/TableDialog";
 import ImageContextMenu from "./components/ImageContextMenu";
 import EditorContextMenu from "./components/EditorContextMenu";
+import SelectionToolbar from "./components/SelectionToolbar";
+import SlashMenu from "./components/SlashMenu";
 import PaletteSwitcher from "./components/PaletteSwitcher";
 import AboutModal from "./components/AboutModal";
 import SettingsModal from "./components/SettingsModal";
+import ThemeEditor from "./components/ThemeEditor";
+import ThemePicker from "./components/ThemePicker";
 import PandocDownloadModal from "./components/PandocDownloadModal";
 import UpdateModal from "./components/UpdateModal";
 import ExportHtmlDialog from "./components/ExportHtmlDialog";
 import ConflictBanner from "./components/ConflictBanner";
 import MenuBar from "./components/MenuBar";
 import { initSettings } from "./settings";
+import { base16ToCss } from "./base16";
 import { autoCheckForUpdates } from "./updater";
 import {
   doc, theme, sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
   fileName, setActive, fileTree, folderName, THEMES, targetBlockIndex,
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
   focusMode, typewriterMode, statusBarVisible, alwaysOnTop, zoom, tableFullWidth,
-  mathAltDelimiters, mathFence, bumpMermaidEpoch,
+  mathAltDelimiters, mathFence, bumpMermaidEpoch, customScheme,
   emojiEnabled, highlightEnabled, subSupEnabled, autolinkEnabled,
   finalNewline, autosaveInterval, setExternalChange,
 } from "./store";
@@ -349,8 +354,15 @@ export default function App() {
       <TableDialog />
       <ImageContextMenu />
       <EditorContextMenu />
+      {/* Live view only — Source mode is a plain textarea with no block model. */}
+      <Show when={!sourceMode()}>
+        <SelectionToolbar />
+        <SlashMenu />
+      </Show>
       <AboutModal />
       <SettingsModal />
+      <ThemeEditor />
+      <ThemePicker />
       <PandocDownloadModal />
       <UpdateModal />
       <ExportHtmlDialog />
