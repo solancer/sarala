@@ -58,9 +58,35 @@ const CORE = new Set(["src", "alt"]);
 const escapeAttr = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+/** The entities `escapeAttr` can emit, plus the two other spellings HTML allows. */
+const NAMED: Record<string, string> = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+};
+
 /**
- * Every attribute on an `<img>` tag, lowercased. Unrecognised ones are kept so
- * a rewrite never discards markup the panel does not know about (a `class`, a
+ * The inverse of `escapeAttr`. Attribute values in the source are HTML, so an
+ * `&` reaches us as `&amp;`; without decoding it here, `buildImgTag` would
+ * escape it a second time and every rewrite of `alt="Tom &amp; Jerry"` would
+ * grow another `amp;`. Decoding is a single pass, so `&amp;lt;` correctly
+ * yields the literal text `&lt;` rather than `<`.
+ */
+const decodeAttr = (s: string) =>
+  s.replace(/&(#[xX][0-9a-fA-F]+|#\d+|[a-zA-Z][a-zA-Z0-9]*);/g, (whole, body: string) => {
+    if (body[0] !== "#") return NAMED[body] ?? whole;
+    const cp = body[1] === "x" || body[1] === "X"
+      ? parseInt(body.slice(2), 16)
+      : parseInt(body.slice(1), 10);
+    // Out-of-range or surrogate code points are left as written rather than
+    // turned into a replacement character.
+    return cp > 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff)
+      ? String.fromCodePoint(cp)
+      : whole;
+  });
+
+/**
+ * Every attribute on an `<img>` tag, lowercased, with entities decoded to the
+ * plain text the panel should show. Unrecognised attributes are kept so a
+ * rewrite never discards markup the panel does not know about (a `class`, a
  * `data-*` hook, the `style` that `setImageZoom` writes).
  */
 export function parseImgAttrs(tag: string): Record<string, string> {
@@ -69,7 +95,7 @@ export function parseImgAttrs(tag: string): Record<string, string> {
   const out: Record<string, string> = {};
   let m: RegExpExecArray | null;
   while ((m = re.exec(body)) !== null) {
-    out[m[1].toLowerCase()] = m[2] ?? m[3] ?? m[4] ?? "";
+    out[m[1].toLowerCase()] = decodeAttr(m[2] ?? m[3] ?? m[4] ?? "");
   }
   return out;
 }

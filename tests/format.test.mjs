@@ -400,6 +400,16 @@ eq(parseImgAttrs("<img src=x.png>").src, "x.png", "unquoted values parse");
 eq(parseImgAttrs('<img SRC="x.png">').src, "x.png", "attribute names are lowercased");
 eq(parseImgAttrs('<img src="x.png" hidden>').hidden, "", "valueless attributes parse");
 
+// Values arrive as HTML, so entities have to be decoded on the way in —
+// otherwise buildImgTag escapes them a second time and every rewrite adds
+// another "amp;".
+eq(parseImgAttrs('<img alt="Tom &amp; Jerry">').alt, "Tom & Jerry", "named entities decode");
+eq(parseImgAttrs('<img alt="&lt;b&gt; &quot;q&quot; &apos;a&apos;">').alt, `<b> "q" 'a'`, "the rest of the escape set decodes");
+eq(parseImgAttrs('<img src="a.png?w=1&amp;h=2">').src, "a.png?w=1&h=2", "a query string keeps its real ampersand");
+eq(parseImgAttrs('<img alt="caf&#233; &#x2014; open">').alt, "café — open", "numeric and hex references decode");
+eq(parseImgAttrs('<img alt="&amp;lt; stays text">').alt, "&lt; stays text", "decoding is a single pass");
+eq(parseImgAttrs('<img alt="100&percnt; &bogus; &#xZZ;">').alt, "100&percnt; &bogus; &#xZZ;", "unknown or malformed references are left alone");
+
 // src/alt are always emitted; unset optional attributes are omitted entirely.
 eq(buildImgTag({ src: "a.png", alt: "" }), '<img src="a.png" alt="" />', "minimal tag");
 eq(
@@ -464,6 +474,19 @@ eq(
   for (const f of IMG_FIELDS) {
     assert(back[f.name] !== undefined, `round trip keeps ${f.name}`);
   }
+}
+{
+  // The reported bug: an entity in the source used to gain an extra "amp;" on
+  // every rewrite, so an alt drifted further from the original with each edit.
+  const tag = '<img src="a.png?w=1&amp;h=2" alt="Tom &amp; Jerry" title="5 &lt; 6" />';
+  const once = buildImgTag(parseImgAttrs(tag));
+  eq(once, tag, "a tag with entities rebuilds byte-identically");
+  eq(buildImgTag(parseImgAttrs(once)), once, "…and a second pass adds nothing");
+  eq(
+    imageMarkup("a.png", "Tom & Jerry", "md"),
+    "![Tom & Jerry](a.png)",
+    "demoting to markdown writes the decoded text, not the entity",
+  );
 }
 // Every enum field offers "not set" as its first option.
 for (const f of IMG_FIELDS.filter((x) => x.kind === "enum")) {
