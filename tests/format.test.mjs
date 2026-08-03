@@ -714,6 +714,15 @@ eq(dest("diagram.png").kind, "file", "a local non-document is a file");
 eq(dest("/etc/hosts").kind, "file", "an absolute path is a file");
 eq(dest("/home/me/a.md").path, "/home/me/a.md", "an absolute document is not re-joined");
 
+// A Windows drive letter looks like a URL scheme, so it has to be ruled out
+// before the scheme test — otherwise every absolute path on Windows is thrown
+// at the OS as a url and no local document ever opens.
+eq(dest("C:\\docs\\README.md").kind, "document", "a drive-letter path is a local document");
+eq(dest("C:\\docs\\README.md").path, "C:/docs/README.md", "…with backslashes normalised");
+eq(dest("c:/docs/README.md").kind, "document", "a lowercase forward-slash drive path routes the same");
+eq(dest("C:\\bin\\tool.exe").kind, "file", "a drive-letter non-document goes to the desktop");
+eq(dest("C:\\docs\\README.md#signing").path, "C:/docs/README.md", "a fragment is stripped from a drive path");
+
 // Fragments and queries must not leak into the filesystem path.
 eq(dest("RELEASING.md#signing").path, "/home/me/notes/RELEASING.md", "a fragment is stripped from the path");
 eq(dest("RELEASING.md#signing").kind, "document", "…and it still routes as a document");
