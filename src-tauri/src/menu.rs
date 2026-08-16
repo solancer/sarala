@@ -527,7 +527,9 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let alert = SubmenuBuilder::with_id(app, "paragraph.alert", "Alert")
         .item(&mi(app, "paragraph.alert.note", "Note", None)?)
         .item(&mi(app, "paragraph.alert.tip", "Tip", None)?)
+        .item(&mi(app, "paragraph.alert.important", "Important", None)?)
         .item(&mi(app, "paragraph.alert.warning", "Warning", None)?)
+        .item(&mi(app, "paragraph.alert.caution", "Caution", None)?)
         .build()?;
 
     let paragraph = SubmenuBuilder::new(app, "Paragraph")

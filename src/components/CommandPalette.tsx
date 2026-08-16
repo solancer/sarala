@@ -56,6 +56,8 @@ const BASE: Cmd[] = [
   { group: "View", id: "view.source_mode", label: "Toggle Source Mode", icon: "eye" },
   { group: "View", id: "view.status_bar", label: "Toggle Status Bar", icon: "statusbar" },
   { group: "View", id: "app.settings", label: "Typography Settings", icon: "type" },
+  { group: "Themes", id: "themes.picker", label: "Browse Themes…", icon: "eye" },
+  { group: "Themes", id: "themes.custom", label: "Custom Theme (base16)…", icon: "pencil" },
 ];
 const COMMANDS: Cmd[] = [
   ...BASE,

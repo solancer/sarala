@@ -96,6 +96,14 @@ fn read_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| format!("Could not read {path}: {e}"))
 }
 
+/// Whether a path still resolves on disk. Used to grey out Recent/Pinned
+/// entries whose file has been deleted or moved, so a dead row is visible as
+/// dead instead of failing silently when clicked.
+#[tauri::command]
+fn path_exists(path: String) -> bool {
+    Path::new(&path).exists()
+}
+
 /// A document decoded from disk, tagged with the detected encoding so the editor
 /// can round-trip it (and show the encoding in the status bar).
 #[derive(Serialize)]
@@ -1101,6 +1109,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             list_dir,
             read_file,
+            path_exists,
             read_file_encoded,
             reopen_with_encoding,
             search_in_folder,

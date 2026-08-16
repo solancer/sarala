@@ -1,4 +1,4 @@
-<div align="center">
+<div align="left">
 
 <h1>Sarala</h1>
 
@@ -12,7 +12,7 @@ The editing surface *is* the preview. Every paragraph, heading, list, quote, tab
 [![Build](https://github.com/solancer/sarala/actions/workflows/release.yml/badge.svg)](https://github.com/solancer/sarala/actions/workflows/release.yml)
 [![Snap Store](https://snapcraft.io/sarala/badge.svg)](https://snapcraft.io/sarala)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
-[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#run-it)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#build-from-source)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg?logo=tauri&logoColor=white)](https://tauri.app)
 [![SolidJS](https://img.shields.io/badge/SolidJS-2C4F7C.svg?logo=solid&logoColor=white)](https://www.solidjs.com)
 
@@ -44,28 +44,22 @@ The editing surface *is* the preview. Every paragraph, heading, list, quote, tab
 
 ## Install
 
-### 🍎 macOS — Homebrew
-
-The easiest way to get Sarala on a Mac:
+**macOS** — Homebrew:
 
 ```bash
 brew tap solancer/sarala https://github.com/solancer/sarala
 brew install --cask sarala
 ```
 
-> Sarala's universal build is ad-hoc signed (so it runs natively on both Apple Silicon and Intel) but isn't Apple-notarized. The cask clears the quarantine attribute on install so Gatekeeper won't block the first launch — no extra flags needed. Upgrade later with `brew upgrade --cask sarala`.
+> The universal build is ad-hoc signed (native on Apple Silicon and Intel) but not Apple-notarized. The cask clears the quarantine attribute on install, so Gatekeeper won't block the first launch. Upgrade with `brew upgrade --cask sarala`.
 
-### 🐧 Linux — Snap Store
-
-[![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/sarala)
+**Linux** — [Snap Store](https://snapcraft.io/sarala):
 
 ```bash
 sudo snap install sarala
 ```
 
-### 📦 Every platform — direct download
-
-Grab an installer from the [latest release](https://github.com/solancer/sarala/releases/latest):
+**Everything else** — grab an installer from the [latest release](https://github.com/solancer/sarala/releases/latest):
 
 | Platform | Files |
 | --- | --- |
@@ -73,52 +67,68 @@ Grab an installer from the [latest release](https://github.com/solancer/sarala/r
 | **Windows** | `.exe` · `.msi` |
 | **Linux** | `.AppImage` · `.deb` · `.rpm` · [snap](https://snapcraft.io/sarala) |
 
-## Features
+---
 
-- **Live block editing** — type Markdown and the active block styles itself *as you type*: syntax markers stay visible but dimmed (the gray `##` next to a heading, gray `[ ]( )` around a blue link), and the block fully renders when you press **Enter** or move the caret away
-- **Smart Enter** — continues lists (with auto-numbering and unchecked task carry-over), continues blockquotes, ends a list on an empty item, auto-closes a just-opened code fence, and inserts plain newlines inside fences; `Shift+Enter` for a soft break
-- **Click-to-edit anywhere** — click into rendered text and the caret lands at that exact spot in the source (rendered→source position mapping); merge on backspace at block start, arrow-key navigation across blocks, IME-safe (composition events respected)
-- **GFM** — tables, task lists (clickable checkboxes), strikethrough, and fenced code highlighted by [Shiki](https://shiki.style) (TextMate grammars + VS Code themes; light/dark via CSS variables, self-contained inline styles in export)
-- **Math** (KaTeX) — inline `$…$` and block `$$…$$`, rendered in inactive blocks and shown as raw source while editing; optional `\(…\)` / `\[…\]` delimiters and a `` ```math `` block (preference-gated, off by default); a broken formula keeps its last good render with an error rather than blanking
-- **Diagrams** (Mermaid) — `` ```mermaid `` blocks render every diagram type (flowchart, sequence, gantt, class, state, pie, ER, gitGraph, mindmap, timeline, quadrant, sankey, XY, block, kanban, architecture); invalid syntax shows an inline error and keeps the last good diagram; the diagram theme follows the app's light/dark theme
-- **Find & replace** (`Cmd/Ctrl+F`, replace one or all) and an **Open Quickly** fuzzy finder (`Shift+Cmd/Ctrl+P`)
-- **Sidebar** — file tree (open a folder, browse `.md` files) and a live outline (click a heading to jump)
-- **Distraction-free modes** — **Source mode** (`Cmd/Ctrl+/`) as an escape hatch to the full raw document, plus **Focus** (`F8`) and **Typewriter** (`F9`)
-- **Native menu bar** (File, Edit, Paragraph, Format, View, Themes, Window, Help) — every item dispatches through one frontend command bus shared with the keyboard shortcuts
-- **Paragraph tools** — heading levels, pipe-table editing (insert/rows/columns/alignment), lists and task toggles, quotes, math/code blocks, `[TOC]`, footnotes, GFM alerts
-- **Themes** — Paper, Graphite, GitHub, Night, Newsprint, Whitey — pure CSS variables; add your own in `src/styles/app.css`
-- **Export** — HTML (with an outline sidebar), real PDF (headless Chromium with configurable page size, margins, and header/footer using `${pageNo}`/`${totalPages}`/`${title}`/`${date}`; falls back to the print dialog), and docx/odt/rtf/epub/LaTeX/MediaWiki/rst/Textile/OPML via [Pandoc](https://pandoc.org). **Named presets** store a format, output path, after-export action (reveal/open/run a command), and pandoc flags; **Export with Previous** re-runs the last. Per-document YAML keys (`export_filename`, `export_pdf_margin`, …) override settings. Import via Pandoc too
-- **Local images** — relative `src` paths resolve against the document's folder (via Tauri's asset protocol) and render inline; inserting an image can copy it into a configurable folder (with a `${filename}` variable), and per-document `copy-images-to` / `image-root-url` YAML keys override the copy folder and image root
-- **Built for daily writing** — recent files, settings persisted to disk, smart punctuation, LF/CRLF line endings, word/character count, a dirty indicator (window title shows *— Edited*), confirm-on-close, and **atomic saves** (temp file + rename)
-- **Auto-update** (opt-in) — **Help ▸ Check for Updates…** checks a manifest, then downloads, verifies (minisign), installs, and relaunches — signed artifacts from GitHub Releases, see [Releasing](#releasing)
+## What you get
+
+**Writing**
+
+- Live blocks — markers stay visible but dimmed while you type, then the block renders when you leave it
+- Smart Enter — continues lists and quotes, auto-numbers, closes a just-opened fence; `Shift+Enter` for a soft break
+- Click anywhere in rendered text and the caret lands at that exact spot in the source
+- Select text for a formatting bar with a block-type dropdown; type `/` for an insert menu
+- IME-safe, so CJK composition works as it should
+
+**Content**
+
+- Full GFM — tables, task lists with clickable checkboxes, strikethrough, footnotes, GitHub alerts
+- Code fences highlighted by [Shiki](https://shiki.style), with light/dark handled through CSS variables
+- Math via KaTeX; diagrams via [Mermaid](https://mermaid.js.org) and [D2](https://d2lang.com) — a broken one keeps its last good render instead of blanking
+- Tables edit in place; hover an edge to add a row or column
+- Images resolve relative to the document, with a properties panel for size, alt, and loading behaviour
+
+**Getting around**
+
+- Sidebar with a file tree, live outline, and full-text search across the folder
+- Open Quickly (`Shift+Cmd/Ctrl+P`), find & replace, and a command palette (`Cmd/Ctrl+K`)
+- Focus and Typewriter modes, plus Source mode as an escape hatch to the raw document
+
+**Making it yours**
+
+- 13 built-in themes, plus a **custom theme** built from any [base16](https://github.com/tinted-theming/schemes) scheme — paste one in or edit the sixteen swatches
+- Any installed system font for prose and code
+- A settings dialog for the rest — Markdown extensions, autosave, line endings, image handling
+
+**Getting it out**
+
+- HTML with an outline sidebar, and real PDF via headless Chromium (page size, margins, header/footer)
+- docx, odt, rtf, epub, LaTeX, MediaWiki, rst, Textile, OPML through [Pandoc](https://pandoc.org) — import too
+- Named export presets, and per-document YAML keys to override them
+- Atomic saves, autosave, crash recovery, and opt-in signed auto-updates
+
+---
 
 ## Shortcuts
 
-Most items live in the native menus with their accelerators shown inline; the core set:
+The menus show every accelerator inline. The ones worth learning:
 
 | Keys | Action |
 | --- | --- |
-| `Cmd/Ctrl+S` / `Shift+Cmd/Ctrl+S` | Save / Save As |
-| `Cmd/Ctrl+O` / `Shift+Cmd/Ctrl+O` | Open file / Open folder |
+| `Cmd/Ctrl+K` | Command palette |
+| `Cmd/Ctrl+S` | Save |
 | `Shift+Cmd/Ctrl+P` | Open Quickly |
-| `Cmd/Ctrl+F` / `Cmd/Ctrl+G` / `Alt+Cmd/Ctrl+F` | Find / Find next / Replace |
-| `Cmd/Ctrl+/` | Toggle source mode |
+| `Cmd/Ctrl+F` | Find (`Cmd/Ctrl+G` next, `Alt+Cmd/Ctrl+F` replace) |
+| `Cmd/Ctrl+/` | Source mode |
 | `Shift+Cmd/Ctrl+L` | Toggle sidebar |
-| `F8` / `F9` | Focus mode / Typewriter mode |
-| `Cmd/Ctrl+B / I / U / K` | Bold / italic / underline / link |
-| `Cmd/Ctrl+E` / `Shift+Cmd/Ctrl+X` | Inline code / strike |
+| `F8` / `F9` | Focus / Typewriter mode |
 | `Cmd/Ctrl+1…6`, `0` | Heading level / paragraph |
-| `Cmd/Ctrl+=` / `Cmd/Ctrl+-` | Increase / decrease heading level |
-| `Alt+Cmd/Ctrl+T / C / Q / O / U / X` | Table / fences / quote / ordered / bullet / task list |
-| `Alt+Up` / `Alt+Down` | Move block up / down |
-| `Shift+Cmd/Ctrl+0 / = / -` | Actual size / zoom in / zoom out |
-| `Cmd/Ctrl+P` | Print (also: Export ▸ PDF) |
 | `Esc` | Render the current block |
 
-## Run it
+---
 
-Prereqs: Node 18+, Rust stable, and Tauri's platform dependencies
-(<https://tauri.app/start/prerequisites/> — on Linux that's `webkit2gtk-4.1`, etc.).
+## Build from source
+
+Node 18+, Rust stable, and [Tauri's platform prerequisites](https://tauri.app/start/prerequisites/) (on Linux, `webkit2gtk-4.1` and friends).
 
 ```bash
 pnpm install
@@ -126,58 +136,25 @@ pnpm tauri dev      # desktop app
 pnpm tauri build    # installers in src-tauri/target/release/bundle
 ```
 
-The frontend also runs standalone in a browser (`pnpm dev`) with an in-memory demo document — file dialogs are desktop-only, and Save downloads the file instead.
+`pnpm dev` runs the frontend standalone in a browser — handy for UI work, but file dialogs and the file tree are desktop-only.
 
-## Architecture
+---
 
-```
-src/
-  markdown.ts        parser config, block splitter (fence/front-matter aware),
-                     outline extraction, word count, task toggling
-  store.ts           reactive document model: blocks, split/merge, dirty state
-  commands.ts        command bus: every menu id / shortcut maps to one action
-  settings.ts        persisted settings (recent files, theme, zoom, toggles)
-  tabletools.ts      pipe-table parse/serialize + caret-positioned edits
-  platform.ts        Tauri invoke bridge with graceful browser fallback
-  livesource.ts      the live styler: dims markers, styles content in real
-                     time; caret offset get/set; click-position mapping
-  components/
-    Editor.tsx       block list + click-to-append behavior
-    Block.tsx        the hybrid cell: rendered HTML ⇄ live-styled
-                     contenteditable source (Enter semantics, caret logic)
-    Sidebar.tsx      file tree + outline tabs
-    SourceView.tsx   whole-document raw mode
-    StatusBar.tsx    counts, theme + mode toggles
-    FindBar.tsx      find / replace across blocks
-    QuickOpen.tsx    fuzzy file finder overlay
-src-tauri/
-  src/main.rs        list_dir (md-aware recursive walk), read_file,
-                     save_file (atomic write), settings, pandoc bridge,
-                     dialog / opener / clipboard plugins
-  src/menu.rs        native menu tree; forwards item ids as one "menu"
-                     event — no editing logic in Rust
-```
+## How it works
 
-**Design notes**
+Three decisions shape everything else:
 
-- **Block model over character model.** The document is an array of Markdown blocks (code fences and YAML front matter are kept whole). The active block is a `contenteditable` whose innerHTML is re-styled by `styleSource()` on every input — the key invariant is that the styled HTML's `textContent` is byte-identical to the source, which is what makes caret save/restore by text offset exact (verified by roundtrip tests).
-- **One pipeline.** The same `renderMarkdown()` renders editor blocks and the HTML export, so editing view and output can never diverge.
-- **Normalization on save** falls out of the model: blocks re-join with exactly one blank line between them.
+**A block model, not a character model.** The document is an array of Markdown blocks (fences and YAML front matter kept whole). The active block is a `contenteditable` whose innerHTML is re-styled on every keystroke — and the load-bearing invariant is that the styled HTML's `textContent` stays *byte-identical* to the Markdown source. That exactness is what lets the caret be saved and restored by plain text offset, and it's covered by roundtrip tests.
+
+**One render pipeline.** The same `renderMarkdown()` draws editor blocks and the HTML export, so what you see and what you ship cannot drift apart.
+
+**Rust holds the filesystem, not the logic.** The backend does directory walks, atomic saves, and the Pandoc bridge; the native menu forwards item ids as events. Every editing decision lives in one frontend command bus shared by the menus, the shortcuts, and the command palette.
+
+---
 
 ## Releasing
 
-Releases are automated — bump the version, push a tag, and CI does the rest:
-
-```bash
-pnpm release 0.2.0          # bump manifests + commit + tag v0.2.0
-pnpm release 0.2.0 --push   # ...and push main + the tag in one go
-```
-
-Pushing the `vX.Y.Z` tag triggers [`release.yml`](.github/workflows/release.yml): it builds and signs on macOS (universal), Windows, and Linux; publishes the **GitHub Release** with installers and updater artifacts (each with a `.sig`); and writes `latest.json` to the updater gist — the moment existing installs start seeing the update. The full signing-key setup, CI secrets, `latest.json` shape, and the macOS notarization caveat live in [RELEASING.md](RELEASING.md).
-
-## Roadmap
-
-Custom CSS theme folder.
+`pnpm release 0.2.0 --push` bumps the manifests, tags, and pushes — CI builds and signs for all three platforms, publishes the release, and updates the manifest existing installs check. Details in [RELEASING.md](RELEASING.md).
 
 ## License
 

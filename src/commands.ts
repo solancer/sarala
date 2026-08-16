@@ -4,7 +4,7 @@ import {
   theme, setTheme, THEMES, setFileTree, setFolderName,
   folderPath, setFolderPath, setQuickOpenVisible, setCommandPaletteVisible,
   moveBlock, removeBlock, updateBlock, insertBlockAfter, appendBlock,
-  targetBlockIndex, requestCaret, undo, redo, setCaretProvider,
+  targetBlockIndex, requestCaret, requestSelection, undo, redo, setCaretProvider,
   spellcheckOn, setSpellcheckOn, smartPunctuation, setSmartPunctuation,
   preserveBreaks, setPreserveBreaks, lineEnding, setLineEnding,
   finalNewline, setFinalNewline, setAutosaveInterval,
@@ -16,9 +16,12 @@ import {
   setSidebarTab, focusMode, setFocusMode, typewriterMode, setTypewriterMode,
   statusBarVisible, setStatusBarVisible,
   alwaysOnTop, setAlwaysOnTop, zoom, setZoom, clampZoom,
-  bumpRenderEpoch, proseFont, monoFont,
+  bumpRenderEpoch, proseFont, monoFont, markMissing,
 } from "./store";
 import { selectAllDocument } from "./blockselect";
+import { toggleMark, type MarkKind } from "./inlineformat";
+import { linkDestination } from "./links";
+import { applyBlockKind, type BlockKind } from "./blocktype";
 import { fontEmbedCss } from "./fonts";
 import {
   isTauri, pickFolder, pickMarkdownFile, pickSavePath, pickImportFile,
@@ -26,7 +29,7 @@ import {
   watchFile, clearShadow, listDirectory, openExternal,
   confirmDialog, alertDialog, renameFile, deleteFile, openNewWindow,
   pandocImport, pandocExport, exportPdf, runCommand, revealInDir,
-  clipboardWriteText, clipboardReadText,
+  clipboardWriteText, clipboardReadText, pathExists,
   pickImageFile, copyAsset,
   setWindowAlwaysOnTop, toggleFullscreen, minimizeWindow, toggleMaximizeWindow,
 } from "./platform";
@@ -45,8 +48,8 @@ import { setLiveHighlight, setLiveSubSup } from "./livesource";
 import { shadowFor, restoreSession, keyForPath } from "./autosave";
 import { stripControlChars } from "./richpaste";
 import {
-  recentFiles, addRecentFile, clearRecentFiles, lastExport, setLastExport,
-  exportPresets, pdfOptions, setSetting,
+  recentFiles, addRecentFile, clearRecentFiles, removeRecentFile, pinnedFiles,
+  lastExport, setLastExport, exportPresets, pdfOptions, setSetting,
 } from "./settings";
 import {
   buildExportHtml, pageCss, readExportOverrides, pandocFlagsFor, resolveOutputPath,
@@ -64,8 +67,13 @@ import { openTableDialog } from "./components/TableDialog";
 import { openAbout } from "./components/AboutModal";
 import { ensurePandoc } from "./components/PandocDownloadModal";
 import { openSettings } from "./components/SettingsModal";
+import { openThemePicker } from "./components/ThemePicker";
+import { openThemeEditor } from "./components/ThemeEditor";
 import { checkForUpdates } from "./updater";
-import { skeletonTable, editTable, resizeTable, prettifyTable, parseTable, type TableEdit, type Align } from "./tabletools";
+import {
+  skeletonTable, editTable, resizeTable, prettifyTable, parseTable, cellRanges,
+  appendTableRow, appendTableColumn, type TableAppend, type TableEdit, type Align,
+} from "./tabletools";
 
 const HELP_URL = "https://github.com/solancer/sarala#readme";
 
@@ -135,10 +143,52 @@ async function applyOpened(p: string, ed: EncodedDoc) {
   await watchFile(p);
 }
 
+/**
+ * Re-check every Recent/Pinned path and flag the ones whose file is gone, so a
+ * dead row looks dead. Cheap (one stat per entry) and safe to call often.
+ */
+export async function validateRecentPaths() {
+  const paths = [...new Set([...recentFiles(), ...pinnedFiles()])];
+  await Promise.all(
+    paths.map(async (p) => markMissing(p, !(await pathExists(p)))),
+  );
+}
+
+/**
+ * Open a Recent/Pinned entry whose file has gone missing: say so, and offer to
+ * drop it from the list. Returns true when the caller should stop.
+ */
+async function handleMissingFile(p: string): Promise<boolean> {
+  markMissing(p, true);
+  const name = fileName0(p);
+  if (await confirmDialog(`${name} no longer exists at:\n${p}\n\nRemove it from Recent?`)) {
+    await removeRecentFile(p);
+    markMissing(p, false);
+  }
+  return true;
+}
+
 export async function openFile(path?: string) {
   const p = path ?? (await pickMarkdownFile());
   if (!p) return;
-  const ed = await readFileEncoded(p);
+  // A Recent entry can point at a file that has since been deleted or moved.
+  // Without this the invoke below rejects unhandled and the click does nothing.
+  if (!(await pathExists(p))) {
+    await handleMissingFile(p);
+    return;
+  }
+  let ed: EncodedDoc;
+  try {
+    ed = await readFileEncoded(p);
+  } catch (e) {
+    // Raced with a delete, or unreadable for another reason (permissions).
+    if (!(await pathExists(p))) {
+      await handleMissingFile(p);
+      return;
+    }
+    await alertDialog(String(e));
+    return;
+  }
   // Offer to recover newer autosaved content from a previous session.
   const shadow = await shadowFor(p, ed.content);
   if (shadow && (await confirmDialog(
@@ -489,11 +539,17 @@ function mutateCaretLine(fn: (line: string) => string) {
   });
 }
 
-/** Insert a fresh block after the target (or at the end) and focus it. */
+/**
+ * Insert a fresh block after the target (or at the end) and focus it. An empty
+ * target block *becomes* the new block instead of being left behind above it —
+ * that is what the slash menu needs (it fires from an otherwise-blank line),
+ * and it is what the Paragraph menu should have been doing all along.
+ */
 function insertBlock(text: string, caretWithin = text.length) {
   const at = targetBlockIndex();
   requestCaret(caretWithin);
-  insertBlockAfter(at >= 0 ? at : doc.blocks.length - 1, text);
+  if (at >= 0 && doc.blocks[at].text.trim() === "") updateBlock(at, text);
+  else insertBlockAfter(at >= 0 ? at : doc.blocks.length - 1, text);
 }
 
 function shiftHeading(delta: number) {
@@ -551,6 +607,25 @@ function applyTableEdit(edit: TableEdit) {
 }
 
 const tableAlign = (align: Align) => () => applyTableEdit({ kind: "align", align });
+
+/**
+ * Grow the active table from its edge "+" rails, landing the caret in the new
+ * cell. `cellRanges` is recomputed on the *new* source, so the tab-order index
+ * the append reports resolves to a real offset.
+ */
+function growActiveTable(grow: (text: string) => TableAppend | null) {
+  const i = targetBlockIndex();
+  if (i < 0) return;
+  const text = doc.blocks[i].text;
+  const next = grow(text);
+  if (next == null || next.text === text) return;
+  const cell = cellRanges(next.text)[next.cell];
+  requestCaret(cell ? cell.end : next.text.length);
+  updateBlock(i, next.text);
+}
+
+export const appendRowToActiveTable = () => growActiveTable(appendTableRow);
+export const appendColumnToActiveTable = () => growActiveTable(appendTableColumn);
 
 /** Called by the TableDialog overlay with the chosen dimensions. */
 export function insertTable(rows: number, cols: number) {
@@ -818,6 +893,165 @@ function clearFormat() {
 }
 
 /**
+ * Follow a link from the rendered view.
+ *
+ * A relative link to a sibling document used to be handed straight to the OS
+ * opener, which gets a schemeless path with no notion of the document's folder
+ * and silently does nothing — clicking `RELEASING.md` from the README did
+ * nothing at all. Resolve first, then route: documents open in the editor,
+ * other local files go to the desktop, and `#anchors` scroll this document.
+ */
+export async function followLink(href: string) {
+  const dest = linkDestination(href);
+  switch (dest.kind) {
+    case "external":
+      await openExternal(dest.url);
+      return;
+    case "document":
+      if (!(await pathExists(dest.path))) {
+        await alertDialog(`That file no longer exists:\n${dest.path}`);
+        return;
+      }
+      await openFile(dest.path);
+      return;
+    case "file":
+      if (!(await pathExists(dest.path))) {
+        await alertDialog(`That file no longer exists:\n${dest.path}`);
+        return;
+      }
+      await openExternal(dest.path);
+      return;
+    case "anchor": {
+      // Slugs are generated by the renderer's addHeadingIds, so match on them.
+      const el = document.getElementById(dest.id);
+      el?.scrollIntoView({ block: "start" });
+      return;
+    }
+    default:
+      return;
+  }
+}
+
+/* ---------- sidebar file operations ----------
+   These act on any path in the tree, unlike the `file.*` commands which act on
+   the open document. Each refreshes the tree; expansion state is keyed by path
+   in the store, so it survives that refresh. */
+
+/** Rename/move a file from the tree. Retargets the editor if it was open. */
+export async function renamePath(path: string) {
+  const to = await pickSavePath(path.replace(/\\/g, "/").split("/").pop() ?? "");
+  if (!to || to === path) return;
+  try {
+    await renameFile(path, to);
+    if (doc.filePath === path) {
+      setFilePath(to);
+      await addRecentFile(to);
+    }
+    await refreshTree();
+  } catch (e) {
+    await alertDialog(String(e));
+  }
+}
+
+/** Delete a file from the tree, after confirming. */
+export async function deletePath(path: string) {
+  const name = path.replace(/\\/g, "/").split("/").pop() ?? path;
+  if (!(await confirmDialog(`Delete ${name}? This cannot be undone.`))) return;
+  try {
+    await deleteFile(path);
+    // The open document just lost its file; keep the buffer but forget the path
+    // so the next save prompts for a location rather than recreating it.
+    if (doc.filePath === path) setFilePath("");
+    await refreshTree();
+  } catch (e) {
+    await alertDialog(String(e));
+  }
+}
+
+export async function revealPath(path: string) {
+  try {
+    await revealInDir(path);
+  } catch (e) {
+    await alertDialog(String(e));
+  }
+}
+
+export const copyPath = (path: string) => clipboardWriteText(path);
+
+/** Create a new markdown file next to `nearPath` (or inside it, if a folder). */
+export async function newFileNear(nearPath: string, isDir: boolean) {
+  const norm = nearPath.replace(/\\/g, "/");
+  const dir = isDir ? norm : norm.slice(0, norm.lastIndexOf("/"));
+  // pickSavePath forwards its argument as Tauri's `defaultPath`, which accepts a
+  // full path — so joining the directory here is what opens the dialog there.
+  const to = await pickSavePath(dir ? `${dir}/Untitled.md` : "Untitled.md");
+  if (!to) return;
+  try {
+    await writeTextFile(to, "");
+    await refreshTree();
+    await openFile(to);
+  } catch (e) {
+    await alertDialog(String(e));
+  }
+}
+
+/* ---------- slash menu ---------- */
+
+/** Insert a fenced block with a starter body, caret at the end of the body. */
+export function insertFencedBlock(lang: string, body: string) {
+  const head = "```" + lang + "\n";
+  insertBlock(head + body + "\n```", head.length + body.length);
+}
+
+/**
+ * Delete [start, end) from the target block, parking the caret at `start`.
+ * The slash menu uses this to remove the `/query` before running an item, so
+ * the item's own command sees a clean block.
+ */
+export function deleteRangeInBlock(start: number, end: number) {
+  const i = targetBlockIndex();
+  if (i < 0) return;
+  const text = doc.blocks[i].text;
+  const from = Math.max(0, Math.min(start, text.length));
+  const to = Math.max(from, Math.min(end, text.length));
+  if (to === from) return;
+  requestCaret(from);
+  updateBlock(i, text.slice(0, from) + text.slice(to));
+}
+
+/* ---------- selection toolbar ---------- */
+
+/**
+ * Toggle an inline mark over the current selection, keeping the selection on
+ * the same words afterwards. `wrap()` (the menu/keyboard path) collapses the
+ * caret instead, which would dismiss the floating toolbar on every click.
+ */
+export function toggleInlineMark(kind: Exclude<MarkKind, "image">) {
+  const i = targetBlockIndex();
+  if (i < 0 || !blockApi) return;
+  const { start, end } = blockApi.selectionOffsets();
+  if (end <= start) return;
+  const text = doc.blocks[i].text;
+  const edit = toggleMark(text, start, end, kind);
+  if (edit.text === text) return;
+  requestSelection(edit.start, edit.end);
+  updateBlock(i, edit.text);
+}
+
+/** Convert the target block to a block construct, preserving the selection. */
+export function setBlockKind(kind: BlockKind) {
+  const i = targetBlockIndex();
+  if (i < 0) return;
+  const text = doc.blocks[i].text;
+  const edit = applyBlockKind(text, kind);
+  if (edit.text === text) return;
+  const sel = blockApi?.selectionOffsets();
+  if (sel && sel.end > sel.start) requestSelection(edit.map(sel.start), edit.map(sel.end));
+  else requestCaret(edit.map(sel?.start ?? text.length));
+  updateBlock(i, edit.text);
+}
+
+/**
  * Markdown ref for an inserted image. Copies it next to the document when
  * enabled — the folder template (global setting or the per-document
  * `copy-images-to` front-matter override) expands ${filename} to the
@@ -980,7 +1214,9 @@ const registry: Record<string, Command> = {
   "paragraph.footnote": insertFootnote,
   "paragraph.alert.note": () => insertBlock("> [!NOTE]\n> "),
   "paragraph.alert.tip": () => insertBlock("> [!TIP]\n> "),
+  "paragraph.alert.important": () => insertBlock("> [!IMPORTANT]\n> "),
   "paragraph.alert.warning": () => insertBlock("> [!WARNING]\n> "),
+  "paragraph.alert.caution": () => insertBlock("> [!CAUTION]\n> "),
 
   // Format — inline wraps at the caret of the active block
   "format.strong": wrap("**"),
@@ -1003,6 +1239,8 @@ const registry: Record<string, Command> = {
   "format.image.copy_to_folder": toggleCopyImageToAssets,
   "format.image.root_path": () => void setImageRootPath(),
   "format.clear": clearFormat,
+  "themes.picker": () => openThemePicker(),
+  "themes.custom": () => openThemeEditor(),
 
   // View
   "view.source_mode": () => { setSourceMode(!sourceMode()); },

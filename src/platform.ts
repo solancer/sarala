@@ -48,6 +48,17 @@ export async function pickSavePath(defaultName: string): Promise<string | null> 
   return await save({ defaultPath: defaultName });
 }
 
+/**
+ * Whether a path still resolves on disk. In the browser build there is no
+ * filesystem, so nothing is reported missing — marking every Recent entry dead
+ * in `pnpm dev` would be worse than not checking at all.
+ */
+export async function pathExists(path: string): Promise<boolean> {
+  if (!isTauri) return true;
+  const { invoke } = await import("@tauri-apps/api/core");
+  return await invoke<boolean>("path_exists", { path }).catch(() => true);
+}
+
 export async function readTextFile(path: string): Promise<string> {
   const { invoke } = await tauriCore();
   return await invoke<string>("read_file", { path });

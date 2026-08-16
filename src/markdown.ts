@@ -352,7 +352,11 @@ const lastGoodBlock = new Map<string, string>();
 // admit the extra inline tags/attributes the sweep introduces.
 const SANITIZE_OPTS = {
   ADD_TAGS: ["kbd", "ruby", "rt", "rp", "details", "summary", "video", "source", "u", "mark", "sub", "sup"],
-  ADD_ATTR: ["target", "style", "controls", "open", "src", "type", "id"],
+  // fetchpriority/referrerpolicy are not in DOMPurify's default allowlist but
+  // are inert loading hints the Image Properties panel can set; the rest of the
+  // <img> attribute set (width/height/srcset/sizes/loading/decoding/crossorigin)
+  // already survives by default.
+  ADD_ATTR: ["target", "style", "controls", "open", "src", "type", "id", "fetchpriority", "referrerpolicy"],
 };
 
 /* ---------- GitHub-style alerts ---------- */

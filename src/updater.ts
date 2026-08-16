@@ -40,6 +40,9 @@ export { availableUpdate };
 const [updateError, setUpdateError] = createSignal("");
 export { updateError };
 
+/** Give up on a stalled check rather than leaving it outstanding forever. */
+const CHECK_TIMEOUT_MS = 15_000;
+
 // The plugin's Update handle for the pending version; carries downloadAndInstall.
 let pending: Update | null = null;
 // Guards against overlapping checks/installs (menu re-click, startup race, …).
@@ -88,10 +91,17 @@ async function runCheck(silent: boolean): Promise<void> {
   // the modal is already showing an available update.
   if (inFlight || availableUpdate() || updatePhase().kind !== "idle") return;
   inFlight = true;
-  setUpdatePhase({ kind: "checking" });
+  // A silent startup check deliberately shows nothing. It is background work
+  // the user did not ask for, and surfacing it put "Checking for updates…" in
+  // the status bar for the whole round trip — which the release endpoint can
+  // easily make several seconds. Progress is shown only when the user asked
+  // (Help ▸ Check for Updates…), and for downloads/installs they opted into.
+  if (!silent) setUpdatePhase({ kind: "checking" });
   try {
     const { check } = await import("@tauri-apps/plugin-updater");
-    const update = await check();
+    // Bounded: without a timeout a stalled request never settles, so the
+    // `finally` below never runs and the phase stays pinned forever.
+    const update = await check({ timeout: CHECK_TIMEOUT_MS });
     if (!update) {
       if (!silent) await alertDialog("You're up to date.", "Update");
       return;
