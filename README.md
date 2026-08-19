@@ -2,9 +2,9 @@
 
 <h1>Sarala</h1>
 
-**A seamless WYSIWYG Markdown editor — no preview pane, no split view.**
+**A seamless WYSIWYG Markdown editor. No preview pane, no split view.**
 
-The editing surface *is* the preview. Every paragraph, heading, list, quote, table, and code fence is a live block: click into one and it opens to raw Markdown, click away and it renders in place. One parser, one theme, one window — what you see while writing is exactly what exports.
+The editing surface *is* the preview. Every paragraph, heading, list, quote, table, and code fence is a live block: click into one and it opens to raw Markdown, click away and it renders in place. One parser, one theme, one window: what you see while writing is exactly what exports.
 
 <br />
 
@@ -18,7 +18,7 @@ The editing surface *is* the preview. Every paragraph, heading, list, quote, tab
 
 <br />
 
-<img src="screenshots/header.png" alt="Sarala — Markdown that reads like a finished document" width="820" />
+<img src="screenshots/header.png" alt="Sarala: Markdown that reads like a finished document" width="820" />
 
 </div>
 
@@ -28,15 +28,15 @@ The editing surface *is* the preview. Every paragraph, heading, list, quote, tab
 
 <div align="center">
 
-<img src="screenshots/feature.png" alt="Sarala editing a Markdown document in the light theme — file tree and outline sidebar, a live-rendered table, and syntax-highlighted C" width="880" />
+<img src="screenshots/feature.png" alt="Sarala editing a Markdown document in the light theme, with file tree and outline sidebar, a live-rendered table, and syntax-highlighted C" width="880" />
 
-<sub>*Light theme — rendered tables and Shiki-highlighted code, with the file tree and outline in the sidebar.*</sub>
+<sub>*Light theme: rendered tables and Shiki-highlighted code, with the file tree and outline in the sidebar.*</sub>
 
 <br /><br />
 
 <img src="screenshots/feature-2-dark.png" alt="Sarala in the Night theme showing a welcome document with clickable task-list checkboxes and the theme palette" width="880" />
 
-<sub>*Night theme — clickable task lists, live-styled inline formatting, and the quick theme palette.*</sub>
+<sub>*Night theme: clickable task lists, live-styled inline formatting, and the quick theme palette.*</sub>
 
 </div>
 
@@ -44,22 +44,25 @@ The editing surface *is* the preview. Every paragraph, heading, list, quote, tab
 
 ## Install
 
-**macOS** — Homebrew:
+**macOS** via Homebrew:
 
 ```bash
 brew tap solancer/sarala https://github.com/solancer/sarala
-brew install --cask sarala
+brew trust --cask solancer/sarala/sarala
+brew install --cask --yes sarala
 ```
 
-> The universal build is ad-hoc signed (native on Apple Silicon and Intel) but not Apple-notarized. The cask clears the quarantine attribute on install, so Gatekeeper won't block the first launch. Upgrade with `brew upgrade --cask sarala`.
+> `brew trust` is a one-time step: Homebrew 6 refuses to load casks from third-party taps until you trust them (skip it and you get *"Refusing to load cask ... from untrusted tap"*). Older Homebrew has no `trust` command and doesn't need one. Upgrade later with `brew upgrade --cask sarala`.
 
-**Linux** — [Snap Store](https://snapcraft.io/sarala):
+> The universal build is ad-hoc signed (native on Apple Silicon and Intel) but not Apple-notarized. The cask clears the quarantine attribute on install, so Gatekeeper won't block the first launch.
+
+**Linux** via the [Snap Store](https://snapcraft.io/sarala):
 
 ```bash
 sudo snap install sarala
 ```
 
-**Everything else** — grab an installer from the [latest release](https://github.com/solancer/sarala/releases/latest):
+**Everything else**: grab an installer from the [latest release](https://github.com/solancer/sarala/releases/latest):
 
 | Platform | Files |
 | --- | --- |
@@ -73,17 +76,17 @@ sudo snap install sarala
 
 **Writing**
 
-- Live blocks — markers stay visible but dimmed while you type, then the block renders when you leave it
-- Smart Enter — continues lists and quotes, auto-numbers, closes a just-opened fence; `Shift+Enter` for a soft break
+- Live blocks: markers stay visible but dimmed while you type, then the block renders when you leave it
+- Smart Enter: continues lists and quotes, auto-numbers, closes a just-opened fence; `Shift+Enter` for a soft break
 - Click anywhere in rendered text and the caret lands at that exact spot in the source
 - Select text for a formatting bar with a block-type dropdown; type `/` for an insert menu
 - IME-safe, so CJK composition works as it should
 
 **Content**
 
-- Full GFM — tables, task lists with clickable checkboxes, strikethrough, footnotes, GitHub alerts
+- Full GFM: tables, task lists with clickable checkboxes, strikethrough, footnotes, GitHub alerts
 - Code fences highlighted by [Shiki](https://shiki.style), with light/dark handled through CSS variables
-- Math via KaTeX; diagrams via [Mermaid](https://mermaid.js.org) and [D2](https://d2lang.com) — a broken one keeps its last good render instead of blanking
+- Math via KaTeX; diagrams via [Mermaid](https://mermaid.js.org) and [D2](https://d2lang.com). A broken one keeps its last good render instead of blanking
 - Tables edit in place; hover an edge to add a row or column
 - Images resolve relative to the document, with a properties panel for size, alt, and loading behaviour
 
@@ -95,14 +98,14 @@ sudo snap install sarala
 
 **Making it yours**
 
-- 13 built-in themes, plus a **custom theme** built from any [base16](https://github.com/tinted-theming/schemes) scheme — paste one in or edit the sixteen swatches
+- 13 built-in themes, plus a **custom theme** built from any [base16](https://github.com/tinted-theming/schemes) scheme: paste one in or edit the sixteen swatches
 - Any installed system font for prose and code
-- A settings dialog for the rest — Markdown extensions, autosave, line endings, image handling
+- A settings dialog for the rest: Markdown extensions, autosave, line endings, image handling
 
 **Getting it out**
 
 - HTML with an outline sidebar, and real PDF via headless Chromium (page size, margins, header/footer)
-- docx, odt, rtf, epub, LaTeX, MediaWiki, rst, Textile, OPML through [Pandoc](https://pandoc.org) — import too
+- docx, odt, rtf, epub, LaTeX, MediaWiki, rst, Textile, OPML through [Pandoc](https://pandoc.org), with import too
 - Named export presets, and per-document YAML keys to override them
 - Atomic saves, autosave, crash recovery, and opt-in signed auto-updates
 
@@ -136,7 +139,7 @@ pnpm tauri dev      # desktop app
 pnpm tauri build    # installers in src-tauri/target/release/bundle
 ```
 
-`pnpm dev` runs the frontend standalone in a browser — handy for UI work, but file dialogs and the file tree are desktop-only.
+`pnpm dev` runs the frontend standalone in a browser, which is handy for UI work, but file dialogs and the file tree are desktop-only.
 
 ---
 
@@ -144,7 +147,7 @@ pnpm tauri build    # installers in src-tauri/target/release/bundle
 
 Three decisions shape everything else:
 
-**A block model, not a character model.** The document is an array of Markdown blocks (fences and YAML front matter kept whole). The active block is a `contenteditable` whose innerHTML is re-styled on every keystroke — and the load-bearing invariant is that the styled HTML's `textContent` stays *byte-identical* to the Markdown source. That exactness is what lets the caret be saved and restored by plain text offset, and it's covered by roundtrip tests.
+**A block model, not a character model.** The document is an array of Markdown blocks (fences and YAML front matter kept whole). The active block is a `contenteditable` whose innerHTML is re-styled on every keystroke, and the load-bearing invariant is that the styled HTML's `textContent` stays *byte-identical* to the Markdown source. That exactness is what lets the caret be saved and restored by plain text offset, and it's covered by roundtrip tests.
 
 **One render pipeline.** The same `renderMarkdown()` draws editor blocks and the HTML export, so what you see and what you ship cannot drift apart.
 
@@ -154,7 +157,7 @@ Three decisions shape everything else:
 
 ## Releasing
 
-`pnpm release 0.2.0 --push` bumps the manifests, tags, and pushes — CI builds and signs for all three platforms, publishes the release, and updates the manifest existing installs check. Details in [RELEASING.md](RELEASING.md).
+`pnpm release 0.2.0 --push` bumps the manifests, tags, and pushes; CI builds and signs for all three platforms, publishes the release, and updates the manifest existing installs check. Details in [RELEASING.md](RELEASING.md).
 
 ## License
 

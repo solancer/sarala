@@ -2,7 +2,7 @@
 
 Sarala ships an opt-in auto-updater (**Help ▸ Check for Updates…**). It pulls a
 JSON manifest from a GitHub Gist, compares the version against the running build,
-and — if newer — downloads the signed artifact from a GitHub Release, verifies
+and, if newer, downloads the signed artifact from a GitHub Release, verifies
 its minisign signature, installs it, and restarts the app.
 
 - Updater config lives in `src-tauri/tauri.conf.json` under `plugins.updater`
@@ -38,7 +38,7 @@ The updater endpoint in `tauri.conf.json` points at this gist:
 https://gist.githubusercontent.com/solancer/47a3dee0bace9ff5134878f55d887157/raw/latest.json
 ```
 
-The `/raw/` form **without** a revision hash always serves the latest revision —
+The `/raw/` form **without** a revision hash always serves the latest revision, so
 don't pin a revision in the endpoint, or the app will be stuck on one manifest.
 CI rewrites this gist's `latest.json` on every release (see below).
 
@@ -58,7 +58,7 @@ The release workflow (`.github/workflows/release.yml`) needs three repo secrets
 
 ### 4. Snap publishing (snapcraft.io)
 
-The snap is **not** built in GitHub Actions — it's built by the **Snap Store
+The snap is **not** built in GitHub Actions. It's built by the **Snap Store
 build service**, which is connected to this repo and builds `snap/snapcraft.yaml`
 (a `core22`, strictly-confined build that compiles the app and unpacks Tauri's
 `.deb` into the snap) natively on **amd64** and **arm64**. One-time setup:
@@ -71,7 +71,7 @@ build service**, which is connected to this repo and builds `snap/snapcraft.yaml
 
 2. **Connect the repo:** at <https://snapcraft.io/sarala/builds>, link the GitHub
    repository. From then on every push to `main` triggers a build and uploads the
-   resulting revisions to the **edge** channel automatically — no repo secret or
+   resulting revisions to the **edge** channel automatically, with no repo secret or
    workflow required (which is why there's no `snap.yml`).
 
 3. **Promote to stable** from the snap's **Releases** page once a revision looks
@@ -89,17 +89,17 @@ build service**, which is connected to this repo and builds `snap/snapcraft.yaml
 #### Security rebuilds
 
 Canonical's security bot scans published snaps daily and emails when a staged
-`.deb` has since received a USN — for example *"sarala contains outdated Ubuntu
+`.deb` has since received a USN, for example *"sarala contains outdated Ubuntu
 packages"* naming `gstreamer1.0-plugins-good`.
 
 Nothing in this repo is at fault when that arrives. Those packages are **not**
 listed in `snapcraft.yaml`; they come in transitively via `libwebkit2gtk-4.1-0`
 and are frozen at whatever the Ubuntu archive held **on the day the revision was
-built**. There is no version to bump and no automatic rebuild — the fix is
+built**. There is no version to bump and no automatic rebuild; the fix is
 simply to build again so apt pulls the patched versions:
 
 1. Trigger a build at <https://snapcraft.io/sarala/builds> (**Trigger new build**),
-   or push any commit to `main` — the build service watches the repo.
+   or push any commit to `main`, since the build service watches the repo.
 2. When the new revisions land in **edge**, promote them:
 
    ```sh
@@ -110,14 +110,14 @@ simply to build again so apt pulls the patched versions:
    (e.g. r17 amd64, r18 arm64).
 
 Because the packages are pinned at build time, a snap that goes unreleased for a
-while will drift again. Rebuilding every month or two — or whenever one of these
-emails lands — keeps the published revision current without needing an app
+while will drift again. Rebuilding every month or two, or whenever one of these
+emails lands, keeps the published revision current without needing an app
 release.
 
 > **Auto-updater note:** a snap is a read-only image that the Snap Store keeps
 > updated, so Tauri's in-app updater can't (and shouldn't) replace the binary
 > there. The **Check for Updates…** action will simply fail to install inside the
-> snap — that's expected; `snap refresh` is the update path for this package.
+> snap, and that's expected; `snap refresh` is the update path for this package.
 
 ### 5. Homebrew cask (macOS)
 
@@ -126,13 +126,26 @@ can install without an Apple Developer account or notarization:
 
 ```sh
 brew tap solancer/sarala https://github.com/solancer/sarala
-brew install --cask sarala
+brew trust --cask solancer/sarala/sarala
+brew install --cask --yes sarala
 ```
+
+Two Homebrew 6 behaviours are baked into that snippet, so keep it in sync with
+the README's copy:
+
+- **`brew trust`** is required: Homebrew 6 refuses to load casks from
+  third-party taps until they're trusted, otherwise users hit *"Refusing to load
+  cask solancer/sarala/sarala from untrusted tap"*. (`brew trust
+  solancer/sarala` trusts the whole tap instead of just this cask.)
+- **`--yes`** skips the new confirmation prompt. Ask mode is the default in
+  Homebrew 6, so a bare `brew install --cask sarala` prints `Would install 1
+  cask:` and waits for input, which reads as a hang when an unrelated tap-trust
+  warning scrolls the prompt off screen.
 
 The universal `.dmg` is **ad-hoc signed** by Tauri's build (verified:
 `codesign` reports `flags=...(adhoc,linker-signed)`), which is enough to run on
 Apple Silicon. It is **not** Apple-notarized, so the cask's `postflight` strips
-`com.apple.quarantine` after install — that attribute is what makes Gatekeeper
+`com.apple.quarantine` after install, and that attribute is what makes Gatekeeper
 demand notarization on first launch, so removing it lets the ad-hoc-signed app
 open with no extra flags. This is deliberately disallowed by the official
 `homebrew/cask` repo (which mandates notarization), but fine for our self-hosted
@@ -157,10 +170,10 @@ instead of the default `GITHUB_TOKEN`.
    - builds + signs on macOS (universal), Windows, and Linux;
    - creates the **GitHub Release** `vX.Y.Z` with the installers and updater
      artifacts (`Sarala.app.tar.gz`, `*-setup.exe`, `*.AppImage`, each + `.sig`);
-   - generates `latest.json` and **pushes it to the gist** — which is the moment
+   - generates `latest.json` and **pushes it to the gist**, which is the moment
      existing installs start seeing the update.
 
-3. Watch it at <https://github.com/solancer/sarala/actions>. That's it — no
+3. Watch it at <https://github.com/solancer/sarala/actions>. That's it, with no
    manual signature pasting.
 
 The updater compares the manifest `version` against `tauri.conf.json`'s
@@ -229,9 +242,9 @@ If you ever need to release without the workflow:
 
 2. `pnpm tauri build` **on each OS** (no single host builds all three). Each emits
    the artifact plus a sibling `.sig`:
-   - **macOS** — `Sarala.app.tar.gz` + `.sig`
-   - **Windows** — `Sarala_<ver>_x64-setup.exe` + `.sig`
-   - **Linux** — `sarala_<ver>_amd64.AppImage` + `.sig`
+   - **macOS**: `Sarala.app.tar.gz` + `.sig`
+   - **Windows**: `Sarala_<ver>_x64-setup.exe` + `.sig`
+   - **Linux**: `sarala_<ver>_amd64.AppImage` + `.sig`
 
 3. Create a GitHub Release tagged `v<version>` and upload the artifacts.
 
