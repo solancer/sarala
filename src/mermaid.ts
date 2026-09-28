@@ -1,3 +1,4 @@
+import { applyLegacyLinks, type LegacyLink } from "./legacydiagrams";
 /**
  * Mermaid diagram rendering for ```mermaid blocks. Mermaid is async (unlike
  * KaTeX), so renderMarkdown only emits a placeholder div; this module renders
@@ -64,8 +65,11 @@ export async function renderMermaidIn(container: HTMLElement, blockKey?: string)
     try {
       const { svg } = await mermaid.render(id, src);
       node.innerHTML = svg;
+      if (node.dataset.legacyLinks) {
+        try { const links = JSON.parse(node.dataset.legacyLinks) as LegacyLink[]; if (Array.isArray(links)) applyLegacyLinks(node, links); } catch { /* Invalid metadata cannot alter the SVG. */ }
+      }
       node.dataset.rendered = "1";
-      if (blockKey != null) lastGoodSvg.set(blockKey, svg);
+      if (blockKey != null) lastGoodSvg.set(blockKey, node.innerHTML);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const last = blockKey != null ? lastGoodSvg.get(blockKey) : undefined;

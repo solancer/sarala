@@ -1,3 +1,8 @@
+import { emojiFor, emojiShortcode } from "./emoji";
+import { inlineSourceTokens, resolveMarkdownImage } from "./markdown";
+import { splitPipeRow } from "./tabletools";
+import { Marked, type Token, type Tokens } from "marked";
+
 /**
  * Live-styled Markdown source — WYSIWYG inline editing.
  * The active block shows its raw source, but markers are dimmed and
@@ -5,8 +10,7 @@
  * happens only when the caret leaves the block (Enter / blur / Esc).
  */
 
-const P_OPEN = "\uE000";
-const P_CLOSE = "\uE001";
+
 
 // Mirror the renderer's inline-syntax prefs so the active block styles only
 // what will actually render. textContent stays byte-identical either way \u2014
@@ -15,6 +19,13 @@ let liveHighlight = true;
 let liveSubSup = true;
 export function setLiveHighlight(on: boolean) { liveHighlight = on; }
 export function setLiveSubSup(on: boolean) { liveSubSup = on; }
+
+// Inject the same Shiki renderer used by preview without importing its async
+// loader (which depends on the document store).
+let liveCodeHighlighter: (code: string, lang: string) => string | null = () => null;
+export function setLiveCodeHighlighter(highlight: typeof liveCodeHighlighter) {
+  liveCodeHighlighter = highlight;
+}
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -30,62 +41,84 @@ const mark = (s: string) => `<span class="md-mark">${s}</span>`;
  */
 const tok = (html: string) => `<span class="md-tok">${html}</span>`;
 
-/** Style inline markdown inside one already-escaped line. */
+/** Parse the original source with preview's grammar, retaining every source byte. */
 function inline(text: string): string {
-  const tokens: string[] = [];
-  const stash = (html: string) => {
-    tokens.push(html);
-    return P_OPEN + (tokens.length - 1) + P_CLOSE;
-  };
-
-  let t = text;
-  // code spans first — their content must stay literal
-  t = t.replace(/`([^`\n]+)`/g, (_, c) =>
-    stash(tok(`${mark("`")}<span class="md-codespan">${c}</span>${mark("`")}`))
-  );
-  // images — the URL span is also an md-mark so it hides with the brackets
-  t = t.replace(/!\[([^\]\n]*)\]\(([^)\n]*)\)/g, (_, alt, url) =>
-    stash(tok(`${mark("![")}<span class="md-link">${alt}</span>${mark("](")}<span class="md-mark md-url">${url}</span>${mark(")")}`))
-  );
-  // links
-  t = t.replace(/\[([^\]\n]+)\]\(([^)\n]*)\)/g, (_, label, url) =>
-    stash(tok(`${mark("[")}<span class="md-link">${label}</span>${mark("](")}<span class="md-mark md-url">${url}</span>${mark(")")}`))
-  );
-  // bold
-  t = t.replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, (_, m, body) =>
-    stash(tok(`${mark(m)}<strong>${body}</strong>${mark(m)}`))
-  );
-  // italic
-  t = t.replace(/(\*|_)(?=\S)([^*_\n]*?\S)\1/g, (_, m, body) =>
-    stash(tok(`${mark(m)}<em>${body}</em>${mark(m)}`))
-  );
-  // strikethrough (must run before single-tilde subscript so ~~ wins)
-  t = t.replace(/~~(?=\S)([\s\S]*?\S)~~/g, (_, body) =>
-    stash(tok(`${mark("~~")}<del>${body}</del>${mark("~~")}`))
-  );
-  // highlight ==text==
-  if (liveHighlight) {
-    t = t.replace(/==(?=\S)([\s\S]*?\S)==/g, (_, body) =>
-      stash(tok(`${mark("==")}<mark>${body}</mark>${mark("==")}`))
-    );
-  }
-  if (liveSubSup) {
-    // subscript ~text~ (single tilde; ~~ already consumed above)
-    t = t.replace(/~(?![~\s])([^~\n]+?)~(?!~)/g, (_, body) =>
-      stash(tok(`${mark("~")}<sub>${body}</sub>${mark("~")}`))
-    );
-    // superscript ^text^ (no inner whitespace)
-    t = t.replace(/\^(?!\s)([^\^\s]+?)\^/g, (_, body) =>
-      stash(tok(`${mark("^")}<sup>${body}</sup>${mark("^")}`))
-    );
-  }
-
-  // restore (tokens may nest one level via bold-inside-link etc.)
-  for (let pass = 0; pass < 3; pass++) {
-    t = t.replace(new RegExp(P_OPEN + "(\\d+)" + P_CLOSE, "g"), (_, i) => tokens[Number(i)]);
-    if (!t.includes(P_OPEN)) break;
-  }
-  return t;
+  const raw = text.replace(/&(?:amp|lt|gt);/g, entity => ({ "&amp;": "&", "&lt;": "<", "&gt;": ">" })[entity]!);
+  const attr = (s: string) => esc(s).replace(/"/g, "&quot;").replace(/\n/g, "&#10;");
+  const generated = (source: string, value: string) => tok(`${mark(esc(source))}<span class="md-generated" data-visible="${attr(value)}"></span>`);
+  const render = (tokens: Token[]): string => tokens.map((token, index) => {
+    // Pair underline tags so both delimiters share a caret-scoped token.
+    if (token.type === "html" && /^<u>$/i.test(token.raw)) {
+      const end = tokens.findIndex((t, i) => i > index && t.type === "html" && /^<\/u>$/i.test(t.raw));
+      if (end > index) {
+        const body = tokens.splice(index + 1, end - index);
+        const close = body.pop()!;
+        return tok(`${mark(esc(token.raw))}<u>${render(body)}</u>${mark(esc(close.raw))}`);
+      }
+    }
+    const t = token as Tokens.Generic;
+    const raw = token.raw;
+    if (["strong", "em", "del", "highlight", "subscript", "superscript"].includes(token.type)) {
+      const tags: Record<string, string> = { strong: "strong", em: "em", del: "del", highlight: "mark", subscript: "sub", superscript: "sup" };
+      if ((token.type === "highlight" && !liveHighlight) || (["subscript", "superscript"].includes(token.type) && !liveSubSup)) return esc(raw);
+      const width = ["strong", "del", "highlight"].includes(token.type) ? 2 : 1;
+      const body = raw.slice(width, -width);
+      return tok(`${mark(esc(raw.slice(0, width)))}<${tags[token.type]}>${render(inlineSourceTokens(body))}</${tags[token.type]}>${mark(esc(raw.slice(-width)))}`);
+    }
+    if (token.type === "escape") return tok(`${mark(esc(raw[0]))}${esc(raw.slice(1))}`);
+    if (token.type === "codespan") {
+      const fence = raw.match(/^`+/)![0];
+      let body = raw.slice(fence.length, -fence.length);
+      let left = "", right = "";
+      if (/^ [\s\S]* $/.test(body) && /[^ ]/.test(body)) { left = " "; right = " "; body = body.slice(1,-1); }
+      return tok(`${mark(fence + left)}<span class="md-codespan">${esc(body)}</span>${mark(right + fence)}`);
+    }
+    if (token.type === "link") {
+      if (raw.startsWith("[")) {
+        const label = (t.tokens as Token[] ?? []).map(t => t.raw).join("");
+        return tok(`${mark("[")}<span class="md-link">${render(t.tokens as Token[] ?? [])}</span><span class="md-mark md-url">${esc(raw.slice(1 + label.length))}</span>`);
+      }
+      if (raw.startsWith("<")) return tok(`${mark("&lt;")}<span class="md-link">${esc(raw.slice(1,-1))}</span>${mark("&gt;")}`);
+      return `<span class="md-link">${esc(raw)}</span>`;
+    }
+    if (token.type === "inlineMath") return tok(`${mark(esc(raw))}<span class="md-inline-preview" data-markdown="${attr(raw)}" contenteditable="false"></span>`);
+    if (token.type === "footnoteRef") return tok(`${mark(esc(raw))}<sup class="footnote-ref md-generated" data-visible="[${attr(String(t.text))}]" aria-label="Footnote ${attr(String(t.text))}"></sup>`);
+    if (token.type === "image") {
+      const href = resolveMarkdownImage(String(t.href ?? ""));
+      const title = t.title ? ` title="${attr(String(t.title))}"` : "";
+      if (/^(?:javascript|data):/i.test(href)) return esc(raw);
+      return tok(`${mark(esc(raw))}<img src="${attr(href)}" alt="${attr(String(t.text ?? ""))}" contenteditable="false"${title}>`);
+    }
+    if (token.type === "br") return `${tok(mark(esc(raw.slice(0,-1))))}<span class="md-hard-break">\n</span>`;
+    if (token.type === "html") {
+      const tag = /^<\/?(u|kbd|mark|sub|sup|span|ruby|rt|rp|b|i|strong|em|s|del)(?:\s[^>]*)?>$/i.exec(raw);
+      if (tag) {
+        let style = "";
+        if (!raw.startsWith("</")) {
+          const element = document.createElement("template"); element.innerHTML = raw;
+          const node = element.content.firstElementChild as HTMLElement | null;
+          for (const property of ["color", "background-color", "font-weight", "font-style", "text-decoration"]) {
+            const value = node?.style.getPropertyValue(property);
+            if (value && !/url\s*\(/i.test(value)) style += `${property}:${value};`;
+          }
+        }
+        return tok(mark(esc(raw))) + `<${raw.startsWith("</") ? "/" : ""}${tag[1].toLowerCase()}${style ? ` style="${attr(style)}"` : ""}>`;
+      }
+      if (/^<br\s*\/?>$/i.test(raw)) return tok(mark(esc(raw))) + "<br>";
+      if (raw.startsWith("<!--")) return tok(mark(esc(raw)));
+      return esc(raw);
+    }
+    if (token.type === "emoji") return generated(raw, String(t.emoji ?? t.text ?? raw));
+    if (token.type === "text") {
+      if (t.tokens) return render(t.tokens as Token[]);
+      return esc(raw).replace(/&amp;((?:#\d+|#x[\da-f]+|[a-z][a-z0-9]+);)/gi, (_, entity: string) => {
+        const el = document.createElement("textarea"); el.innerHTML = "&" + entity;
+        return generated("&" + entity, el.value);
+      });
+    }
+    return esc(raw);
+  }).join("");
+  return render(inlineSourceTokens(raw));
 }
 
 /** Style one escaped line with its block-level construct. */
@@ -97,7 +130,7 @@ function styleLine(raw: string): string {
     const lvl = h[1].length;
     // Hashes (and their space) reveal only while the caret touches the
     // prefix region — a re-entered heading stays looking rendered.
-    return `<span class="md-h${lvl}"><span class="md-tok md-pre">${mark(h[1] + h[2])}</span>${inline(h[3])}</span>`;
+    return `<span class="md-h${lvl}"><span class="md-tok md-pre">${mark(h[1] + h[2])}</span>${inline(h[3].replace(/([ \t]+#+[ \t]*)$/, ""))}${h[3].match(/[ \t]+#+[ \t]*$/) ? tok(mark(h[3].match(/[ \t]+#+[ \t]*$/)![0])) : ""}</span>`;
   }
   const hr = line.match(/^\s*((?:-\s*){3,}|(?:\*\s*){3,}|(?:_\s*){3,})$/);
   if (hr) return mark(line);
@@ -161,7 +194,7 @@ function columnAligns(sep: string): ColAlign[] {
  */
 function styleTableRow(raw: string, isSep: boolean, aligns: ColAlign[]): string {
   const line = esc(raw);
-  const parts = line.split("|");
+  const parts = splitPipeRow(line);
   let html = `<span class="md-trow${isSep ? " md-tsep" : ""}">`;
   let col = 0; // index into aligns — advances once per emitted cell
   for (let i = 0; i < parts.length; i++) {
@@ -176,7 +209,7 @@ function styleTableRow(raw: string, isSep: boolean, aligns: ColAlign[]): string 
   return html + "</span>";
 }
 
-export function styleSource(src: string): string {
+function styleFlatSource(src: string): string {
   if (!src) return "";
   const lines = src.split("\n");
 
@@ -236,16 +269,171 @@ export function styleSource(src: string): string {
   return out.join("\n");
 }
 
+// Use the same block grammar as the preview. In particular a heading followed
+// immediately by a list is two constructs, even inside one editor block.
+const blockLexer = new Marked({ gfm: true, breaks: false });
+const concealed = (s: string) => `<span class="md-layout-space">${esc(s)}</span>`;
+
+function layoutTokens(src: string): Token[] | null {
+  // Marked normalizes CRLF and can synthesize whitespace for incomplete
+  // items. Fall back while typing those forms rather than changing source.
+  if (src.startsWith("---\n") || /^\s*(`{3,}|~{3,})/.test(src)) return null;
+  const tokens = blockLexer.lexer(src);
+  if (tokens.map((token) => token.raw).join("") !== src) return null;
+  return tokens.some((token) => token.type === "list" || token.type === "paragraph" || token.type === "blockquote" || token.type === "heading" || token.type === "code" || token.type === "hr") ? tokens : null;
+}
+
+export function hasSourceLayout(src: string): boolean {
+  return layoutTokens(src) !== null;
+}
+
+function styleList(token: Tokens.List): string {
+  if (!token.raw.startsWith(token.items.map((item) => item.raw).join(""))) {
+    return styleFlatSource(token.raw);
+  }
+  let consumed = 0;
+  const items = token.items.map((item, index) => {
+    const raw = index === token.items.length - 1 ? token.raw.slice(consumed) : item.raw;
+    consumed += raw.length;
+    const prefix = raw.match(/^([ \t]*)(?:[-+*]|\d+[.)])([ \t]+|$)/);
+    if (!prefix) return styleFlatSource(raw);
+    let markerLength = prefix[0].length;
+    if (item.task) markerLength += raw.slice(markerLength).match(/^\[[ xX]\][ \t]+/)?.[0].length ?? 0;
+    const marker = raw.slice(0, markerLength);
+    const tail = raw.slice(markerLength).match(/\n*$/)![0];
+    const body = raw.slice(markerLength, tail ? -tail.length : undefined);
+    // Dedent for parsing, then restore each removed source indent as hidden
+    // text. This retains exact offsets, including nested lists and soft wraps.
+    const indents: string[] = [];
+    const normalized = body.replace(/\n([ \t]*)/g, (_, spaces: string) => {
+      const removed = spaces.slice(0, prefix[0].length);
+      indents.push(removed);
+      return "\n" + spaces.slice(removed.length);
+    });
+    let html = styleLayoutTokens(blockLexer.lexer(normalized), !token.loose);
+    let line = 0;
+    html = html.replace(/\n/g, () => "\n" + concealed(indents[line++] ?? ""));
+    const cls = item.task ? `md-task${item.checked ? " md-done" : ""}`
+      : token.ordered ? "md-olnum" : "md-bullet";
+    const number = token.ordered ? ` data-number="${Number(token.start) + index}."` : "";
+    return `<span class="md-list-item${item.task ? " md-list-task" : ""}"><span class="md-tok md-pre ${cls}"${number}>${mark(esc(marker))}</span>${html}${concealed(tail)}</span>`;
+  });
+  return `<span class="md-list">${items.join("")}${concealed(token.raw.slice(consumed))}</span>`;
+}
+
+/** Highlight only source text that survives byte-for-byte. Shiki's <pre>
+ * wrapper is replaced by a source span so list indentation and fence markers
+ * can remain in the same contenteditable, with no duplicate preview text. */
+function styleCodeContent(source: string, lang: string): string {
+  const highlighted = liveCodeHighlighter(source, lang);
+  if (highlighted && typeof document !== "undefined") {
+    const template = document.createElement("template");
+    template.innerHTML = highlighted;
+    const code = template.content.querySelector("pre > code");
+    if (code?.textContent === source) return code.innerHTML;
+  }
+  return esc(source);
+}
+
+function styleCode(token: Tokens.Code): string {
+  const raw = token.raw;
+  const opening = raw.match(/^([ \t]*)(`{3,}|~{3,})[^\n]*(?:\n|$)/);
+  const lang = (token.lang ?? "").split(/\s+/)[0];
+  let body: string;
+  let open = "";
+  let close = "";
+  let indent = 4; // indented Markdown code
+  if (opening && token.codeBlockStyle !== "indented") {
+    open = opening[0];
+    indent = opening[1].length;
+    const rest = raw.slice(open.length);
+    const marker = opening[2];
+    const closing = new RegExp(`(?:^|\\n)[ \t]*${marker[0]}{${marker.length},}[ \t]*(?:\\n)?$`).exec(rest);
+    body = closing ? rest.slice(0, closing.index) : rest;
+    close = closing ? rest.slice(closing.index) : "";
+  } else {
+    // The final newline is a block separator, not another visible code line.
+    const tail = raw.match(/\n+$/)?.[0] ?? "";
+    body = tail ? raw.slice(0, -tail.length) : raw;
+    close = tail;
+  }
+  const prefixes: string[] = [];
+  const code = body.split("\n").map((line) => {
+    const prefix = !opening && line.startsWith("\t") ? "\t" : line.match(new RegExp(`^[ ]{0,${indent}}`))![0];
+    prefixes.push(prefix);
+    return line.slice(prefix.length);
+  }).join("\n");
+  let line = 1;
+  const content = concealed(prefixes[0] ?? "") + styleCodeContent(code, lang)
+    .replace(/\n/g, () => "\n" + concealed(prefixes[line++] ?? ""));
+  const fence = (source: string) => `<span class="md-tok md-fence">${mark(esc(source))}</span>`;
+  return `<span class="md-layout-code shiki">${open ? fence(open) : ""}<span class="md-code-content">${content}</span>${opening ? fence(close) : concealed(close)}</span>`;
+}
+
+/** Quote markers remain source text, but the quote itself is one continuous
+ * box, using the same block grammar as preview (including nested lists/code). */
+function styleQuote(token: Tokens.Blockquote): string {
+  const prefixes: string[] = [];
+  const normalized = token.raw.split("\n").map((line) => {
+    const prefix = line.match(/^ {0,3}>[ \t]?/)?.[0] ?? "";
+    prefixes.push(prefix);
+    return line.slice(prefix.length);
+  }).join("\n");
+  const alert = normalized.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(?:\n)?/i);
+  let html: string;
+  let cls = "md-layout-quote";
+  if (alert) {
+    const type = alert[1].toLowerCase();
+    const label = type[0].toUpperCase() + type.slice(1);
+    cls = `md-alert md-alert-${type}`;
+    html = `<span class="md-alert-title md-source-alert-title" data-label="${label}"><span class="md-tok md-alert-tag md-alert-${type}">${mark(esc(alert[0]))}</span></span>`
+      + styleLayoutTokens(blockLexer.lexer(normalized.slice(alert[0].length)));
+  } else {
+    html = styleLayoutTokens(blockLexer.lexer(normalized));
+  }
+  const prefix = (index: number) => prefixes[index]
+    ? `<span class="md-tok md-quote-pre md-quote-prefix">${mark(esc(prefixes[index]))}</span>` : "";
+  let line = 1;
+  html = prefix(0) + html.replace(/\n/g, () => "\n" + prefix(line++));
+  return `<span class="${cls}">${html}</span>`;
+}
+
+function styleLayoutTokens(tokens: Token[], tight = false): string {
+  return tokens.map((token) => {
+    if (token.type === "list") return styleList(token as Tokens.List);
+    if (token.type === "blockquote") return styleQuote(token as Tokens.Blockquote);
+    if (token.type === "code") return styleCode(token as Tokens.Code);
+    if (token.type === "space" || token.type === "def") return concealed(token.raw);
+    const raw = token.raw;
+    const tail = raw.match(/\n*$/)![0];
+    const body = tail ? raw.slice(0, -tail.length) : raw;
+    if (token.type === "heading" && !/^#{1,6}\s/.test(body)) {
+      const heading = token as Tokens.Heading;
+      const end = body.lastIndexOf("\n");
+      return `<span class="md-layout-heading md-layout-h${heading.depth}"><span class="md-h${heading.depth}">${inline(esc(body.slice(0,end)))}</span>${concealed(body.slice(end))}</span>${concealed(tail)}`;
+    }
+    if (token.type === "hr") return `<span class="md-live-hr">${concealed(raw)}<hr></span>`;
+    if (token.type === "heading" && /^#{1,6}\s/.test(body)) {
+      return `<span class="md-layout-heading md-layout-h${(token as Tokens.Heading).depth}">${styleFlatSource(body)}</span>${concealed(tail)}`;
+    }
+    if (token.type === "paragraph" || token.type === "text") {
+      return `<span class="md-layout-paragraph${tight ? " md-tight" : ""}">${inline(esc(body)).replace(/(?: {2,}|\\)\n/g, (br) => `${concealed(br.slice(0, -1))}<span class="md-hard-break">\n</span>`)}</span>${concealed(tail)}`;
+    }
+    return `<span class="md-layout-literal">${styleFlatSource(raw)}</span>`;
+  }).join("");
+}
+
+export function styleSource(src: string): string {
+  const tokens = layoutTokens(src);
+  // Keep specialized fence/table editing; structured layout keeps
+  // soft-wrapped paragraphs and lists consistent with preview.
+  return tokens ? styleLayoutTokens(tokens) : styleFlatSource(src);
+}
+
 /**
- * Caret-scoped reveal: toggle .md-on on every .md-tok in a
- * live-styled block. A token reveals while the caret sits inside its source
- * range, edges inclusive — completing `**bold**` leaves the caret on the end
- * edge so the pair stays revealed, and a list/heading prefix reveals when the
- * caret reaches the start of the line's text (its end edge), which also keeps
- * hidden markers reachable by arrow keys (browsers skip display:none text, so
- * the caret lands on the edge and the reveal makes the marker traversable).
- * Pure class toggling: the DOM text is never altered, so textContent stays
- * byte-identical to the source.
+ * Reveal syntax only while the caret is in a delimiter, never in its styled
+ * content. Text clicks preserve preview layout. Hidden source stays in the DOM
+ * for exact caret offsets and is reachable by moving through delimiter edges.
  */
 export function applyMarkerVisibility(el: HTMLElement, source: string, caret: number) {
   const c = Math.max(0, Math.min(caret, source.length));
@@ -260,13 +448,57 @@ export function applyMarkerVisibility(el: HTMLElement, source: string, caret: nu
       return;
     }
     const start = pos;
-    for (let child = node.firstChild; child; child = child.nextSibling) walk(child);
+    let inMarker = false;
+    for (let child = node.firstChild; child; child = child.nextSibling) {
+      const markerStart = pos;
+      walk(child);
+      if (child instanceof HTMLElement && child.classList.contains("md-mark")) {
+        // Text clicks must not expose syntax and reflow the paragraph. Reveal
+        // only when navigating into a delimiter. Exclude the content-facing
+        // boundary so clicking the first/last styled character stays rendered.
+        const opening = child === node.firstChild;
+        inMarker ||= opening ? c >= markerStart && c < pos : c > markerStart && c <= pos;
+      }
+    }
     const end = pos;
     if (node instanceof HTMLElement && node.classList.contains("md-tok")) {
-      node.classList.toggle("md-on", c >= start && c <= end);
+      const nestedFence = node.classList.contains("md-fence") && node.parentElement?.classList.contains("md-layout-code");
+      const showFence = nestedFence
+        ? (node.nextElementSibling?.classList.contains("md-code-content") ? c >= start && c < end : c > start && c <= end)
+        : c >= start && c <= end;
+      node.classList.toggle("md-on", node.classList.contains("md-fence")
+        ? showFence : inMarker || (node.classList.contains("md-pre") && c === end && end === source.length));
     }
   };
   walk(el);
+}
+
+/** Shadow previews do not add duplicate text to the editable source tree.
+ * This keeps range offsets exact while equations retain their rendered size.
+ */
+export function hydrateInlinePreviews(el: HTMLElement, render: (source: string) => string, edit: (offset: number) => void) {
+  const previews = el.querySelectorAll<HTMLElement>(".md-inline-preview");
+  if (!previews.length) return;
+  const styles: string[] = [];
+  for (const sheet of Array.from(document.styleSheets)) {
+    try {
+      for (const rule of Array.from(sheet.cssRules)) if (rule.cssText.includes(".katex")) styles.push(rule.cssText);
+    } catch { /* Cross-origin stylesheets cannot be inspected. */ }
+  }
+  for (const preview of previews) {
+    const shadow = preview.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
+    style.textContent = styles.join("\n") + "\n:host { display:inline-block; } p { display:contents; margin:0; }";
+    shadow.append(style);
+    const body = document.createElement("span");
+    body.innerHTML = render(preview.dataset.markdown ?? "");
+    shadow.append(body);
+    preview.addEventListener("mousedown", event => {
+      event.preventDefault(); event.stopPropagation();
+      const range = document.createRange(); range.selectNodeContents(el); range.setEndBefore(preview.parentElement!);
+      edit(range.toString().length + 1);
+    });
+  }
 }
 
 /* ---------- caret utilities for contenteditable ---------- */
@@ -297,7 +529,12 @@ export function setCaret(el: HTMLElement, offset: number) {
   let node = walker.nextNode() as Text | null;
   while (node) {
     const len = node.data.length;
-    if (remaining <= len) {
+    // At a concealed prefix's end, prefer the following visible text node.
+    // Otherwise WebKit can move the caret to the block start on activation.
+    const hiddenMarker = node.parentElement?.closest(".md-mark")?.parentElement;
+    const skipBoundary = remaining === len && hiddenMarker?.classList.contains("md-tok")
+      && !hiddenMarker.classList.contains("md-on");
+    if (remaining <= len && !skipBoundary) {
       range.setStart(node, remaining);
       range.collapse(true);
       sel.removeAllRanges();
@@ -356,7 +593,40 @@ export function mapRenderedPrefixToSource(source: string, renderedPrefix: string
   let i = 0;
   let stalled = 0;
   for (let j = 0; j < renderedPrefix.length && i < source.length; ) {
-    if (source[i] === renderedPrefix[j]) { i++; j++; stalled = 0; }
+    const entity = /^&(?:#\d+|#x[\da-f]+|[a-z][a-z0-9]+);/i.exec(source.slice(i));
+    const emojiMatch = emojiShortcode().exec(source.slice(i));
+    const emoji = emojiMatch?.index === 0 ? emojiMatch : null;
+    let replacement = "", length = 0;
+    if (entity) {
+      const el = document.createElement("textarea"); el.innerHTML = entity[0];
+      replacement = el.value; length = entity[0].length;
+    } else if (emoji) { replacement = emojiFor(emoji[1]) ?? ""; length = emoji[0].length; }
+    if (replacement && renderedPrefix.slice(j).startsWith(replacement)) {
+      i += length; j += replacement.length; stalled = 0; continue;
+    }
+    // Callout titles are generated labels ("Note"), not literal source
+    // ("[!NOTE]"). Consume them as a unit so a body click cannot run past the
+    // intended word while searching for the title's differently-cased text.
+    const alert = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i.exec(source.slice(i));
+    if (alert) {
+      const label = alert[1][0].toUpperCase() + alert[1].slice(1).toLowerCase();
+      const rest = renderedPrefix.slice(j);
+      if (rest.startsWith(label) || label.startsWith(rest)) {
+        i += alert[0].length;
+        j += Math.min(rest.length, label.length);
+        i += source.slice(i).match(/^[ \t]*(?:\n[ \t]*>[ \t]?)?/)![0].length;
+        stalled = 0;
+        continue;
+      }
+    }
+    // Renderer-added newlines between block/list tags have no source
+    // counterpart. Never search forward through item text to match them.
+    if (/\s/.test(renderedPrefix[j])) {
+      if (/\s/.test(source[i])) i++;
+      j++;
+      stalled = 0;
+    }
+    else if (source[i] === renderedPrefix[j]) { i++; j++; stalled = 0; }
     else { i++; if (++stalled > 80) { j++; stalled = 0; } }
   }
   return Math.min(i, source.length);

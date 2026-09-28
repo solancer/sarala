@@ -28,21 +28,21 @@ interface Props {
 
 const FileIcon = () => (
   <svg class="file-icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-    <path fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"
+    <path fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"
       d="M4 1.6h5L12.4 5v9.4H4z M9 1.6V5h3.4" />
   </svg>
 );
 const TextFileIcon = () => (
   <svg class="file-icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-    <path fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"
+    <path fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"
       d="M4 1.6h5L12.4 5v9.4H4z M9 1.6V5h3.4" />
-    <path fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"
+    <path fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"
       d="M5.7 8h4.6 M5.7 10.2h4.6 M5.7 12.4h2.8" />
   </svg>
 );
 const FolderIcon = () => (
   <svg class="folder-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-    <path fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"
+    <path fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"
       d="M1.7 4c0-.5.4-.9.9-.9h2.7l1.2 1.3h6.9c.5 0 .9.4.9.9v6.7c0 .5-.4.9-.9.9H2.6c-.5 0-.9-.4-.9-.9z" />
   </svg>
 );
@@ -52,23 +52,38 @@ const Chevron = (props: { open: boolean }) => (
     <path d="m9 6 6 6-6 6" />
   </svg>
 );
-// Tab icons.
-const TabFilesIcon = () => (
-  <svg class="side-tab-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+// One 16px grid and stroke weight keeps the sidebar symbols crisp together.
+const SidebarIcon = (p: { name: "files" | "outline" | "search" | "folder" | "open" | "new"; class?: string }) => (
+  <svg class={p.class} viewBox="0 0 16 16" width="16" height="16" fill="none"
+    stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    {p.name === "files" && <>
+      <rect x="5" y="1.75" width="8.25" height="10.5" rx="1.25" />
+      <path d="M3 4H2.75a1 1 0 0 0-1 1v8.25a1 1 0 0 0 1 1H10" />
+      <path d="M7.5 5h3.25M7.5 7.75h3.25" />
+    </>}
+    {p.name === "outline" && <>
+      <path d="M2 3h2M6.5 3H14M6.5 6.25H12M2 9.5h2M6.5 9.5H14M6.5 12.75H12" />
+    </>}
+    {p.name === "search" && <>
+      <circle cx="6.75" cy="6.75" r="4.5" /><path d="m10.1 10.1 3.65 3.65" />
+    </>}
+    {p.name === "folder" && <>
+      <path d="M2 4.75V3.5c0-.7.55-1.25 1.25-1.25h3l1.5 1.5h5c.7 0 1.25.55 1.25 1.25v6.75c0 .7-.55 1.25-1.25 1.25h-9.5C2.55 13 2 12.45 2 11.75v-7Z" />
+      <path d="M2 5.25h12" />
+    </>}
+    {p.name === "open" && <>
+      <path d="M1.75 11.75V3.5c0-.7.55-1.25 1.25-1.25h3l1.5 1.5H12c.7 0 1.25.55 1.25 1.25v.75" />
+      <path d="M3.75 7h9.6c.65 0 1.1.6.95 1.2l-1 4a1.1 1.1 0 0 1-1.05.8H2.75a1 1 0 0 1-.98-1.2l1-4A1 1 0 0 1 3.75 7Z" />
+    </>}
+    {p.name === "new" && <>
+      <path d="M8.5 1.75H3.25A1.25 1.25 0 0 0 2 3v10a1.25 1.25 0 0 0 1.25 1.25h7.5A1.25 1.25 0 0 0 12 13V5.25Z" />
+      <path d="M8.5 1.75v3.5H12M7 7.5v4M5 9.5h4" />
+    </>}
   </svg>
 );
-const TabOutlineIcon = () => (
-  <svg class="side-tab-ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
-    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <path d="M21 6h-9M21 12h-7M21 18h-9M3 5v5a2 2 0 0 0 2 2h3M3 10v6a2 2 0 0 0 2 2h5" />
-  </svg>
-);
-const TabSearchIcon = () => (
-  <svg class="side-tab-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-    <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" />
-  </svg>
-);
+const TabFilesIcon = () => <SidebarIcon name="files" class="side-tab-ic" />;
+const TabOutlineIcon = () => <SidebarIcon name="outline" class="side-tab-ic" />;
+const TabSearchIcon = () => <SidebarIcon name="search" class="side-tab-ic" />;
 
 const PinIcon = () => (
   <svg class="pin-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
@@ -167,7 +182,7 @@ function flatten(nodes: FileNode[], query: string, depth = 0, out: Row[] = []): 
 }
 
 /** Row height in px — must match `.tree-item` in app.css for windowing to line up. */
-const ROW_H = 28;
+const ROW_H = 26;
 /** Below this many rows, render everything (short trees keep native behaviour). */
 const WINDOW_MIN = 300;
 /** Extra rows above/below the viewport, so fast scrolling doesn't show gaps. */
@@ -365,8 +380,19 @@ export default function Sidebar(props: Props) {
     <button
       class="side-tab"
       role="tab"
+      id={`sidebar-view-${p.id}`}
+      aria-controls="sidebar-view-panel"
       title={p.label}
       aria-selected={sidebarTab() === p.id}
+      tabIndex={sidebarTab() === p.id ? 0 : -1}
+      onKeyDown={(e) => {
+        const ids = ["files", "outline", "search"] as const;
+        const index = ids.indexOf(p.id);
+        const next = e.key === "ArrowRight" ? (index + 1) % 3 : e.key === "ArrowLeft" ? (index + 2) % 3 : e.key === "Home" ? 0 : e.key === "End" ? 2 : -1;
+        if (next < 0) return;
+        e.preventDefault(); setSidebarTab(ids[next]);
+        document.getElementById(`sidebar-view-${ids[next]}`)?.focus();
+      }}
       classList={{ on: sidebarTab() === p.id }}
       onClick={() => setSidebarTab(p.id)}
     >
@@ -377,7 +403,7 @@ export default function Sidebar(props: Props) {
 
   return (
     <aside
-      class="sidebar"
+      class="sidebar" id="workspace-sidebar" inert={!sidebarOpen()}
       classList={{ collapsed: !sidebarOpen() }}
       aria-hidden={!sidebarOpen()}
       style={{
@@ -385,7 +411,15 @@ export default function Sidebar(props: Props) {
         "margin-left": sidebarOpen() ? "0px" : `-${sidebarWidth()}px`,
       }}
     >
-      <div class="sidebar-resize" title="Drag to resize" onPointerDown={startResize} />
+      <div class="sidebar-resize" title="Drag or use arrow keys to resize" onPointerDown={startResize}
+        role="separator" aria-label="Sidebar width" aria-orientation="vertical" tabIndex={0}
+        aria-valuenow={sidebarWidth()} aria-valuemin={clampSidebar(0)} aria-valuemax={clampSidebar(10000)}
+        onKeyDown={(e) => {
+          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+          e.preventDefault();
+          const width = clampSidebar(sidebarWidth() + (e.key === "ArrowLeft" ? -10 : 10));
+          setSidebarWidth(width); void setSetting("sidebarWidth", width);
+        }} />
 
       {/* macOS overlay title bar: the traffic lights float above this band. It
           used to be plain padding on .sidebar, which meant the strip beside the
@@ -407,18 +441,7 @@ export default function Sidebar(props: Props) {
           padded down past the traffic lights, which must stay outside any drag
           region or they stop receiving their own clicks. */}
       <div class="side-ws-head" data-tauri-drag-region="deep">
-        {/* A folder glyph, not an initial: the old badge restated the first
-            letter of the word beside it, carried no information, and was the
-            loudest element in the panel. The glyph instead says *what* the name
-            is — a folder — which is the thing that was ambiguous. */}
-        <svg
-          class="side-ws-glyph"
-          viewBox="0 0 24 24" width="15" height="15"
-          fill="none" stroke="currentColor" stroke-width="1.7"
-          stroke-linejoin="round" aria-hidden="true"
-        >
-          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-        </svg>
+        <SidebarIcon name="folder" class="side-ws-glyph" />
         <span
           class="side-ws-name"
           classList={{ empty: !props.folderName }}
@@ -436,42 +459,36 @@ export default function Sidebar(props: Props) {
           aria-label="Open folder"
           onClick={() => props.onOpenFolder()}
         >
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true">
-            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h5a2 2 0 0 1 2 2v1" />
-            <path d="M3 9h17.5a1 1 0 0 1 .95 1.3l-2.1 7A2 2 0 0 1 17.4 19H4.5a2 2 0 0 1-2-2z" />
-          </svg>
+          <SidebarIcon name="open" />
         </button>
         <button class="side-icon-btn" title="New file" aria-label="New file" onClick={() => executeCommand("file.new")}>
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
+          <SidebarIcon name="new" />
         </button>
       </div>
 
-      {/* ===== segmented tabs ===== */}
-      <div class="side-tabs" role="tablist">
+      {/* ===== sidebar views ===== */}
+      <div class="side-tabs" role="tablist" aria-label="Sidebar views">
         <Tab id="files" icon={() => <TabFilesIcon />} label="Files" />
         <Tab id="outline" icon={() => <TabOutlineIcon />} label="Outline" />
         <Tab id="search" icon={() => <TabSearchIcon />} label="Find" />
       </div>
 
       {/* ===== tab body ===== */}
-      <div class="side-tab-body scrollarea">
+      <div class="side-tab-body scrollarea" id="sidebar-view-panel" role="tabpanel" aria-labelledby={`sidebar-view-${sidebarTab()}`}>
         {/* --- Files --- */}
         <Show when={sidebarTab() === "files"}>
           <Show when={pinnedFiles().length}>
             <div class="side-list-head side-list-head-row">
               <span>Pinned</span>
-              <button class="side-clear-btn" title="Clear pinned files" onClick={() => void clearPinned()}>
-                <TrashIcon /> Clear
+              <button class="side-clear-btn" title="Clear pinned files" aria-label="Clear pinned files" onClick={() => void clearPinned()}>
+                <TrashIcon />
               </button>
             </div>
-            <div class="side-recent" role="list">
+            <div class="side-recent" role="group" aria-label="Recent or pinned files">
               <For each={pinnedFiles()}>
                 {(path) => (
                   <button
                     class="tree-item file pinned"
-                    role="treeitem"
                     classList={{ current: doc.filePath === path, missing: isMissing(path) }}
                     onClick={() => props.onOpenFile(path)}
                     onContextMenu={(e) => openPinMenu(e, path)}
@@ -499,17 +516,16 @@ export default function Sidebar(props: Props) {
                 <Chevron open={recentOpen()} />
                 <span>Recent</span>
               </button>
-              <button class="side-clear-btn" title="Clear recent files" onClick={() => void clearRecentFiles()}>
-                <TrashIcon /> Clear
+              <button class="side-clear-btn" title="Clear recent files" aria-label="Clear recent files" onClick={() => void clearRecentFiles()}>
+                <TrashIcon />
               </button>
             </div>
             <Show when={recentOpen()}>
-            <div class="side-recent" role="list">
+            <div class="side-recent" role="group" aria-label="Recent or pinned files">
               <For each={recentFiles().slice(0, 6)}>
                 {(path) => (
                   <button
                     class="tree-item file"
-                    role="treeitem"
                     classList={{ current: doc.filePath === path, missing: isMissing(path) }}
                     onClick={() => props.onOpenFile(path)}
                     onContextMenu={(e) => openPinMenu(e, path, false, true)}
@@ -537,9 +553,12 @@ export default function Sidebar(props: Props) {
               <button
                 class="side-clear-btn"
                 title="Collapse all folders"
+                aria-label="Collapse all folders"
                 onClick={() => { collapseAllFolders(); void saveOpenFolders(); }}
               >
-                Collapse
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m5 3 3 3 3-3M5 13l3-3 3 3M3 8h10" />
+                </svg>
               </button>
             </Show>
           </div>
@@ -556,6 +575,7 @@ export default function Sidebar(props: Props) {
                 type="text"
                 spellcheck={false}
                 autocomplete="off"
+                aria-label="Filter files"
                 placeholder="Filter files…"
                 value={filter()}
                 onInput={(e) => setFilter(e.currentTarget.value)}
@@ -616,7 +636,7 @@ export default function Sidebar(props: Props) {
                       aria-setsize={row.size}
                       aria-selected={!row.node.is_dir && doc.filePath === row.node.path}
                       aria-expanded={row.node.is_dir ? isFolderOpen(row.node.path) : undefined}
-                      style={{ "padding-left": `${10 + row.depth * 14}px` }}
+                      style={{ "padding-left": `${8 + row.depth * 16}px` }}
                       onClick={() => {
                         if (row.node.is_dir) { toggleFolder(row.node.path); void saveOpenFolders(); }
                         else props.onOpenFile(row.node.path);
@@ -654,7 +674,6 @@ export default function Sidebar(props: Props) {
                 {(h, i) => (
                   <button
                     class="out-row"
-                    role="treeitem"
                     classList={{ active: i() === activeHeading(), top: h.level <= baseLevel() }}
                     aria-current={i() === activeHeading() ? "true" : undefined}
                     // Depth drives indent in CSS so the step stays in one place.

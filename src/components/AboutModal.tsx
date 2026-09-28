@@ -1,3 +1,4 @@
+import ModalFrame from "./ModalFrame";
 import { Show, createSignal } from "solid-js";
 import { openExternal, isTauri } from "../platform";
 import appIcon from "../../src-tauri/icons/128x128.png";
@@ -28,7 +29,7 @@ export default function AboutModal() {
   return (
     <Show when={visible()}>
       <div class="about-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-        <div class="about" onKeyDown={(e) => e.key === "Escape" && close()} tabindex="-1">
+        <ModalFrame class="about" label="About Sarala" onClose={close}>
           <button class="about-close" title="Close" aria-label="Close" onClick={close}>
             <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
               <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M4 4l8 8M12 4l-8 8" />
@@ -73,7 +74,7 @@ export default function AboutModal() {
           </div>
 
           <div class="about-footer">© {new Date().getFullYear()} · Made with ♥ in Bengaluru</div>
-        </div>
+        </ModalFrame>
       </div>
     </Show>
   );

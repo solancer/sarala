@@ -92,6 +92,8 @@ sudo snap install sarala
 
 **Getting around**
 
+- Document tabs with independent edits and undo history; `Cmd/Ctrl+T` opens a tab, `Cmd/Ctrl+W` closes it, and `Ctrl+Tab` switches tabs
+
 - Sidebar with a file tree, live outline, and full-text search across the folder
 - Open Quickly (`Shift+Cmd/Ctrl+P`), find & replace, and a command palette (`Cmd/Ctrl+K`)
 - Focus and Typewriter modes, plus Source mode as an escape hatch to the raw document

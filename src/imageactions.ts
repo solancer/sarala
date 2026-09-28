@@ -1,9 +1,9 @@
-import { doc, updateBlock, insertBlockAfter } from "./store";
+import { doc, updateBlock, insertBlockAfter, imageUploadUrl } from "./store";
 import {
   isTauri, revealInDir, copyFileTo, renameFile, deleteFile,
   pickFolder, pickSavePath, confirmDialog, alertDialog,
 } from "./platform";
-import { imageFsPath, docDir, type ImageRef } from "./images";
+import { imageFsPath, resolveImageSrc, docDir, type ImageRef } from "./images";
 import { imageMarkup, needsHtmlSyntax } from "./imageattrs";
 
 /** A right-clicked image: where it lives in the document and its parsed form. */
@@ -178,4 +178,24 @@ export function setImageProps(t: ImageTarget, patch: Record<string, string>) {
   if (i < 0) return;
   if (next === doc.blocks[i].text.slice(t.start, t.end)) return;
   rewrite(t, next);
+}
+
+/** Upload only the selected local image and avoid replacing edits made while waiting. */
+export async function uploadSelectedImage(t: ImageTarget) {
+  const source = doc.blocks.find(b => b.id === t.blockId)?.text.slice(t.start, t.end);
+  if (!source) return;
+  const path = imageFsPath(t.src);
+  if (!path) { await alertDialog("Choose a local image to upload."); return; }
+  if (!imageUploadUrl()) { await alertDialog("Set an image upload URL in Settings → Images first."); return; }
+  try {
+    const response = await fetch(resolveImageSrc(t.src));
+    if (!response.ok) throw new Error("Could not read the image.");
+    const { uploadImageBlob } = await import("./imageupload");
+    const url = await uploadImageBlob(imageUploadUrl(), await response.blob(), path.split(/[\\/]/).pop() || "image");
+    const current = doc.blocks.find(b => b.id === t.blockId);
+    if (current?.text.slice(t.start, t.end) !== source) {
+      await alertDialog(`Image uploaded, but the document changed. Image URL: ${url}`); return;
+    }
+    rewrite(t, remark(t, url));
+  } catch (error) { await alertDialog(String(error)); }
 }

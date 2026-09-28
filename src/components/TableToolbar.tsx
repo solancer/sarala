@@ -76,6 +76,12 @@ export default function TableToolbar(props: Props) {
           <svg viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M1.5 2h1.5v12H1.5zM13 2h1.5v12H13zM5.9 4.9 2.8 8l3.1 3.1 1-1L5.6 8.7h4.8l-1.3 1.4 1 1L13.2 8l-3.1-3.1-1 1 1.3 1.4H5.6l1.3-1.4z"/></svg>
         </button>
       </div>
+      <div class="tt-group" role="group" aria-label="Reorder table">
+        <For each={[
+          ["move_row_up", "Move row up", "↑"], ["move_row_down", "Move row down", "↓"],
+          ["move_col_left", "Move column left", "←"], ["move_col_right", "Move column right", "→"],
+        ]}>{([id, label, glyph]) => <button class="tt-btn" title={label} aria-label={label} onClick={() => executeCommand(`paragraph.table.${id}`)}>{glyph}</button>}</For>
+      </div>
       <button class="tt-btn tt-delete" title="Delete table" onClick={() => executeCommand("edit.delete_block")}>
         <svg viewBox="0 0 16 16" width="14" height="14"><path fill="currentColor" d="M6 2h4v1h4v1.5H2V3h4zM3.5 5.5h9L11.8 14H4.2zM6.2 7l.3 5h1.2l-.3-5zm3.4 0-.3 5h1.2l.3-5z"/></svg>
       </button>

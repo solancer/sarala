@@ -1,3 +1,4 @@
+import ModalFrame from "./ModalFrame";
 /**
  * Settings — a categorised dialog over the options that were previously
  * reachable only as menu items.
@@ -19,9 +20,10 @@ import {
   autosaveInterval, copyImageToAssets, copyImagesToFolder, tableFullWidth,
   mathAltDelimiters, mathFence, emojiEnabled, highlightEnabled, subSupEnabled,
   autolinkEnabled, focusMode, typewriterMode, statusBarVisible, zoom, theme,
-  setCopyImagesToFolder, customScheme,
+  setCopyImagesToFolder, customScheme, htmlEmbeds, setHtmlEmbedsSig, mathAutoNumber, setMathAutoNumberSig, physicsEnabled, setPhysicsEnabledSig, imageUploadUrl, setImageUploadUrl, bumpRenderEpoch,
 } from "../store";
 import { listSystemFonts, applyProseFont, applyMonoFont } from "../fonts";
+import { setHtmlEmbeds, setMathAutoNumber, setPhysicsEnabled } from "../markdown";
 import { setSetting } from "../settings";
 import { executeCommand, toggleTableFullWidth } from "../commands";
 import { openThemePicker } from "./ThemePicker";
@@ -177,6 +179,21 @@ const SECTIONS = (): Section[] => [
         get: mathAltDelimiters, run: cmd("edit.math.alt_delimiters"),
       },
       {
+        kind: "toggle", id: "math_physics", label: "Physics operator notation",
+        desc: "Enable physics meanings for standard operators such as divergence and automatically sized trigonometric arguments.", get: physicsEnabled,
+        run: () => { const value = !physicsEnabled(); setPhysicsEnabledSig(value); setPhysicsEnabled(value); bumpRenderEpoch(); void setSetting("physicsEnabled", value); },
+      },
+      {
+        kind: "toggle", id: "math_numbering", label: "Number display equations",
+        desc: "Add equation numbers; use \\label and \\ref for references.", get: mathAutoNumber,
+        run: () => { const value = !mathAutoNumber(); setMathAutoNumberSig(value); setMathAutoNumber(value); bumpRenderEpoch(); void setSetting("mathAutoNumber", value); },
+      },
+      {
+        kind: "toggle", id: "html_embeds", label: "Sandboxed web embeds",
+        desc: "Load HTTPS iframe content with scripts isolated from the document.", get: htmlEmbeds,
+        run: () => { const value = !htmlEmbeds(); setHtmlEmbedsSig(value); setHtmlEmbeds(value); bumpRenderEpoch(); void setSetting("htmlEmbeds", value); },
+      },
+      {
         kind: "toggle", id: "math_fence", label: "Math code fences",
         desc: "Render ```math fenced blocks as equations.",
         get: mathFence, run: cmd("edit.math.fence"),
@@ -231,6 +248,11 @@ const SECTIONS = (): Section[] => [
         kind: "toggle", id: "copy_images", label: "Copy inserted images into the document folder",
         desc: "Keeps a document portable by copying local images next to it.",
         get: copyImageToAssets, run: cmd("format.image.copy_to_folder"),
+      },
+      {
+        kind: "text", id: "image_upload_url", label: "Image upload URL",
+        desc: 'HTTPS service accepting multipart field "file" and returning {"url":"https://…"}. Upload from the image menu. The service must allow this app’s origin.',
+        get: imageUploadUrl, run: value => { setImageUploadUrl(value.trim()); void setSetting("imageUploadUrl", value.trim()); },
       },
       {
         kind: "text", id: "assets_folder", label: "Assets folder",
@@ -289,7 +311,7 @@ function RowView(props: { row: Row }) {
           {(() => {
             const row = r() as Extract<Row, { kind: "select" }>;
             return (
-              <select class="ip-input ip-select" value={row.get()} onChange={(e) => row.run(e.currentTarget.value)}>
+              <select aria-label={row.label} class="ip-input ip-select" value={row.get()} onChange={(e) => row.run(e.currentTarget.value)}>
                 <For each={row.options}>{(o) => <option value={o.value}>{o.label}</option>}</For>
               </select>
             );
@@ -301,6 +323,7 @@ function RowView(props: { row: Row }) {
             return (
               <input
                 class="ip-input"
+                aria-label={row.label}
                 value={row.get()}
                 spellcheck={false}
                 onChange={(e) => row.run(e.currentTarget.value)}
@@ -370,13 +393,13 @@ export default function SettingsModal() {
         class="settings-backdrop"
         onMouseDown={(e) => e.target === e.currentTarget && setVisible(false)}
       >
-        <div class="settings" onKeyDown={(e) => e.key === "Escape" && setVisible(false)} tabindex="-1">
+        <ModalFrame class="settings" label="Settings" onClose={() => setVisible(false)}>
           <nav class="set-rail" aria-label="Settings sections">
             <span class="set-rail-title">Settings</span>
             <For each={SECTIONS()}>
               {(s) => (
                 <button
-                  class="set-rail-item"
+                  class="set-rail-item" aria-current={!searching() && section() === s.id ? "page" : undefined}
                   classList={{ on: !searching() && section() === s.id }}
                   onClick={() => { setQuery(""); setSection(s.id); }}
                 >
@@ -390,7 +413,7 @@ export default function SettingsModal() {
             <div class="set-pane-head">
               <input
                 class="settings-search"
-                placeholder="Search settings…"
+                aria-label="Search settings" placeholder="Search settings…"
                 value={query()}
                 onInput={(e) => setQuery(e.currentTarget.value)}
                 autocomplete="off"
@@ -406,10 +429,10 @@ export default function SettingsModal() {
             <div class="set-body">
               <Show when={showFonts()}>
                 <div class="settings-tabs">
-                  <button classList={{ on: target() === "prose" }} onClick={() => setTarget("prose")}>
+                  <button aria-pressed={target() === "prose"} classList={{ on: target() === "prose" }} onClick={() => setTarget("prose")}>
                     Editor font
                   </button>
-                  <button classList={{ on: target() === "mono" }} onClick={() => setTarget("mono")}>
+                  <button aria-pressed={target() === "mono"} classList={{ on: target() === "mono" }} onClick={() => setTarget("mono")}>
                     Code font
                   </button>
                 </div>
@@ -421,7 +444,7 @@ export default function SettingsModal() {
                 </div>
                 <input
                   class="settings-search set-font-search"
-                  placeholder="Search fonts…"
+                  aria-label="Search fonts" placeholder="Search fonts…"
                   value={fontQuery()}
                   onInput={(e) => setFontQuery(e.currentTarget.value)}
                   autocomplete="off"
@@ -450,7 +473,7 @@ export default function SettingsModal() {
                       {(f) => (
                         <button
                           class="settings-font"
-                          classList={{ current: current() === f }}
+                          aria-pressed={current() === f} classList={{ current: current() === f }}
                           style={{ "font-family": `"${f}"` }}
                           onClick={() => void choose(f)}
                         >
@@ -483,7 +506,7 @@ export default function SettingsModal() {
               </Show>
             </div>
           </div>
-        </div>
+        </ModalFrame>
       </div>
     </Show>
   );

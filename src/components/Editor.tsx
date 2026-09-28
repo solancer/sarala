@@ -24,6 +24,7 @@ export default function Editor() {
     const onCopy = (e: ClipboardEvent) => clipboard(e, false);
     const onCut = (e: ClipboardEvent) => clipboard(e, true);
     const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.closest('[aria-modal="true"]')) return;
       const r = selectedBlockRange();
       if (!r) return;
       if (e.key === "Backspace" || e.key === "Delete" || e.key === "Enter") {
@@ -59,7 +60,12 @@ export default function Editor() {
 
   return (
     <div
-      class="editor"
+      class="editor" tabIndex={0} role="region" aria-label="Document editor. Press Enter to edit."
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget && e.key === "Enter") {
+          e.preventDefault(); requestCaret(0); setActive(Math.max(0, doc.activeIndex));
+        }
+      }}
       onContextMenu={(e) => {
         // Catch-all for right-clicks in the editor (gutter/padding). Block and
         // image handlers stopPropagation for clicks on their own content, so

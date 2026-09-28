@@ -1,11 +1,12 @@
 import { createEffect, onCleanup } from "solid-js";
 import {
-  doc, fullText, autosaveInterval, loadDocument, setDocDirty, setExternalChange,
+  openDocuments, autosaveInterval, openDocument, setDocDirty, setExternalChange,
 } from "./store";
 import {
   writeShadow, clearShadow, listShadows, readFileEncoded, watchFile,
   type ShadowSession,
 } from "./platform";
+import { joinBlocks } from "./markdown";
 import { addRecentFile } from "./settings";
 
 /** Stable per-file shadow key (FNV-1a hex of the absolute path). The Rust side
@@ -28,8 +29,10 @@ const baseName = (p: string) => p.replace(/\\/g, "/").split("/").pop() || p;
 // trailing-newline-insensitively to avoid nagging about untouched files.
 const normalizeForCompare = (s: string) => s.replace(/\r\n?/g, "\n").replace(/\n+$/, "");
 
-// The shadow key we last wrote, so we can delete it the moment the doc is saved.
-let lastKey: string | null = null;
+// Track each tab's shadow independently; switching to a clean tab must never
+// clear another tab's recovery data.
+const shadowKeys = new Set<string>();
+let ticking = false;
 
 /** Wire up the autosave loop: a re-arming interval that shadows the dirty buffer,
  *  and an effect that clears the shadow once the document is saved (clean). */
@@ -41,28 +44,35 @@ export function startAutosave(): void {
     onCleanup(() => clearInterval(id));
   });
 
-  // When the buffer becomes clean (a real save happened), the on-disk file now
-  // holds the content — drop the shadow.
   createEffect(() => {
-    if (!doc.dirty && lastKey) {
-      const k = lastKey;
-      lastKey = null;
-      void clearShadow(k);
+    const dirtyKeys = new Set(openDocuments().filter(({ document }) => document.dirty && document.filePath)
+      .map(({ document }) => keyForPath(document.filePath!)));
+    for (const key of shadowKeys) {
+      if (!dirtyKeys.has(key)) { shadowKeys.delete(key); void clearShadow(key); }
     }
   });
 }
 
 async function tick(): Promise<void> {
-  if (!doc.dirty || !doc.filePath) return; // saved files only
-  const key = keyForPath(doc.filePath);
-  lastKey = key;
-  await writeShadow(key, {
-    path: doc.filePath,
-    content: fullText(),
-    savedAt: Date.now(),
-    encoding: doc.encoding,
-    hadBom: doc.hadBom,
-  });
+  if (ticking) return;
+  ticking = true;
+  try {
+    for (const { document } of openDocuments()) {
+      if (!document.dirty || !document.filePath) continue;
+      const path = document.filePath;
+      const key = keyForPath(path);
+      shadowKeys.add(key);
+      await writeShadow(key, {
+        path, content: joinBlocks(document.blocks.map((b) => b.text)), savedAt: Date.now(),
+        encoding: document.encoding, hadBom: document.hadBom,
+      });
+      // A save or close may have completed while this write was in flight.
+      if (!openDocuments().some(({ document: d }) => d.filePath === path && d.dirty)) {
+        shadowKeys.delete(key);
+        await clearShadow(key);
+      }
+    }
+  } finally { ticking = false; }
 }
 
 /** Shadows whose content differs from the file currently on disk (i.e. real
@@ -109,7 +119,7 @@ export async function discardShadowFor(path: string | null): Promise<void> {
 /** Load a recovered session into the current window, marked dirty so the
  *  recovered content can be saved back over the file. */
 export async function restoreSession(s: ShadowSession): Promise<void> {
-  loadDocument(s.content, s.path, { encoding: s.encoding, hadBom: s.hadBom });
+  openDocument(s.content, s.path, { encoding: s.encoding, hadBom: s.hadBom });
   setDocDirty(true);
   setExternalChange(null);
   await watchFile(s.path);

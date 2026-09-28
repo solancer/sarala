@@ -1,4 +1,4 @@
-import { createSignal, createMemo } from "solid-js";
+import { batch, createSignal, createMemo } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 import type { FileNode } from "./platform";
 import type { Base16Scheme } from "./base16";
@@ -9,6 +9,7 @@ import {
   extractOutline,
   countWords,
   setTocProvider,
+  setMarkdownDocumentProvider,
 } from "./markdown";
 
 export interface Block {
@@ -166,6 +167,10 @@ export const [tableFullWidth, setTableFullWidth] = createSignal(false);
 
 // Math rendering preferences (gated, off by default; persisted).
 export const [mathAltDelimiters, setMathAltDelimitersSig] = createSignal(false);
+export const [htmlEmbeds, setHtmlEmbedsSig] = createSignal(false);
+export const [physicsEnabled, setPhysicsEnabledSig] = createSignal(false);
+export const [mathAutoNumber, setMathAutoNumberSig] = createSignal(false);
+export const [imageUploadUrl, setImageUploadUrl] = createSignal("");
 export const [mathFence, setMathFenceSig] = createSignal(false);
 
 // Inline-syntax preferences (on by default; persisted).
@@ -186,6 +191,8 @@ export const fullText = createMemo(() => joinBlocks(state.blocks.map((b) => b.te
 export const outline = createMemo(() => extractOutline(state.blocks.map((b) => b.text)));
 // eslint-disable-next-line solid/reactivity -- the provider runs inside Block's render (a tracked scope)
 setTocProvider(() => outline());
+// eslint-disable-next-line solid/reactivity -- evaluated in the rendering scope
+setMarkdownDocumentProvider(() => state.blocks);
 export const stats = createMemo(() => countWords(fullText()));
 /** Estimated reading time in whole minutes (200 wpm), never below 1. */
 export const readTime = createMemo(() => Math.max(1, Math.ceil(stats().words / 200)));
@@ -231,8 +238,8 @@ interface Snapshot {
   caret: number | null;
 }
 
-const undoStack: Snapshot[] = [];
-const redoStack: Snapshot[] = [];
+let undoStack: Snapshot[] = [];
+let redoStack: Snapshot[] = [];
 let lastPushKey: string | null = null;
 let lastPushAt = 0;
 
@@ -299,8 +306,15 @@ export interface DocMeta {
 }
 
 export function loadDocument(text: string, path: string | null, meta?: DocMeta) {
-  undoStack.length = 0;
-  redoStack.length = 0;
+  undoStack = [];
+  redoStack = [];
+  lastActive = -1;
+  caretRequest = null;
+  selectionRequest = null;
+  setEncodingLossy(false);
+  setExternalChange(null);
+  setLiveCaretOffset(0);
+  setSourceCaret({ line: 1, col: 1 });
   lastPushKey = null;
   setState(
     produce((s) => {
@@ -518,4 +532,182 @@ export function replaceAll(text: string) {
       s.dirty = true;
     })
   );
+}
+
+/* ---------- document tabs ----------
+   The existing editor/command API continues to address `doc`. Inactive tabs
+   retain their own buffer and history; switching restores them in one batch. */
+type DocumentState = typeof state;
+export interface TabView {
+  scrollTop: number;
+  sourceStart: number;
+  sourceEnd: number;
+}
+const emptyView = (): TabView => ({ scrollTop: 0, sourceStart: 0, sourceEnd: 0 });
+interface DocumentTab {
+  id: number;
+  document: DocumentState;
+  undo: Snapshot[];
+  redo: Snapshot[];
+  caret: number | null;
+  lastActive: number;
+  sourceMode: boolean;
+  lossy: boolean;
+  conflict: ReturnType<typeof externalChange>;
+  view: TabView;
+}
+let nextTabId = 1;
+export const [activeTabId, setActiveTabId] = createSignal(nextTabId++);
+let viewProvider: (() => TabView) | null = null;
+export function setTabViewProvider(provider: (() => TabView) | null) { viewProvider = provider; }
+const copyDocument = (): DocumentState => ({ ...state, blocks: state.blocks.map((b) => ({ ...b })) });
+function captureTab(): DocumentTab {
+  return {
+    id: activeTabId(), document: copyDocument(), undo: undoStack, redo: redoStack,
+    caret: caretProvider?.() ?? liveCaretOffset(), lastActive,
+    sourceMode: sourceMode(), lossy: encodingLossy(), conflict: externalChange(),
+    view: viewProvider?.() ?? emptyView(),
+  };
+}
+const [tabRecords, setTabRecords] = createSignal<DocumentTab[]>([captureTab()]);
+export const openTabs = createMemo(() => tabRecords().map((tab) => {
+  const document = tab.id === activeTabId() ? state : tab.document;
+  return { id: tab.id, filePath: document.filePath, dirty: document.dirty,
+    name: document.filePath?.replace(/\\/g, "/").split("/").pop() || "Untitled.md" };
+}));
+export function openDocuments() {
+  return tabRecords().map((tab) => ({ id: tab.id, document: tab.id === activeTabId() ? state : tab.document }));
+}
+export function getTabDocument(id: number): DocumentState | undefined {
+  return id === activeTabId() ? copyDocument() : tabRecords().find((tab) => tab.id === id)?.document;
+}
+export function currentTabView(): TabView {
+  return tabRecords().find((tab) => tab.id === activeTabId())?.view ?? emptyView();
+}
+function retainCurrentTab() {
+  const current = captureTab();
+  setTabRecords((tabs) => tabs.map((tab) => tab.id === current.id ? current : tab));
+}
+export function switchTab(id: number) {
+  if (id === activeTabId()) return;
+  const tab = tabRecords().find((entry) => entry.id === id);
+  if (!tab) return;
+  batch(() => {
+    retainCurrentTab();
+    undoStack = tab.undo;
+    redoStack = tab.redo;
+    lastPushKey = null;
+    lastActive = tab.lastActive;
+    caretRequest = tab.caret;
+    selectionRequest = null;
+    setState({ ...tab.document, blocks: tab.document.blocks.map((b) => ({ ...b })) });
+    setSourceMode(tab.sourceMode);
+    setEncodingLossy(tab.lossy);
+    setExternalChange(tab.conflict);
+    setLiveCaretOffset(tab.caret ?? 0);
+    setSourceCaret({ line: 1, col: 1 });
+    setActiveTabId(id);
+    bumpRenderEpoch();
+  });
+}
+export function cycleTab(direction: -1 | 1) {
+  const tabs = tabRecords();
+  const index = tabs.findIndex((tab) => tab.id === activeTabId());
+  switchTab(tabs[(index + direction + tabs.length) % tabs.length].id);
+}
+
+/** Reorder records without saving/restoring the active editor or its selection. */
+export function moveTab(id: number, targetIndex: number) {
+  if (!Number.isFinite(targetIndex)) return;
+  setTabRecords((tabs) => {
+    const from = tabs.findIndex((tab) => tab.id === id);
+    const to = Math.max(0, Math.min(tabs.length - 1, Math.trunc(targetIndex)));
+    if (from < 0 || from === to) return tabs;
+    const reordered = [...tabs];
+    const [tab] = reordered.splice(from, 1);
+    reordered.splice(to, 0, tab);
+    return reordered;
+  });
+}
+export function findTabByPath(path: string): number | undefined {
+  return openTabs().find((tab) => tab.filePath === path)?.id;
+}
+/** Open a new buffer; opening an existing file selects its unsaved buffer. */
+export function openDocument(text: string, path: string | null, meta?: DocMeta): number {
+  const existing = path ? findTabByPath(path) : undefined;
+  if (existing !== undefined) { switchTab(existing); return existing; }
+  // Reuse the initial empty scratch tab when a file is opened.
+  const reuse = path && !state.filePath && !state.dirty && state.blocks.every((b) => !b.text);
+  batch(() => {
+    if (!reuse) {
+      retainCurrentTab();
+      setActiveTabId(nextTabId++);
+      undoStack = [];
+      redoStack = [];
+    }
+    loadDocument(text, path, meta);
+    setSourceMode(false);
+    const tab = captureTab();
+    tab.view = emptyView();
+    setTabRecords((tabs) => reuse ? tabs.map((entry) => entry.id === tab.id ? tab : entry) : [...tabs, tab]);
+  });
+  return activeTabId();
+}
+/** Called only after the command layer has handled unsaved changes. */
+export function removeTab(id: number) {
+  const tabs = tabRecords();
+  const index = tabs.findIndex((tab) => tab.id === id);
+  if (index < 0) return;
+  batch(() => {
+    if (id === activeTabId()) {
+      if (tabs.length === 1) openDocument("", null);
+      else switchTab(tabs[index + 1]?.id ?? tabs[index - 1].id);
+    }
+    setTabRecords((entries) => entries.filter((tab) => tab.id !== id));
+  });
+}
+/** Save completion belongs to the tab that started it, even after a switch. */
+export function markTabSaved(id: number, path: string, savedText: string) {
+  const document = getTabDocument(id);
+  if (!document) return;
+  const dirty = joinBlocks(document.blocks.map((b) => b.text)) !== savedText;
+  if (id === activeTabId()) {
+    setState({ filePath: path, dirty });
+    setExternalChange(null);
+    bumpRenderEpoch();
+  } else {
+    setTabRecords((tabs) => tabs.map((tab) => tab.id === id
+      ? { ...tab, document: { ...tab.document, filePath: path, dirty }, conflict: null } : tab));
+  }
+}
+export function setTabExternalChange(path: string, deleted: boolean) {
+  if (state.filePath === path) setExternalChange({ path, deleted });
+  setTabRecords((tabs) => tabs.map((tab) => tab.id !== activeTabId() && tab.document.filePath === path
+    ? { ...tab, conflict: { path, deleted } } : tab));
+}
+/** Reload a specific tab without replacing whichever document is now active. */
+export function replaceTabDocument(id: number, text: string, path: string, meta: DocMeta, lossy = false) {
+  if (id === activeTabId()) {
+    loadDocument(text, path, meta);
+    setEncodingLossy(lossy);
+  } else {
+    setTabRecords((tabs) => tabs.map((tab) => tab.id === id ? {
+      ...tab, document: { blocks: splitBlocks(text).map(mkBlock), activeIndex: -1, filePath: path,
+        dirty: false, encoding: meta.encoding, hadBom: meta.hadBom },
+      undo: [], redo: [], caret: null, lastActive: -1, conflict: null, lossy, view: emptyView(),
+    } : tab));
+  }
+}
+
+/** Keep open buffers attached to file-tree renames, including inactive tabs. */
+export function retargetTabPath(from: string, to: string | null) {
+  batch(() => {
+    if (state.filePath === from) {
+      setState({ filePath: to, dirty: to === null || state.dirty });
+      setExternalChange(null);
+      bumpRenderEpoch();
+    }
+    setTabRecords((tabs) => tabs.map((tab) => tab.id !== activeTabId() && tab.document.filePath === from
+      ? { ...tab, document: { ...tab.document, filePath: to, dirty: to === null || tab.document.dirty }, conflict: null } : tab));
+  });
 }

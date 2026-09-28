@@ -1,5 +1,6 @@
 import {
-  doc, fullText, fileName, loadDocument, markSaved, setFilePath, setHeading,
+  doc, fullText, fileName, retargetTabPath, cycleTab, setHeading,
+  activeTabId, openDocument, findTabByPath, switchTab, removeTab, getTabDocument, markTabSaved, replaceTabDocument,
   sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
   theme, setTheme, THEMES, setFileTree, setFolderName,
   folderPath, setFolderPath, setQuickOpenVisible, setCommandPaletteVisible,
@@ -34,7 +35,7 @@ import {
   setWindowAlwaysOnTop, toggleFullscreen, minimizeWindow, toggleMaximizeWindow,
 } from "./platform";
 import {
-  renderMarkdown, setPreserveBreaksOption,
+  renderMarkdown, joinBlocks, setPreserveBreaksOption,
   setMathAltDelimiters as setMathAltDelimitersOpt,
   setMathFence as setMathFenceOpt,
   setEmojiEnabled as setEmojiEnabledOpt,
@@ -45,7 +46,7 @@ import {
 import { renderMermaidIn } from "./mermaid";
 import { renderD2In } from "./d2";
 import { setLiveHighlight, setLiveSubSup } from "./livesource";
-import { shadowFor, restoreSession, keyForPath } from "./autosave";
+import { shadowFor, restoreSession, keyForPath, discardShadowFor } from "./autosave";
 import { stripControlChars } from "./richpaste";
 import {
   recentFiles, addRecentFile, clearRecentFiles, removeRecentFile, pinnedFiles,
@@ -71,7 +72,7 @@ import { openThemePicker } from "./components/ThemePicker";
 import { openThemeEditor } from "./components/ThemeEditor";
 import { checkForUpdates } from "./updater";
 import {
-  skeletonTable, editTable, resizeTable, prettifyTable, parseTable, cellRanges,
+  skeletonTable, editTable, resizeTable, prettifyTable, parseTable, cellRanges, columnAtOffset, lineAtOffset,
   appendTableRow, appendTableColumn, type TableAppend, type TableEdit, type Align,
 } from "./tabletools";
 
@@ -128,19 +129,27 @@ export async function openFolder() {
 
 // ---------- File ----------
 
-/** True when it is safe to discard the current document. */
-async function confirmDiscard(): Promise<boolean> {
-  if (!doc.dirty) return true;
-  return confirmDialog(`Discard unsaved changes to ${fileName()}?`);
+/** Load or reload the requested buffer, never an unrelated active tab. */
+async function applyOpened(p: string, ed: EncodedDoc, tabId?: number) {
+  if (tabId === undefined) {
+    const id = openDocument(ed.content, p, ed);
+    if (id === activeTabId()) setEncodingLossy(ed.lossy);
+  } else replaceTabDocument(tabId, ed.content, p, ed, ed.lossy);
+  await watchFile(p);
 }
 
-/** Load a decoded file into the editor, flag lossy decodes, and start watching
- *  it for external changes (clearing any stale conflict banner). */
-async function applyOpened(p: string, ed: EncodedDoc) {
-  loadDocument(ed.content, p, { encoding: ed.encoding, hadBom: ed.hadBom });
-  setEncodingLossy(ed.lossy);
-  setExternalChange(null);
-  await watchFile(p);
+const closingTabs = new Set<number>();
+export async function closeTab(id = activeTabId()): Promise<void> {
+  if (closingTabs.has(id)) return;
+  const document = getTabDocument(id);
+  if (!document) return;
+  closingTabs.add(id);
+  try {
+    const name = document.filePath ? fileName0(document.filePath) : "Untitled.md";
+    if (document.dirty && !(await confirmDialog(`Close ${name} without saving? Unsaved changes will be lost.`))) return;
+    removeTab(id);
+    await discardShadowFor(document.filePath);
+  } finally { closingTabs.delete(id); }
 }
 
 /**
@@ -171,6 +180,8 @@ async function handleMissingFile(p: string): Promise<boolean> {
 export async function openFile(path?: string) {
   const p = path ?? (await pickMarkdownFile());
   if (!p) return;
+  const existing = findTabByPath(p);
+  if (existing !== undefined) { switchTab(existing); return; }
   // A Recent entry can point at a file that has since been deleted or moved.
   // Without this the invoke below rejects unhandled and the click does nothing.
   if (!(await pathExists(p))) {
@@ -204,21 +215,22 @@ export async function openFile(path?: string) {
 
 const fileName0 = (p: string) => p.replace(/\\/g, "/").split("/").pop() || p;
 
-async function newFile() {
-  if (await confirmDiscard()) loadDocument("", null);
+function newFile() {
+  openDocument("", null);
 }
 
 /** Conflict banner ▸ Reload: re-read the file from disk, discarding edits. */
 export async function reloadFromDisk() {
+  const id = activeTabId();
   const path = doc.filePath;
   if (!path) {
     setExternalChange(null);
     return;
   }
   try {
-    await applyOpened(path, await readFileEncoded(path));
+    await applyOpened(path, await readFileEncoded(path), id);
   } catch {
-    setExternalChange(null);
+    if (activeTabId() === id) setExternalChange(null);
   }
 }
 
@@ -235,39 +247,38 @@ export async function keepMine() {
 /** Document bytes-as-text for disk: apply the final-newline policy (Edit ▸ Final
  *  Newline), then line endings (Edit ▸ Line Endings). Both touch only the disk
  *  form — never the in-memory blocks. */
-function textForDisk(): string {
-  let text = fullText();
+function textForDisk(text = fullText()): string {
   const policy = finalNewline();
   if (policy === "ensure") text = text.length ? text.replace(/\n+$/, "") + "\n" : text;
   else if (policy === "trim") text = text.replace(/\n+$/, "");
   return lineEnding() === "crlf" ? text.replace(/\n/g, "\r\n") : text;
 }
 
-export async function save() {
-  let path = doc.filePath;
-  if (!path) path = await pickSavePath(fileName());
+async function saveTab(as = false) {
+  const id = activeTabId();
+  const initial = getTabDocument(id)!;
+  const name = initial.filePath ? fileName0(initial.filePath) : "Untitled.md";
+  const path = as || !initial.filePath ? await pickSavePath(name) : initial.filePath;
   if (!path && isTauri) return;
-  await writeTextFile(path ?? fileName(), textForDisk(), doc.encoding, doc.hadBom);
+  const document = getTabDocument(id);
+  if (!document) return;
+  const duplicate = path ? findTabByPath(path) : undefined;
+  if (duplicate !== undefined && duplicate !== id) {
+    await alertDialog("That file is already open in another tab. Choose a different name or save from that tab.");
+    return;
+  }
+  const text = joinBlocks(document.blocks.map((b) => b.text));
+  await writeTextFile(path ?? name, textForDisk(text), document.encoding, document.hadBom);
   if (path) {
-    markSaved(path);
-    setExternalChange(null);
+    markTabSaved(id, path, text);
+    if (initial.filePath !== path) await discardShadowFor(initial.filePath);
     await watchFile(path);
     await addRecentFile(path);
+    if (as) await refreshTree();
   }
 }
-
-async function saveAs() {
-  const path = await pickSavePath(fileName());
-  if (!path && isTauri) return;
-  await writeTextFile(path ?? fileName(), textForDisk(), doc.encoding, doc.hadBom);
-  if (path) {
-    markSaved(path);
-    setExternalChange(null);
-    await watchFile(path);
-    await addRecentFile(path);
-    await refreshTree();
-  }
-}
+export async function save() { await saveTab(); }
+async function saveAs() { await saveTab(true); }
 
 async function renameCurrent() {
   const from = doc.filePath;
@@ -279,9 +290,11 @@ async function renameCurrent() {
   // new path and warns on overwrite. wry has no window.prompt().
   const to = await pickSavePath(fileName());
   if (!to || to === from) return;
+  if (findTabByPath(to) !== undefined) { await alertDialog("That file is already open in another tab."); return; }
   try {
     await renameFile(from, to);
-    setFilePath(to);
+    retargetTabPath(from, to);
+    await watchFile(to);
     await addRecentFile(to);
     await refreshTree();
   } catch (e) {
@@ -290,12 +303,14 @@ async function renameCurrent() {
 }
 
 async function deleteCurrent() {
+  const id = activeTabId();
   const path = doc.filePath;
   if (!path) return;
   if (!(await confirmDialog(`Delete ${fileName()}? This cannot be undone.`))) return;
   try {
     await deleteFile(path);
-    loadDocument("", null);
+    removeTab(id);
+    await discardShadowFor(path);
     await refreshTree();
   } catch (e) {
     await alertDialog(String(e));
@@ -303,19 +318,20 @@ async function deleteCurrent() {
 }
 
 async function revertToSaved() {
+  const id = activeTabId();
   const path = doc.filePath;
   if (!path) return;
   if (doc.dirty && !(await confirmDialog(`Revert ${fileName()} to the last saved version?`))) return;
-  await applyOpened(path, await readFileEncoded(path));
+  await applyOpened(path, await readFileEncoded(path), id);
 }
 
 async function importViaPandoc() {
   if (!(await ensurePandoc())) return;
-  if (!(await confirmDiscard())) return;
   const path = await pickImportFile();
   if (!path) return;
   try {
-    loadDocument(await pandocImport(path), null);
+    openDocument(await pandocImport(path), null);
+    setDocDirty(true);
   } catch (e) {
     await alertDialog(`Pandoc import failed:\n${String(e)}`);
   }
@@ -602,9 +618,24 @@ function applyTableEdit(edit: TableEdit) {
   const text = doc.blocks[i].text;
   const next = editTable(text, blockApi?.caretOffset() ?? 0, edit);
   if (next == null || next === text) return;
-  requestCaret(Math.min(blockApi?.caretOffset() ?? 0, next.length));
+  let caret = Math.min(blockApi?.caretOffset() ?? 0, next.length);
+  if (edit.kind === "move_row" || edit.kind === "move_col") {
+    const oldOffset = blockApi?.caretOffset() ?? 0;
+    const line = lineAtOffset(text, oldOffset);
+    const row = Math.max(0, line - 1) + (edit.kind === "move_row" ? edit.direction : 0);
+    const column = columnAtOffset(text, oldOffset) + (edit.kind === "move_col" ? edit.direction : 0);
+    caret = cellRanges(next)[row * parseTable(next)!.align.length + column]?.start ?? caret;
+  }
+  requestCaret(caret);
   updateBlock(i, next);
 }
+
+const moveWritingRow = (direction: -1 | 1) => {
+  const index = targetBlockIndex();
+  if (index < 0) return;
+  if (parseTable(doc.blocks[index].text)) applyTableEdit({ kind: "move_row", direction });
+  else moveBlock(index, direction);
+};
 
 const tableAlign = (align: Align) => () => applyTableEdit({ kind: "align", align });
 
@@ -773,6 +804,7 @@ async function chooseAutosaveInterval(seconds: number) {
 /** Re-decode the current file with a chosen encoding (Edit ▸ Reopen with
  *  Encoding). `utf8_bom` keeps UTF-8 but forces a BOM on the next save. */
 async function reopenEncoding(idLabel: string) {
+  const id = activeTabId();
   const path = doc.filePath;
   if (!path) {
     await alertDialog("Open a file before choosing an encoding.");
@@ -784,14 +816,11 @@ async function reopenEncoding(idLabel: string) {
   try {
     if (idLabel === "utf8_bom") {
       const ed = await reopenWithEncoding(path, "UTF-8");
-      loadDocument(ed.content, path, { encoding: "UTF-8", hadBom: true });
-      setEncodingLossy(ed.lossy);
+      replaceTabDocument(id, ed.content, path, { encoding: "UTF-8", hadBom: true }, ed.lossy);
     } else {
       const ed = await reopenWithEncoding(path, idLabel);
-      loadDocument(ed.content, path, { encoding: ed.encoding, hadBom: ed.hadBom });
-      setEncodingLossy(ed.lossy);
+      replaceTabDocument(id, ed.content, path, ed, ed.lossy);
     }
-    setExternalChange(null);
     await watchFile(path);
   } catch (e) {
     await alertDialog(String(e));
@@ -941,12 +970,12 @@ export async function followLink(href: string) {
 export async function renamePath(path: string) {
   const to = await pickSavePath(path.replace(/\\/g, "/").split("/").pop() ?? "");
   if (!to || to === path) return;
+  if (findTabByPath(to) !== undefined) { await alertDialog("That file is already open in another tab."); return; }
   try {
     await renameFile(path, to);
-    if (doc.filePath === path) {
-      setFilePath(to);
-      await addRecentFile(to);
-    }
+    retargetTabPath(path, to);
+    await watchFile(to);
+    await addRecentFile(to);
     await refreshTree();
   } catch (e) {
     await alertDialog(String(e));
@@ -961,7 +990,7 @@ export async function deletePath(path: string) {
     await deleteFile(path);
     // The open document just lost its file; keep the buffer but forget the path
     // so the next save prompts for a location rather than recreating it.
-    if (doc.filePath === path) setFilePath("");
+    retargetTabPath(path, null);
     await refreshTree();
   } catch (e) {
     await alertDialog(String(e));
@@ -1063,7 +1092,7 @@ export async function imageInsertRef(absPath: string): Promise<string> {
   const fm = currentFrontMatter();
   // copy-images-to enables copy for the document even if the global toggle
   // is off. Copying needs a doc dir to copy into.
-  const template = fm["copy-images-to"] ?? (copyImageToAssets() ? copyImagesToFolder() : null);
+  const template = fm["copy-images-to"] ?? fm["typora-copy-images-to"] ?? (copyImageToAssets() ? copyImagesToFolder() : null);
   if (dir && template) {
     const folder = template.replace(/\$\{filename\}/g, docBaseName());
     try {
@@ -1075,7 +1104,7 @@ export async function imageInsertRef(absPath: string): Promise<string> {
   // When an image root is set and the file lives under it, store a
   // root-relative link (/rel) — it resolves against the root and works even
   // for unsaved documents (which have no doc dir to be relative to).
-  const root = fm["image-root-url"];
+  const root = fm["image-root-url"] ?? fm["typora-root-url"];
   if (root) {
     const r = norm(root).replace(/\/+$/, "");
     if (norm(absPath).startsWith(r + "/")) return "/" + norm(absPath).slice(r.length + 1);
@@ -1119,7 +1148,9 @@ const registry: Record<string, Command> = {
   "menu.command_palette": () => { setCommandPaletteVisible(true); },
   "file.open_folder": openFolder,
   "file.open_recent.clear": () => clearRecentFiles(),
-  "file.close": newFile,
+  "file.close": () => closeTab(),
+  "window.next_tab": () => cycleTab(1),
+  "window.previous_tab": () => cycleTab(-1),
   "file.save": save,
   "file.save_as": saveAs,
   "file.rename": renameCurrent,
@@ -1137,8 +1168,8 @@ const registry: Record<string, Command> = {
   "edit.copy_plain": copyPlain,
   "edit.paste": pasteText,
   "edit.paste_plain": pastePlain,
-  "edit.move_row_up": () => { if (doc.activeIndex >= 0) moveBlock(doc.activeIndex, -1); },
-  "edit.move_row_down": () => { if (doc.activeIndex >= 0) moveBlock(doc.activeIndex, 1); },
+  "edit.move_row_up": () => moveWritingRow(-1),
+  "edit.move_row_down": () => moveWritingRow(1),
   "edit.delete_block": () => { if (doc.activeIndex >= 0) removeBlock(doc.activeIndex); },
   "edit.select_block": () => {
     if (doc.activeIndex >= 0) blockApi?.selectRange(0, doc.blocks[doc.activeIndex].text.length);
@@ -1181,6 +1212,10 @@ const registry: Record<string, Command> = {
   "paragraph.table.insert": () => openTableDialog(),
   "paragraph.table.row_above": () => applyTableEdit({ kind: "row_above" }),
   "paragraph.table.row_below": () => applyTableEdit({ kind: "row_below" }),
+  "paragraph.table.move_row_up": () => applyTableEdit({ kind: "move_row", direction: -1 }),
+  "paragraph.table.move_row_down": () => applyTableEdit({ kind: "move_row", direction: 1 }),
+  "paragraph.table.move_col_left": () => applyTableEdit({ kind: "move_col", direction: -1 }),
+  "paragraph.table.move_col_right": () => applyTableEdit({ kind: "move_col", direction: 1 }),
   "paragraph.table.delete_row": () => applyTableEdit({ kind: "delete_row" }),
   "paragraph.table.add_col": () => applyTableEdit({ kind: "add_col" }),
   "paragraph.table.add_col_before": () => applyTableEdit({ kind: "add_col", before: true }),

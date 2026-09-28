@@ -104,9 +104,20 @@ function MenuList(props: { items: MenuNode[] }) {
 function MenuSub(props: { node: MenuLeaf }) {
   const [open, setOpen] = createSignal(false);
   const disabled = () => isDisabled(props.node);
+  let parent: HTMLButtonElement | undefined;
   return (
-    <div class="menu-sub" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <button class="menu-item menu-parent" classList={{ disabled: disabled() }} disabled={disabled()}>
+    <div class="menu-sub" onKeyDown={(e) => {
+      if (e.key === "Escape" || e.key === "ArrowLeft") {
+        e.preventDefault(); e.stopPropagation(); setOpen(false); parent?.focus();
+      }
+    }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <button ref={parent} class="menu-item menu-parent" classList={{ disabled: disabled() }} disabled={disabled()}
+        aria-expanded={open()} onClick={() => setOpen(!open())}
+        onKeyDown={(e) => {
+          if (e.key !== "ArrowRight") return;
+          e.preventDefault(); setOpen(true);
+          queueMicrotask(() => parent?.parentElement?.querySelector<HTMLButtonElement>('.menu-dropdown button:not(:disabled)')?.focus());
+        }}>
         <span class="menu-gutter"><MenuIcon k={iconKey(props.node)} /></span>
         <span class="menu-label">{props.node.label}</span>
         <span class="menu-caret">›</span>
@@ -143,7 +154,7 @@ export default function MenuBar() {
         {(menu, i) => (
           <div class="menubar-item">
             <button
-              class="menubar-btn"
+              class="menubar-btn" aria-expanded={openIdx() === i()}
               classList={{ open: openIdx() === i() }}
               onClick={() => setOpenIdx(openIdx() === i() ? null : i())}
               onMouseEnter={() => openIdx() !== null && setOpenIdx(i())}

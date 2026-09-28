@@ -93,7 +93,7 @@ export const MENUS: TopMenu[] = [
   {
     label: "File",
     items: [
-      { id: "file.new", label: "New", accel: "Ctrl+N" },
+      { id: "file.new", label: "New Tab", accel: "Ctrl+N" },
       { id: "file.new_window", label: "New Window", accel: "Shift+Ctrl+N" },
       { sep: true },
       { id: "file.open", label: "Open…", accel: "Ctrl+O" },
@@ -109,7 +109,7 @@ export const MENUS: TopMenu[] = [
       { sep: true },
       { id: "file.open_folder", label: "Open Folder…", accel: "Shift+Ctrl+O" },
       { sep: true },
-      { id: "file.close", label: "Close", accel: "Ctrl+W" },
+      { id: "file.close", label: "Close Tab", accel: "Ctrl+W" },
       { id: "file.save", label: "Save", accel: "Ctrl+S" },
       { id: "file.save_as", label: "Save As / Duplicate…", accel: "Shift+Ctrl+S" },
       { sep: true },
@@ -252,7 +252,7 @@ export const MENUS: TopMenu[] = [
     ],
   },
   {
-    label: "Paragraph",
+    label: "Blocks",
     items: [
       { id: "paragraph.heading.1", label: "Heading 1", accel: "Ctrl+1" },
       { id: "paragraph.heading.2", label: "Heading 2", accel: "Ctrl+2" },
@@ -274,6 +274,10 @@ export const MENUS: TopMenu[] = [
           { sep: true },
           { id: "paragraph.table.row_above", label: "Add Row Above" },
           { id: "paragraph.table.row_below", label: "Add Row Below" },
+          { id: "paragraph.table.move_row_up", label: "Move Table Row Up" },
+          { id: "paragraph.table.move_row_down", label: "Move Table Row Down" },
+          { id: "paragraph.table.move_col_left", label: "Move Column Left" },
+          { id: "paragraph.table.move_col_right", label: "Move Column Right" },
           { id: "paragraph.table.delete_row", label: "Delete Row" },
           { sep: true },
           { id: "paragraph.table.add_col_before", label: "Add Column Before" },
@@ -391,6 +395,9 @@ export const MENUS: TopMenu[] = [
   {
     label: "Window",
     items: [
+      { id: "window.next_tab", label: "Next Tab" },
+      { id: "window.previous_tab", label: "Previous Tab" },
+      { sep: true },
       { id: "window.minimize", label: "Minimize" },
       { id: "window.maximize", label: "Zoom" },
     ],

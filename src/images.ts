@@ -6,17 +6,8 @@ import { parseImgAttrs } from "./imageattrs";
 
 /* ---------- document front matter ---------- */
 
-/** Parse leading YAML front matter (simple `key: value` lines) from a doc. */
-export function parseFrontMatter(text: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  const m = /^---\n([\s\S]*?)\n---/.exec(text);
-  if (!m) return out;
-  for (const line of m[1].split("\n")) {
-    const kv = /^([A-Za-z0-9_-]+)\s*:\s*(.*)$/.exec(line.trim());
-    if (kv) out[kv[1]] = kv[2].replace(/^["']|["']$/g, "").trim();
-  }
-  return out;
-}
+import { parseFrontMatter } from "./frontmatter";
+export { parseFrontMatter, parseYamlMetadata } from "./frontmatter";
 
 /** Front matter of the current document (its first block, if it is YAML). */
 export function currentFrontMatter(): Record<string, string> {
@@ -157,7 +148,7 @@ export function resolveImageSrc(src: string): string {
   if (!isTauri) return src;
   return resolveImagePath(src, {
     dir: docDir(),
-    rootUrl: currentFrontMatter()["image-root-url"],
+    rootUrl: (currentFrontMatter()["image-root-url"] ?? currentFrontMatter()["typora-root-url"]),
     convert: (p) => {
       try {
         return convertFileSrc(p);
@@ -170,7 +161,7 @@ export function resolveImageSrc(src: string): string {
 
 /** Absolute filesystem path of an image src, for file operations. Null if remote. */
 export function imageFsPath(src: string): string | null {
-  return toAbsImagePath(src, { dir: docDir(), rootUrl: currentFrontMatter()["image-root-url"] });
+  return toAbsImagePath(src, { dir: docDir(), rootUrl: (currentFrontMatter()["image-root-url"] ?? currentFrontMatter()["typora-root-url"]) });
 }
 
 setImageResolver(resolveImageSrc);

@@ -35,7 +35,7 @@ await build({
 
 const { activeMarks, toggleMark, scanMarks } = await import(path.join(outdir, "inlineformat.mjs"));
 const { blockKind, applyBlockKind } = await import(path.join(outdir, "blocktype.mjs"));
-const { appendTableRow, appendTableColumn, parseTable, cellRanges } = await import(
+const { appendTableRow, appendTableColumn, parseTable, cellRanges, parseTableDimension, skeletonTable } = await import(
   path.join(outdir, "tabletools.mjs")
 );
 const { SLASH_ITEMS, filterSlashItems, slashTriggerAt } = await import(
@@ -753,6 +753,23 @@ eq(dest("RELEASING.md#signing").kind, "document", "…and it still routes as a d
 // Nothing to do.
 eq(dest("").kind, "unknown", "an empty href goes nowhere");
 eq(linkDestination("RELEASING.md", null).kind, "unknown", "a relative link with no open folder cannot resolve");
+
+// Dialog drafts stay editable; invalid values must never create a coerced table.
+for (const draft of ["", " ", "0", "-1", "2.5", "NaN", "Infinity", "65"]) {
+  eq(parseTableDimension(draft, 64), null, `invalid row draft: ${JSON.stringify(draft)}`);
+}
+for (const draft of ["17", "-2", "1.5", ""]) {
+  eq(parseTableDimension(draft, 16), null, `invalid column draft: ${JSON.stringify(draft)}`);
+}
+eq(parseTableDimension("1", 64), 1, "minimum table dimension");
+eq(parseTableDimension("64", 64), 64, "maximum body row count");
+eq(parseTableDimension("16", 16), 16, "maximum column count");
+const defaultTable = parseTable(skeletonTable(3, 2));
+eq(defaultTable.rows.length, 4, "dialog body rows exclude header");
+eq(defaultTable.rows[0].length, 2, "preview columns match generated table");
+const maxTable = parseTable(skeletonTable(64, 16));
+eq(maxTable.rows.length, 65, "maximum table preserves all requested body rows");
+eq(maxTable.rows[0].length, 16, "maximum table preserves requested columns");
 
 console.log(`${passes} passed, ${failures} failed`);
 process.exit(failures ? 1 : 0);

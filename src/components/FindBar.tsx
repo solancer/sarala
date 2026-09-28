@@ -229,7 +229,7 @@ export default function FindBar() {
             </svg>
             <input
               ref={inputEl}
-              placeholder="Find"
+              aria-label="Find" placeholder="Find" aria-invalid={invalid()}
               value={query()}
               onInput={(e) => setQuery(e.currentTarget.value)}
               onKeyDown={onKeyDown}
@@ -241,22 +241,22 @@ export default function FindBar() {
           </div>
           <div class="findbar-toggles">
             <button class="find-toggle" classList={{ on: caseSensitive() }}
-              title="Match case" onClick={() => setCaseSensitive(!caseSensitive())}>Aa</button>
+              title="Match case" aria-label="Match case" aria-pressed={caseSensitive()} onClick={() => setCaseSensitive(!caseSensitive())}>Aa</button>
             <button class="find-toggle" classList={{ on: wholeWord() }}
-              title="Whole word" onClick={() => setWholeWord(!wholeWord())}>W</button>
+              title="Whole word" aria-label="Whole word" aria-pressed={wholeWord()} onClick={() => setWholeWord(!wholeWord())}>W</button>
             <button class="find-toggle mono" classList={{ on: useRegex() }}
-              title="Use regular expression" onClick={() => setUseRegex(!useRegex())}>.*</button>
+              title="Use regular expression" aria-label="Use regular expression" aria-pressed={useRegex()} onClick={() => setUseRegex(!useRegex())}>.*</button>
           </div>
-          <span class="findbar-count">{count()}</span>
-          <button class="ghost-btn" title="Previous (Shift+Enter)" onClick={() => findNext(-1)}>↑</button>
-          <button class="ghost-btn" title="Next (Enter)" onClick={() => findNext(1)}>↓</button>
-          <button class="ghost-btn" title="Toggle replace" onClick={() => setWithReplace(!withReplace())}>⇄</button>
-          <button class="ghost-btn" title="Close (Esc)" onClick={closeFind}>✕</button>
+          <span class="findbar-count" role="status">{count()}</span>
+          <button class="ghost-btn" title="Previous (Shift+Enter)" aria-label="Previous match" onClick={() => findNext(-1)}>↑</button>
+          <button class="ghost-btn" title="Next (Enter)" aria-label="Next match" onClick={() => findNext(1)}>↓</button>
+          <button class="ghost-btn" title="Toggle replace" aria-label="Toggle replace" aria-expanded={withReplace()} onClick={() => setWithReplace(!withReplace())}>⇄</button>
+          <button class="ghost-btn" title="Close (Esc)" aria-label="Close find" onClick={closeFind}>✕</button>
         </div>
         <Show when={withReplace()}>
           <div class="findbar-row">
             <input
-              placeholder="Replace with"
+              aria-label="Replace with" placeholder="Replace with"
               value={replaceWith()}
               onInput={(e) => setReplaceWith(e.currentTarget.value)}
               onKeyDown={(e) => e.key === "Escape" && closeFind()}

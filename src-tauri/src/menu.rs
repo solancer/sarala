@@ -115,7 +115,7 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .build()?;
 
     let file = SubmenuBuilder::new(app, "File")
-        .item(&mi(app, "file.new", "New", Some("CmdOrCtrl+N"))?)
+        .item(&mi(app, "file.new", "New Tab", Some("CmdOrCtrl+N"))?)
         .item(&mi(
             app,
             "file.new_window",
@@ -139,7 +139,7 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             Some("Shift+CmdOrCtrl+O"),
         )?)
         .separator()
-        .item(&mi(app, "file.close", "Close", Some("CmdOrCtrl+W"))?)
+        .item(&mi(app, "file.close", "Close Tab", Some("CmdOrCtrl+W"))?)
         .item(&mi(app, "file.save", "Save", Some("CmdOrCtrl+S"))?)
         .item(&mi(
             app,
@@ -475,6 +475,10 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             "Add Row Below",
             None,
         )?)
+        .item(&mi(app, "paragraph.table.move_row_up", "Move Table Row Up", None)?)
+        .item(&mi(app, "paragraph.table.move_row_down", "Move Table Row Down", None)?)
+        .item(&mi(app, "paragraph.table.move_col_left", "Move Column Left", None)?)
+        .item(&mi(app, "paragraph.table.move_col_right", "Move Column Right", None)?)
         .item(&mi(app, "paragraph.table.delete_row", "Delete Row", None)?)
         .separator()
         .item(&mi(app, "paragraph.table.add_col", "Add Column", None)?)
@@ -532,7 +536,7 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .item(&mi(app, "paragraph.alert.caution", "Caution", None)?)
         .build()?;
 
-    let paragraph = SubmenuBuilder::new(app, "Paragraph")
+    let paragraph = SubmenuBuilder::new(app, "Blocks")
         .item(&mi(
             app,
             "paragraph.heading.1",
@@ -857,6 +861,9 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
 
     // ---- Window ----
     let window = SubmenuBuilder::new(app, "Window")
+        .item(&mi(app, "window.next_tab", "Next Tab", None)?)
+        .item(&mi(app, "window.previous_tab", "Previous Tab", None)?)
+        .separator()
         .item(&PredefinedMenuItem::minimize(app, None)?)
         .item(&PredefinedMenuItem::maximize(app, None)?)
         .build()?;

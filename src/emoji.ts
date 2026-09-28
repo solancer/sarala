@@ -1,10 +1,10 @@
-/**
- * A curated subset of GitHub/Slack-style emoji shortcodes. Used by the renderer
- * to turn `:smile:` into a glyph and (later) by the autocomplete popup. Kept
- * deliberately small — the common set covers everyday writing without shipping
- * the full ~1800-entry table.
- */
+import { UNICODE_EMOJI } from "./data/unicode-emoji";
+import { EMOJI_CATALOG } from "./data/emoji-catalog";
+
+/** Full bundled catalog plus established Sarala aliases. No runtime requests. */
 export const EMOJI: Record<string, string> = {
+  ...EMOJI_CATALOG,
+  ...UNICODE_EMOJI,
   smile: "😄", smiley: "😃", grin: "😁", laughing: "😆", joy: "😂",
   rofl: "🤣", blush: "😊", wink: "😉", heart_eyes: "😍", kissing_heart: "😘",
   thinking: "🤔", neutral_face: "😐", expressionless: "😑", unamused: "😒",
@@ -43,16 +43,19 @@ export const EMOJI: Record<string, string> = {
   hand: "✋", raising_hand: "🙋", shrug: "🤷", facepalm: "🤦",
 };
 
+const EMOJI_NAMES = Object.keys(EMOJI).sort();
+
 /** Look up a shortcode (without the surrounding colons). */
 export function emojiFor(name: string): string | undefined {
-  return EMOJI[name];
+  return Object.hasOwn(EMOJI, name) ? EMOJI[name] : undefined;
 }
 
 /** Shortcodes whose name starts with `prefix` (for autocomplete), capped. */
 export function emojiMatches(prefix: string, limit = 8): { name: string; glyph: string }[] {
   const p = prefix.toLowerCase();
   const out: { name: string; glyph: string }[] = [];
-  for (const name in EMOJI) {
+  if (limit <= 0) return out;
+  for (const name of EMOJI_NAMES) {
     if (name.startsWith(p)) {
       out.push({ name, glyph: EMOJI[name] });
       if (out.length >= limit) break;
@@ -60,3 +63,7 @@ export function emojiMatches(prefix: string, limit = 8): { name: string; glyph: 
   }
   return out;
 }
+
+/** Unicode aliases in the catalog include accented names and punctuation. */
+export const EMOJI_NAME = "[\\p{L}\\p{N}_+!#&()*.’-]+";
+export const emojiShortcode = () => new RegExp(`:(${EMOJI_NAME}):`, "u");

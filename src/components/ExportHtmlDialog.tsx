@@ -1,3 +1,4 @@
+import ModalFrame from "./ModalFrame";
 import { Show, createSignal } from "solid-js";
 
 const [visible, setVisible] = createSignal(false);
@@ -24,7 +25,7 @@ export default function ExportHtmlDialog() {
   return (
     <Show when={visible()}>
       <div class="about-backdrop" onMouseDown={(e) => e.target === e.currentTarget && choose(null)}>
-        <div class="export-dialog" onKeyDown={(e) => e.key === "Escape" && choose(null)} tabindex="-1">
+        <ModalFrame class="export-dialog" label="Export HTML" onClose={() => choose(null)}>
           <h3>Export HTML</h3>
           <p>Include an outline sidebar (table of contents) in the exported page?</p>
           <div class="export-dialog-actions">
@@ -32,7 +33,7 @@ export default function ExportHtmlDialog() {
             <button class="ghost-btn" onClick={() => choose(false)}>No outline</button>
             <button class="ghost-btn primary" onClick={() => choose(true)}>With outline</button>
           </div>
-        </div>
+        </ModalFrame>
       </div>
     </Show>
   );

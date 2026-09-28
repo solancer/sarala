@@ -6,13 +6,13 @@ import {
   setCopyImageToAssets, setCopyImagesToFolder, setTableFullWidth, bumpRenderEpoch,
   setTheme, setZoom, clampZoom, THEMES, type ThemeId,
   setSidebarWidth, clampSidebar, setStatusBarVisible,
-  setMathAltDelimitersSig, setMathFenceSig,
+  setMathAltDelimitersSig, setMathFenceSig, setMathAutoNumberSig, setPhysicsEnabledSig, setHtmlEmbedsSig, setImageUploadUrl,
   setEmojiEnabledSig, setHighlightEnabledSig, setSubSupEnabledSig, setAutolinkEnabledSig,
   setProseFont, setMonoFont, setOpenFolders, openFolders, setCustomScheme, customScheme,
 } from "./store";
 import { applyProseFont, applyMonoFont } from "./fonts";
 import {
-  setPreserveBreaksOption, setMathAltDelimiters, setMathFence,
+  setPreserveBreaksOption, setMathAltDelimiters, setMathFence, setMathAutoNumber, setPhysicsEnabled, setHtmlEmbeds,
   setEmojiEnabled, setHighlightEnabled, setSubSupEnabled, setAutolinkEnabled,
 } from "./markdown";
 import { setLiveHighlight, setLiveSubSup } from "./livesource";
@@ -134,6 +134,13 @@ function hydrateStore() {
   const altDelim = getSetting("mathAltDelimiters", false);
   setMathAltDelimitersSig(altDelim);
   setMathAltDelimiters(altDelim);
+  setImageUploadUrl(getSetting("imageUploadUrl", ""));
+  const embeds = getSetting("htmlEmbeds", false);
+  setHtmlEmbedsSig(embeds); setHtmlEmbeds(embeds);
+  const physics = getSetting("physicsEnabled", false);
+  setPhysicsEnabledSig(physics); setPhysicsEnabled(physics);
+  const numbering = getSetting("mathAutoNumber", false);
+  setMathAutoNumberSig(numbering); setMathAutoNumber(numbering);
   const mFence = getSetting("mathFence", false);
   setMathFenceSig(mFence);
   setMathFence(mFence);

@@ -1,3 +1,4 @@
+import ModalFrame from "./ModalFrame";
 import { For, Show, createMemo, createSignal, createEffect } from "solid-js";
 import { fileTree, quickOpenVisible, setQuickOpenVisible } from "../store";
 import type { FileNode } from "../platform";
@@ -42,7 +43,7 @@ export default function QuickOpen() {
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Escape") { e.preventDefault(); close(); }
-    if (e.key === "ArrowDown") { e.preventDefault(); setCursor((c) => Math.min(c + 1, matches().length - 1)); }
+    if (e.key === "ArrowDown") { e.preventDefault(); setCursor((c) => Math.max(0, Math.min(c + 1, matches().length - 1))); }
     if (e.key === "ArrowUp") { e.preventDefault(); setCursor((c) => Math.max(c - 1, 0)); }
     if (e.key === "Enter") {
       e.preventDefault();
@@ -54,9 +55,12 @@ export default function QuickOpen() {
   return (
     <Show when={quickOpenVisible()}>
       <div class="quick-open-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-        <div class="quick-open">
+        <ModalFrame class="quick-open" label="Open file" onClose={close}>
           <input
             ref={inputEl}
+            role="combobox" aria-label="Find a file" aria-autocomplete="list"
+            aria-expanded={matches().length > 0} aria-controls={matches().length ? "quick-file-results" : undefined}
+            aria-activedescendant={matches().length ? `quick-file-option-${cursor()}` : undefined}
             placeholder="Open quickly…"
             value={query()}
             onInput={(e) => { setQuery(e.currentTarget.value); setCursor(0); }}
@@ -66,13 +70,13 @@ export default function QuickOpen() {
             autocapitalize="off"
             spellcheck={false}
           />
-          <Show when={matches().length} fallback={<div class="quick-open-empty">No matching files</div>}>
-            <ul>
+          <Show when={matches().length} fallback={<div class="quick-open-empty" role="status">No matching files</div>}>
+            <ul id="quick-file-results" role="listbox" aria-label="Files">
               <For each={matches()}>
                 {(f, i) => (
-                  <li
+                  <li role="option" id={`quick-file-option-${i()}`} aria-selected={i() === cursor()}
                     classList={{ selected: i() === cursor() }}
-                    onMouseDown={() => pick(f.path)}
+                    onMouseDown={(e) => e.preventDefault()} onClick={() => pick(f.path)}
                     onMouseMove={() => setCursor(i())}
                   >
                     <span class="qo-name">{f.name}</span>
@@ -82,7 +86,7 @@ export default function QuickOpen() {
               </For>
             </ul>
           </Show>
-        </div>
+        </ModalFrame>
       </div>
     </Show>
   );

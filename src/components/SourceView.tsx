@@ -1,5 +1,5 @@
-import { createEffect } from "solid-js";
-import { fullText, replaceAll, setSourceCaret } from "../store";
+import { createEffect, onMount } from "solid-js";
+import { fullText, replaceAll, setSourceCaret, currentTabView } from "../store";
 
 export default function SourceView() {
   let el: HTMLTextAreaElement | undefined;
@@ -28,12 +28,18 @@ export default function SourceView() {
     queueMicrotask(fit);
   });
 
+  onMount(() => {
+    const view = currentTabView();
+    el?.setSelectionRange(view.sourceStart, view.sourceEnd);
+    reportCaret();
+  });
+
   return (
     <div class="editor">
       <div class="page">
         <textarea
           ref={el}
-          class="source-full"
+          class="source-full" aria-label="Markdown source"
           value={fullText()}
           onInput={(e) => {
             replaceAll(e.currentTarget.value);

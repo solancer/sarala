@@ -106,7 +106,7 @@ export default function SearchPanel(props: Props) {
         </svg>
         <input
           class="search-input"
-          placeholder="Search in folder…"
+          aria-label="Search in folder…" placeholder="Search in folder…"
           value={query()}
           onInput={(e) => setQuery(e.currentTarget.value)}
           autocomplete="off"
@@ -117,13 +117,13 @@ export default function SearchPanel(props: Props) {
       </div>
       <div class="search-toggles">
         <button class="find-toggle" classList={{ on: caseSensitive() }}
-          title="Match case" onClick={() => setCaseSensitive(!caseSensitive())}>Aa</button>
+          title="Match case" aria-label="Match case" aria-pressed={caseSensitive()} onClick={() => setCaseSensitive(!caseSensitive())}>Aa</button>
         <button class="find-toggle" classList={{ on: wholeWord() }}
-          title="Whole word" onClick={() => setWholeWord(!wholeWord())}>W</button>
+          title="Whole word" aria-label="Whole word" aria-pressed={wholeWord()} onClick={() => setWholeWord(!wholeWord())}>W</button>
         <button class="find-toggle mono" classList={{ on: regex() }}
-          title="Use regular expression" onClick={() => setRegex(!regex())}>.*</button>
+          title="Use regular expression" aria-label="Use regular expression" aria-pressed={regex()} onClick={() => setRegex(!regex())}>.*</button>
         <Show when={query().trim() && !searching()}>
-          <span class="search-summary">{totalMatches()} in {results().length}</span>
+          <span class="search-summary" role="status">{totalMatches()} in {results().length}</span>
         </Show>
       </div>
 

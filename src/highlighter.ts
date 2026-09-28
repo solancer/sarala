@@ -1,5 +1,6 @@
 import { bumpRenderEpoch } from "./store";
 import { setCodeHighlighter } from "./markdown";
+import { setLiveCodeHighlighter } from "./livesource";
 
 /**
  * Syntax highlighting via Shiki (TextMate grammars + VS Code themes — the same
@@ -77,4 +78,5 @@ export function codeLanguages(): string[] {
 }
 
 setCodeHighlighter(highlightCode);
+setLiveCodeHighlighter(highlightCode);
 void initHighlighter();

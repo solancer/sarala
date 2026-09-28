@@ -31,7 +31,7 @@ globalThis.NodeFilter = dom.window.NodeFilter;
 globalThis.HTMLElement = dom.window.HTMLElement;
 globalThis.Text = dom.window.Text;
 
-const { styleSource, applyMarkerVisibility } = await import(outfile);
+const { styleSource, applyMarkerVisibility, mapRenderedPrefixToSource, setCaret, getCaretOffset } = await import(outfile);
 
 let failures = 0;
 let passes = 0;
@@ -46,9 +46,40 @@ function assert(cond, label) {
 
 const host = () => dom.window.document.createElement("div");
 
+/* Underline uses the same hidden-marker and caret rules as bold. */
+for (const source of [
+  "Reading this <u>article</u> helps readers.",
+  "- Read <u>this **important** article</u> next",
+  "A <u>multi\nline article</u> here",
+  "An <U>article</U> here",
+  "An <u>article with `code`</u> here",
+]) {
+  const el = host();
+  el.innerHTML = styleSource(source);
+  assert(el.textContent === source, "underline preserves exact source");
+  assert(!!el.querySelector("u"), "underline receives semantic styling");
+  applyMarkerVisibility(el, source, source.indexOf("article") + 2);
+  assert(!el.querySelector(".md-on"), "click inside underline keeps tags hidden");
+  applyMarkerVisibility(el, source, source.toLowerCase().indexOf("<u>") + 1);
+  assert(!!el.querySelector(".md-on > u"), "underline delimiter remains editable");
+}
+{
+  const el = host();
+  el.innerHTML = styleSource("Literal `<u>article</u>` code");
+  assert(!el.querySelector("u"), "underline in code stays literal");
+}
+
 /* ---------- textContent roundtrip ---------- */
 
 const SAMPLES = [
+  "### 1.1 Tech stack\n- **Language:** Java\n- **Modules:** `billing` and services",
+  "9) nine\n1) ten\n   - nested\n     continuation\n1) eleven",
+  "- first\n\n  continued paragraph\n- second",
+  "- [x] complete\n  - [ ] nested task\n- last\n",
+  "- parent\n  3. nested ordered\n  1. next\n- sibling",
+  "- [ ] ",
+  "-\titem\n\t-\tnested",
+  "- item\n  ```js\n  foo()\n  ```",
   "plain paragraph",
   "# Heading",
   "###   spaced heading",
@@ -98,7 +129,7 @@ assert(styleSource("- item").includes("md-tok md-pre md-bullet"), "bullet marker
 assert(styleSource("- [ ] t").includes("md-task"), "task marker wrapped");
 assert(styleSource("- [x] t").includes("md-task md-done"), "checked task marker flagged");
 assert(styleSource("> q").includes("md-quote-pre"), "quote marker wrapped");
-assert(!styleSource("1. x").includes("md-tok"), "ordered marker stays always-visible (no token)");
+assert(styleSource("1. x").includes('data-number="1."'), "ordered marker has a rendered number stand-in");
 assert(styleSource("1) x").includes("md-olnum"), "1) ordered marker styled like 1.");
 assert(styleSource("==hi==").includes("<mark>"), "highlight ==text== styled as <mark> in source");
 assert(styleSource("H~2~O").includes("<sub>"), "single tilde ~x~ styled as <sub>");
@@ -107,6 +138,90 @@ assert(styleSource("~~gone~~").includes("<del>") && !styleSource("~~gone~~").inc
   "~~strike~~ wins over single-tilde subscript");
 assert(styleSource("> [!WARNING]\n> body").includes("md-alert-tag md-alert-warning"),
   "alert marker tagged in the live block");
+
+/* Quotes and every callout retain source while using preview block layout. */
+for (const type of ["NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION"]) {
+  const source = `> [!${type}]\n> A **styled** body with \`code\`.\n> Continued text.\n>\n> - First\n> - Second`;
+  const el = host(); el.innerHTML = styleSource(source);
+  assert(el.textContent === source, `${type}: exact source retained`);
+  assert(!!el.querySelector(`.md-alert-${type.toLowerCase()} .md-source-alert-title`), `${type}: preview callout title`);
+  assert(!!el.querySelector(".md-alert .md-list"), `${type}: nested list uses structured layout`);
+  applyMarkerVisibility(el, source, source.indexOf("body") + 2);
+  assert(!el.querySelector(".md-on"), `${type}: body click keeps syntax hidden`);
+  const title = type[0] + type.slice(1).toLowerCase();
+  const caret = mapRenderedPrefixToSource(source, title + "A styled bo");
+  assert(caret === source.indexOf("body") + 2, `${type}: title doesn't corrupt body click offset`);
+}
+for (const source of [
+  "> A soft-wrapped\n> paragraph", "> First\n>\n> Second", "> Parent\n> > Nested\n> > continued",
+  "> - First\n> - Second", "> \`\`\`js\n> const x = 1;\n> \`\`\`", "> quote\nlazy continuation", "> [!NOTE] Inline body",
+]) {
+  const el = host(); el.innerHTML = styleSource(source);
+  assert(el.textContent === source, `quote roundtrip: ${source}`);
+  assert(!!el.querySelector(".md-layout-quote, .md-alert"), "quote has continuous container");
+}
+
+/* ---------- loose lists stay one document block ---------- */
+{
+  const out = path.join(here, ".build", "list-markdown.mjs");
+  await build({ entryPoints: [path.join(here, "..", "src", "markdown.ts")], bundle: true, format: "esm", outfile: out });
+  const { splitBlocks } = await import(out);
+  const list = "1. First\n\n1. Second\n\n   Continuation paragraph";
+  const blocks = splitBlocks("## Section\n\n" + list + "\n\nOutside paragraph");
+  assert(blocks.length === 3 && blocks[1] === list, "loose ordered list stays whole between surrounding blocks");
+  assert(splitBlocks("- Alpha\n\n- Bravo").length === 1, "loose bullet list stays whole");
+  assert(splitBlocks("Paragraph one\n\nParagraph two").length === 2, "ordinary paragraphs still split");
+}
+
+/* ---------- list layout and click offsets ---------- */
+{
+  const src = "### 1.1 Tech stack\n- **Language:** Java\n- **Modules:** shared services";
+  const el = host();
+  el.innerHTML = styleSource(src);
+  assert(el.querySelectorAll(".md-layout-heading").length === 1, "mixed block retains a separate heading");
+  assert(el.querySelectorAll(".md-list-item").length === 2, "mixed block retains both list items");
+  assert(el.querySelector(".md-layout-heading + .md-layout-space + .md-list"), "heading and list are siblings");
+  const numbered = host();
+  numbered.innerHTML = styleSource("9) First\n1) Second\n1) Third");
+  assert([...numbered.querySelectorAll(".md-olnum")].map((n) => n.dataset.number).join(",") === "9.,10.,11.",
+    "ordered list display follows Markdown numbering without rewriting source");
+  applyMarkerVisibility(numbered, numbered.textContent, 12);
+  assert(numbered.textContent === "9) First\n1) Second\n1) Third", "number reveal preserves source markers");
+  const prefix = "1.1 Tech stack\n\nLanguage: Java\nModules: shared";
+  assert(mapRenderedPrefixToSource(src, prefix) === src.indexOf("shared") + "shared".length,
+    "renderer-added whitespace does not move a click past the clicked list text");
+}
+
+/* ---------- soft wraps and text clicks retain preview styling ---------- */
+for (const prefix of ["", "- ", "9) "]) {
+  const body = "The snap is **not** built here. It uses the **Snap Store\nbuild service**, with *multi-line\nemphasis* and `core22`.";
+  const src = prefix + body;
+  const el = host();
+  el.innerHTML = styleSource(src);
+  assert(el.textContent === src, "soft-wrap source preserved: " + prefix);
+  assert([...el.querySelectorAll("strong")].some((n) => n.textContent === "Snap Store\nbuild service"),
+    "bold across source newline remains styled: " + prefix);
+  assert(el.querySelector("em")?.textContent === "multi-line\nemphasis", "italic across source newline: " + prefix);
+  for (const caret of [prefix.length, src.indexOf("Snap") + 2, src.indexOf("core22") + 2, src.length]) {
+    applyMarkerVisibility(el, src, caret);
+    assert(!el.querySelector(".md-on"), "content clicks conceal syntax: " + prefix + caret);
+  }
+}
+for (const src of ["one  \ntwo", "one\\\ntwo", "- one  \n  two"]) {
+  const el = host(); el.innerHTML = styleSource(src);
+  assert(el.textContent === src, "hard break preserves source");
+  assert(el.querySelector(".md-hard-break"), "explicit hard break retains line break");
+}
+
+{
+  const src = "- **Bold** item";
+  const el = host(); el.innerHTML = styleSource(src); document.body.append(el);
+  const offset = src.indexOf("Bold");
+  applyMarkerVisibility(el, src, offset); setCaret(el, offset);
+  assert(window.getSelection().anchorNode.parentElement.tagName === "STRONG", "caret at bold start uses visible text node");
+  assert(getCaretOffset(el) === offset, "visible caret retains exact source offset");
+  el.remove();
+}
 
 /* ---------- table structure ---------- */
 {
@@ -208,7 +323,7 @@ assert(!styleSource("| lone | row |").includes("md-table"),
   const tokOn = () => el.querySelector(".md-tok").classList.contains("md-on");
 
   applyMarkerVisibility(el, src, 4);
-  assert(tokOn(), "caret inside bold reveals markers");
+  assert(!tokOn(), "caret in bold content keeps markers concealed");
   applyMarkerVisibility(el, src, 0);
   assert(!tokOn(), "caret outside bold hides markers");
   applyMarkerVisibility(el, src, 2);
@@ -234,7 +349,7 @@ assert(!styleSource("| lone | row |").includes("md-table"),
   applyMarkerVisibility(el, src, 7); // end of heading line
   assert(!preTok(), "caret at heading line end hides hashes");
   applyMarkerVisibility(el, src, 3); // start of the text = prefix end edge
-  assert(preTok(), "caret at text start (prefix edge) reveals hashes — keeps them reachable");
+  assert(!preTok(), "caret at heading text start keeps hashes concealed");
   applyMarkerVisibility(el, src, 1); // inside the hashes
   assert(preTok(), "caret inside hashes reveals them");
   applyMarkerVisibility(el, src, 12); // on the body line
@@ -275,7 +390,9 @@ assert(!styleSource("| lone | row |").includes("md-table"),
   );
   assert(url.closest(".md-tok") === tok, "URL span is inside the link token");
   applyMarkerVisibility(el, src, 4); // inside the label
-  assert(tok.classList.contains("md-on"), "caret inside link reveals brackets and URL");
+  assert(!tok.classList.contains("md-on"), "caret inside link label keeps brackets and URL concealed");
+  applyMarkerVisibility(el, src, 10);
+  assert(tok.classList.contains("md-on"), "caret inside link URL reveals editable syntax");
 }
 
 /* ---------- nested token: link inside bold, independent ranges ---------- */
@@ -719,6 +836,54 @@ assert(!styleSource("| lone | row |").includes("md-table"),
   assert(readableText("#f1e05a") === "#1a1a1a", "yellow chip uses dark text");
   assert(readableText("#3178c6") === "#ffffff", "blue chip uses white text");
   assert(readableText("not-a-color") === "#ffffff", "non-hex defaults to white text");
+}
+
+/* ---------- code snippets nested under list items ---------- */
+{
+  const { readFile } = await import("node:fs/promises");
+  const { createHighlighter } = await import("shiki");
+  const { setLiveCodeHighlighter } = await import(outfile);
+  const highlighter = await createHighlighter({ themes: ["github-light", "github-dark"], langs: ["bash"] });
+  setLiveCodeHighlighter((source, lang) => highlighter.codeToHtml(source, {
+    lang: lang === "sh" ? "bash" : "text",
+    themes: { light: "github-light", dark: "github-dark" }, defaultColor: "light",
+  }));
+  const releasing = await readFile(path.join(here, "..", "RELEASING.md"), "utf8");
+  const sample = releasing.slice(releasing.indexOf("1. **Register the name**"), releasing.indexOf("> **First-revision review:**")).trimEnd();
+  const el = host();
+  el.innerHTML = styleSource(sample);
+  assert(el.textContent === sample, "release instructions retain exact Markdown while highlighted");
+  assert(el.querySelectorAll(".md-layout-code").length === 1, "nested fenced code has its own code box");
+  assert(el.querySelector(".md-layout-code .md-code-content span[style*='color']"), "nested code keeps Shiki token colors");
+  const content = el.querySelector(".md-code-content");
+  assert(content.textContent === "snapcraft register sarala", "nested code body excludes hidden fences");
+  const codeSpan = content.querySelector("span[style]");
+  assert(codeSpan?.getAttribute("style")?.includes("--shiki-dark"), "nested highlighting supports dark themes");
+  for (const caret of [sample.indexOf("once") + 2, sample.indexOf("snapcraft register"), sample.indexOf("register sarala") + 3]) {
+    applyMarkerVisibility(el, sample, caret);
+    assert(el.textContent === sample, "list/code click keeps all source text intact");
+    assert(!el.querySelector(".md-layout-code .md-on"), "code body clicks keep fences concealed");
+  }
+  applyMarkerVisibility(el, sample, sample.indexOf("once") + 2);
+  assert(!el.querySelector(".md-layout-code .md-on"), "clicking list text leaves nested fence syntax concealed");
+  const link = [...el.querySelectorAll(".md-link")].find((n) => n.textContent.includes("snapcraft.io"));
+  assert(link?.textContent === "https://snapcraft.io/sarala/builds", "autolink is styled without visible angle brackets");
+  assert(link?.parentElement.querySelectorAll(".md-mark").length === 2, "autolink delimiters remain source-backed markers");
+  for (const src of [
+    "- Run:\n\n  ```sh\n  echo first\n  echo second\n  ```\n\n- Next",
+    "1. Run:\n\n   ~~~sh\n   echo ok\n   ~~~\n\n2. Next",
+    "- Run:\n\n      echo first\n      echo second\n\n- Next",
+    "- Parent\n  - Run:\n\n    ```sh\n    echo nested\n    ```",
+    "- Run:\n\n  ```sh\n  ```\n\n- Next",
+    "- Run:\n\n  ```sh\n  echo unclosed",
+    "- Run:\n\n  ```sh\n  echo first\n\n  echo last\n  ```",
+  ]) {
+    el.innerHTML = styleSource(src);
+    assert(el.textContent === src, `nested code roundtrip: ${JSON.stringify(src)}`);
+    assert(el.querySelector(".md-layout-code"), "fenced and indented snippets both retain a code box");
+  }
+  setLiveCodeHighlighter(() => null);
+  highlighter.dispose();
 }
 
 console.log(`${passes} passed, ${failures} failed`);

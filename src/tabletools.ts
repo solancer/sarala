@@ -17,13 +17,26 @@ export interface PipeTable {
   rows: string[][];
 }
 
+/** Split on structural pipes only; keep escapes intact for lossless edits. */
+export function splitPipeRow(line: string): string[] {
+  const parts: string[] = [];
+  let start = 0, slashes = 0;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === "|" && slashes % 2 === 0) {
+      parts.push(line.slice(start, i));
+      start = i + 1;
+    }
+    slashes = line[i] === "\\" ? slashes + 1 : 0;
+  }
+  parts.push(line.slice(start));
+  return parts;
+}
+
 function splitRow(line: string): string[] {
-  return line
-    .trim()
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split("|")
-    .map((c) => c.trim());
+  const parts = splitPipeRow(line.trim());
+  if (parts[0] === "") parts.shift();
+  if (parts.at(-1) === "") parts.pop();
+  return parts.map(c => c.trim());
 }
 
 const SEPARATOR_CELL = /^:?-{1,}:?$/;
@@ -44,6 +57,8 @@ export function parseTable(text: string): PipeTable | null {
   });
 
   const width = align.length;
+  // Refuse structural edits on ragged tables rather than discarding extra cells.
+  if ([lines[0], ...lines.slice(2)].some(line => splitRow(line).length > width)) return null;
   const rows = [lines[0], ...lines.slice(2)].map((l) => {
     const cells = splitRow(l);
     while (cells.length < width) cells.push("");
@@ -61,6 +76,13 @@ export function serializeTable(t: PipeTable): string {
   });
   const row = (cells: string[]) => `| ${cells.join(" | ")} |`;
   return [row(t.rows[0]), row(sep), ...t.rows.slice(1).map(row)].join("\n");
+}
+
+/** Validate dialog drafts without coercing empty, fractional, or oversized values. */
+export function parseTableDimension(value: string, max: number): number | null {
+  if (!value.trim()) return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= max ? n : null;
 }
 
 /** New table markdown: `cols` columns, a header, and `rows` empty body rows. */
@@ -90,8 +112,7 @@ function rowForLine(line: number): number {
 export function columnAtOffset(text: string, offset: number): number {
   const lineStart = text.lastIndexOf("\n", offset - 1) + 1;
   const before = text.slice(lineStart, offset);
-  let pipes = 0;
-  for (const ch of before) if (ch === "|") pipes++;
+  const pipes = splitPipeRow(before).length - 1;
   return Math.max(0, before.trimStart().startsWith("|") ? pipes - 1 : pipes);
 }
 
@@ -142,7 +163,7 @@ export function cellRanges(text: string): { start: number; end: number }[] {
   let offset = 0;
   lines.forEach((line, i) => {
     if (i !== 1 && line.includes("|")) {
-      const parts = line.split("|");
+      const parts = splitPipeRow(line);
       let pos = offset;
       for (let k = 0; k < parts.length; k++) {
         const a = pos;
@@ -203,7 +224,8 @@ export type TableEdit =
   | { kind: "delete_row" }
   | { kind: "add_col"; before?: boolean }
   | { kind: "delete_col" }
-  | { kind: "align"; align: Align };
+  | { kind: "align"; align: Align }
+  | { kind: "move_row" | "move_col"; direction: -1 | 1 };
 
 /** Apply a table edit at a caret offset; returns null if text isn't a table. */
 export function editTable(text: string, offset: number, edit: TableEdit): string | null {
@@ -214,6 +236,19 @@ export function editTable(text: string, offset: number, edit: TableEdit): string
   const emptyRow = () => Array.from({ length: t.align.length }, () => "  ");
 
   switch (edit.kind) {
+    case "move_row": {
+      const to = row + edit.direction;
+      if (row === 0 || to < 1 || to >= t.rows.length) return text;
+      [t.rows[row], t.rows[to]] = [t.rows[to], t.rows[row]];
+      break;
+    }
+    case "move_col": {
+      const to = col + edit.direction;
+      if (to < 0 || to >= t.align.length) return text;
+      [t.align[col], t.align[to]] = [t.align[to], t.align[col]];
+      for (const cells of t.rows) [cells[col], cells[to]] = [cells[to], cells[col]];
+      break;
+    }
     case "row_above":
       // Never insert above the header — that would break the table shape.
       t.rows.splice(Math.max(1, row), 0, emptyRow());
@@ -276,4 +311,17 @@ export function prettifyTable(text: string): string | null {
     return "-".repeat(w);
   }).join(" | ") + " |";
   return [row(t.rows[0]), sep, ...t.rows.slice(1).map(row)].join("\n");
+}
+
+/** Move an entire body row or column, preserving its cells and alignment. */
+export function moveTablePart(text: string, axis: "row" | "column", from: number, to: number): string | null {
+  const table = parseTable(text);
+  if (!table) return null;
+  const count = axis === "row" ? table.rows.length : table.align.length;
+  const minimum = axis === "row" ? 1 : 0;
+  if (![from, to].every(n => Number.isInteger(n) && n >= minimum && n < count) || from === to) return text;
+  const move = <T>(items: T[]) => { const [item] = items.splice(from, 1); items.splice(to, 0, item); };
+  if (axis === "row") move(table.rows);
+  else { move(table.align); table.rows.forEach(move); }
+  return serializeTable(table);
 }

@@ -1,3 +1,4 @@
+import ModalFrame from "./ModalFrame";
 /**
  * Custom theme editor — sixteen base16 swatches plus scheme import/export.
  *
@@ -8,7 +9,7 @@
  * that have to stay mutually consistent by hand.
  */
 
-import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createSignal } from "solid-js";
 import {
   BASE16_ROLES, BASE16_SLOTS, DEFAULT_SCHEME, base16ToTokens, normHex,
   parseBase16, toBase16Yaml, type Base16Slot,
@@ -26,18 +27,6 @@ export function openThemeEditor() {
 export default function ThemeEditor() {
   const [paste, setPaste] = createSignal("");
 
-  // Document-level, so Escape closes it wherever focus happens to be — the
-  // panel's own onKeyDown only fired while focus was inside it.
-  onMount(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!visible() || e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      setVisible(false);
-    };
-    document.addEventListener("keydown", onKey, true);
-    onCleanup(() => document.removeEventListener("keydown", onKey, true));
-  });
   const [error, setError] = createSignal<string | null>(null);
   const [importing, setImporting] = createSignal(false);
 
@@ -76,7 +65,7 @@ export default function ThemeEditor() {
           judge a colour is expected — and would otherwise throw away the panel
           mid-edit. Escape and the close button are the ways out. */}
       <div class="settings-backdrop theme-editor-backdrop">
-        <div class="theme-editor" tabindex="-1">
+        <ModalFrame class="theme-editor" label="Custom theme" onClose={() => setVisible(false)}>
           <div class="settings-head">
             <span class="settings-title">Custom theme</span>
             <button class="ip-close" title="Close" onClick={() => setVisible(false)}>
@@ -192,7 +181,7 @@ export default function ThemeEditor() {
               </div>
             </div>
           </Show>
-        </div>
+        </ModalFrame>
       </div>
     </Show>
   );

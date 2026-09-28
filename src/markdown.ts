@@ -1,8 +1,12 @@
-import { Marked, type Tokens } from "marked";
+import { Marked, Lexer, type Tokens } from "marked";
 import DOMPurify from "dompurify";
 import katex from "katex";
+import "katex/dist/contrib/mhchem.mjs";
+import { planEquation, type EquationPlan } from "./equations";
+import { expandPhysics } from "./physics";
 import { slugBase } from "./slug";
-import { emojiFor } from "./emoji";
+import { parseLegacyDiagram } from "./legacydiagrams";
+import { emojiFor, emojiShortcode } from "./emoji";
 
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -14,6 +18,15 @@ const escapeAttr = (s: string) =>
 /* ---------- math preferences (gated, off by default) ---------- */
 
 let mathAltDelimiters = false; // \( \) and \[ \]
+let htmlEmbeds = false;
+export function setHtmlEmbeds(on: boolean) { htmlEmbeds = on; }
+let physicsEnabled = false;
+export function setPhysicsEnabled(on: boolean) { physicsEnabled = on; }
+let mathAutoNumber = false;
+let equationCursor = 0;
+let equationPlans: EquationPlan[] = [];
+let equationLabels = new Map<string, string>();
+export function setMathAutoNumber(on: boolean) { mathAutoNumber = on; }
 let mathFence = false; //  ```math  fenced block
 export function setMathAltDelimiters(on: boolean) {
   mathAltDelimiters = on;
@@ -56,6 +69,7 @@ let mathErrored = false;
 // Resolve a markdown image src to a loadable URL (relative→doc dir, Tauri
 // asset protocol). Injected by images.ts; identity until then / in browser.
 let imageResolver: (src: string) => string = (s) => s;
+export function resolveMarkdownImage(src: string) { return imageResolver(src); }
 export function setImageResolver(fn: (src: string) => string) {
   imageResolver = fn;
 }
@@ -68,14 +82,25 @@ export function setCodeHighlighter(fn: (code: string, lang: string) => string | 
 }
 
 function renderMathHtml(tex: string, display: boolean): string {
-  const t = tex.trim();
+  const plan = display ? equationPlans[equationCursor++] ?? planEquation(tex, 0, mathAutoNumber) : null;
+  let t = plan?.tex ?? tex.trim();
+  t = t.replace(/\\(eqref|ref)\{([^}]+)\}/g, (_, kind, name) => {
+    const value = equationLabels.get(name) ?? "??";
+    const label = kind === "eqref" ? `(${value})` : value;
+    return equationLabels.has(name) ? `\\href{#eq-${encodeURIComponent(name)}}{${label}}` : label;
+  });
+
   try {
+    t = expandPhysics(t, 0, physicsEnabled);
     const html = katex.renderToString(t, {
       displayMode: display,
       throwOnError: true,
       strict: false,
+      trust: context => context.command === "\\href" && !!context.url?.startsWith("#eq-"),
+
     });
-    return display ? `<div class="math-block">${html}</div>` : html;
+    const anchors = plan ? [...plan.labels.keys()].map(label => `<span id="eq-${escapeAttr(label)}" class="equation-anchor"></span>`).join("") : "";
+    return display ? `<div class="math-block">${anchors}${html}</div>` : html;
   } catch (e) {
     mathErrored = true;
     const msg = e instanceof Error ? e.message : String(e);
@@ -84,16 +109,55 @@ function renderMathHtml(tex: string, display: boolean): string {
   }
 }
 
-function stashMath(tex: string, display: boolean): string {
-  mathStash.push(renderMathHtml(tex, display));
+function stashMath(tex: string, display: boolean, source?: string): string {
+  const html = renderMathHtml(tex, display);
+  mathStash.push(source && !display ? `<span data-math-source="${escapeAttr(source)}">${html}</span>` : html);
   const i = mathStash.length - 1;
   return display ? `<div data-math="${i}"></div>` : `<span data-math="${i}"></span>`;
 }
 
 const marked = new Marked({ gfm: true, breaks: false });
+let footnoteCounts = new Map<string, number>();
+let footnoteDescriptions = new Map<string, string>();
+
+let referenceCacheSource = "";
+let referenceCache = new Lexer().tokens.links;
+let documentProvider: () => { id: number; text: string }[] = () => [];
+export function setMarkdownDocumentProvider(provider: typeof documentProvider) { documentProvider = provider; }
+export function inlineSourceTokens(source: string) {
+  const lexer = new Lexer(marked.defaults);
+  const docSource = documentProvider().map(b => b.text).join("\n\n");
+  if (docSource !== referenceCacheSource) {
+    referenceCacheSource = docSource;
+    referenceCache = marked.lexer(docSource).links;
+  }
+  lexer.tokens.links = referenceCache;
+  const tokens = lexer.inlineTokens(source);
+  if (marked.defaults.walkTokens) marked.walkTokens(tokens, marked.defaults.walkTokens);
+  return tokens;
+}
 
 marked.use({
   extensions: [
+    {
+      name: "footnoteDef", level: "block",
+      start(src: string) { return src.match(/^ {0,3}\[\^[^\]\s]+\]:/m)?.index; },
+      tokenizer(src: string) {
+        const match = /^ {0,3}\[\^([^\]\s]+)\]:[ \t]*(.*)(?:\n|$)/.exec(src);
+        if (!match) return undefined;
+        let raw = match[0], body = match[2];
+        const rest = src.slice(raw.length);
+        const continuation = /^(?:(?:[ \t]*\n)*(?: {4}|\t)[^\n]*(?:\n|$))*/.exec(rest)![0];
+        raw += continuation;
+        if (continuation) body += "\n" + continuation.replace(/^(?: {4}|\t)/gm, "");
+        return { type: "footnoteDef", raw, id: match[1], text: body, tokens: this.lexer.blockTokens(body) };
+      },
+      renderer(token) {
+        const id = escapeAttr(String(token.id));
+        const body = this.parser.parse(token.tokens as Tokens.Generic[]);
+        return `<ol class="footnotes"><li class="footnote-def" id="fn-${id}">${body}<a class="footnote-backref" href="#fnref-${id}" aria-label="Back to reference">↩</a></li></ol>`;
+      },
+    },
     {
       name: "inlineMath",
       level: "inline",
@@ -114,7 +178,7 @@ marked.use({
         return undefined;
       },
       renderer(token) {
-        return stashMath((token as Tokens.Generic).text as string, false);
+        return stashMath((token as Tokens.Generic).text as string, false, token.raw);
       },
     },
     {
@@ -225,12 +289,13 @@ marked.use({
       // Only fire on a complete :shortcode: — a bare ":" (e.g. inside an
       // "https://" URL) must not cut the text run, or autolinking breaks.
       start(src: string) {
-        const m = /:[a-z0-9_+-]+:/.exec(src);
+        const m = emojiShortcode().exec(src);
         return m ? m.index : undefined;
       },
       tokenizer(src: string) {
         if (!emojiOn) return undefined;
-        const m = /^:([a-z0-9_+-]+):/.exec(src);
+        const m = emojiShortcode().exec(src);
+        if (m?.index !== 0) return undefined;
         if (!m) return undefined;
         const glyph = emojiFor(m[1]);
         if (!glyph) return undefined;
@@ -258,7 +323,11 @@ marked.use({
       renderer(token) {
         const id = escapeAttr((token as Tokens.Generic).text as string);
         const label = escapeHtml((token as Tokens.Generic).text as string);
-        return `<sup class="footnote-ref" id="fnref-${id}"><a href="#fn-${id}">[${label}]</a></sup>`;
+        const n = footnoteCounts.get(id) ?? 0;
+        footnoteCounts.set(id, n + 1);
+        const description = footnoteDescriptions.get(String(token.text));
+        const title = description ? ` title="${escapeAttr(description)}"` : "";
+        return `<sup class="footnote-ref" id="fnref-${id}${n ? `-${n}` : ""}"><a href="#fn-${id}"${title} aria-label="Footnote ${label}">[${label}]</a></sup>`;
       },
     },
   ],
@@ -278,6 +347,15 @@ marked.use({
     code(token: Tokens.Code) {
       const info = token.lang || "";
       const lang = info.split(/\s+/)[0].toLowerCase();
+      if (lang === "sequence" || lang === "flow") {
+        try {
+          const diagram = parseLegacyDiagram(token.text, lang);
+          mermaidStash.push(diagram.source);
+          return `<div class="mermaid-block" data-${lang}="true" data-legacy-links="${escapeAttr(JSON.stringify(diagram.links))}" data-mmd="${mermaidStash.length - 1}"></div>`;
+        } catch (error) {
+          return `<pre><code>${escapeHtml(token.text)}</code></pre><p class="render-error">${escapeHtml(String(error))}</p>`;
+        }
+      }
       if (lang === "mermaid") {
         mermaidStash.push(token.text);
         return `<div class="mermaid-block" data-mmd="${mermaidStash.length - 1}"></div>`;
@@ -372,16 +450,25 @@ const ALERT_LABEL: Record<string, string> = {
  * which is all the alert syntax produces.
  */
 function transformAlerts(html: string): string {
-  return html.replace(/<blockquote>([\s\S]*?)<\/blockquote>/g, (full, inner: string) => {
-    const m = /^\s*<p>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:<br\s*\/?>|\n)?/i.exec(inner);
-    if (!m) return full;
-    const type = m[1].toLowerCase();
-    const body = inner.replace(m[0], "<p>").replace(/^\s*<p>\s*<\/p>\s*/, "");
-    return (
-      `<div class="md-alert md-alert-${type}">` +
-      `<p class="md-alert-title">${ALERT_LABEL[type]}</p>${body}</div>`
-    );
-  });
+  const root = document.createElement("template");
+  root.innerHTML = html;
+  for (const quote of Array.from(root.content.querySelectorAll("blockquote")).reverse()) {
+    const first = quote.firstElementChild;
+    if (first?.tagName !== "P") continue;
+    const match = /^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:<br\s*\/?>|\n)?/i.exec(first.innerHTML);
+    if (!match) continue;
+    const type = match[1].toLowerCase();
+    first.innerHTML = first.innerHTML.slice(match[0].length);
+    if (!first.innerHTML.trim()) first.remove();
+    const alert = document.createElement("div");
+    alert.className = `md-alert md-alert-${type}`;
+    const title = document.createElement("p");
+    title.className = "md-alert-title";
+    title.textContent = ALERT_LABEL[type];
+    alert.append(title, ...Array.from(quote.childNodes));
+    quote.replaceWith(alert);
+  }
+  return root.innerHTML;
 }
 
 /* ---------- heading anchor ids ---------- */
@@ -391,41 +478,14 @@ const decodeEntities = (s: string) =>
     .replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 
 /** Give each rendered heading an anchor id matching the TOC's slug. */
-function addHeadingIds(html: string): string {
+function addHeadingIds(html: string, counts = new Map<string, number>()): string {
   return html.replace(/<h([1-6])>([\s\S]*?)<\/h\1>/g, (_, lvl, inner: string) => {
     const text = decodeEntities(inner.replace(/<[^>]+>/g, "")).trim();
-    return `<h${lvl} id="${escapeAttr(slugBase(text))}">${inner}</h${lvl}>`;
+    const base = slugBase(text);
+    const n = counts.get(base) ?? 0;
+    counts.set(base, n + 1);
+    return `<h${lvl} id="${escapeAttr(base + (n ? `-${n}` : ""))}">${inner}</h${lvl}>`;
   });
-}
-
-/* ---------- footnote definition blocks ---------- */
-
-const FOOTNOTE_DEF = /^\[\^([^\]\s]+)\]:\s?(.*)$/;
-
-/** True if every non-blank line of the block is a `[^id]: text` definition. */
-function isFootnoteDefBlock(md: string): boolean {
-  const lines = md.split("\n").filter((l) => l.trim());
-  return lines.length > 0 && lines.every((l) => FOOTNOTE_DEF.test(l));
-}
-
-/** Render a footnote-definition block as a linked footnotes section. */
-function renderFootnoteDefs(md: string): string {
-  const items = md
-    .split("\n")
-    .filter((l) => l.trim())
-    .map((line) => {
-      const m = FOOTNOTE_DEF.exec(line)!;
-      const id = escapeAttr(m[1]);
-      const label = escapeHtml(m[1]);
-      const text = marked.parseInline(m[2], { async: false }) as string;
-      return (
-        `<li class="footnote-def" id="fn-${id}">` +
-        `<span class="footnote-label">${label}.</span> ${text} ` +
-        `<a href="#fnref-${id}" class="footnote-backref" title="Back to reference">↩</a></li>`
-      );
-    })
-    .join("");
-  return DOMPurify.sanitize(`<ol class="footnotes">${items}</ol>`, SANITIZE_OPTS);
 }
 
 /**
@@ -448,20 +508,57 @@ const EMPTY_IMG_HINT =
 export function renderMarkdown(md: string, blockKey?: string): string {
   if (!md.trim()) return `<p class="empty-block">&nbsp;</p>`;
   const trimmed = md.trim();
-  // A lone [TOC] / [[_TOC_]] paragraph renders as the document outline, each
-  // entry linking to its heading's slug anchor.
-  if ((trimmed === "[TOC]" || trimmed === "[[_TOC_]]") && tocProvider) {
-    const items = tocProvider()
-      .map(
-        (h) =>
-          `<li class="toc-l${h.level}"><a href="#${escapeAttr(slugBase(h.text))}">${escapeHtml(h.text)}</a></li>`,
-      )
-      .join("");
-    return DOMPurify.sanitize(`<ul class="toc">${items || "<li>No headings</li>"}</ul>`, SANITIZE_OPTS);
-  }
-  // A block of only `[^id]: text` lines renders as the footnotes section.
-  if (isFootnoteDefBlock(md)) return renderFootnoteDefs(md);
+  const blocks = documentProvider();
+  const blockIndex = blockKey == null ? -1 : blocks.findIndex(b => String(b.id) === blockKey);
+  const whole = blockIndex >= 0 ? blocks.map(b => b.text).join("\n\n") : md;
+  const allTokens = marked.lexer(whole);
+  footnoteCounts = new Map();
+  footnoteDescriptions = new Map();
+  equationLabels = new Map();
+  equationCursor = 0;
+  equationPlans = [];
+  let equationIndex = 0;
+  marked.walkTokens(allTokens, token => {
+    if (token.type === "blockMath" || (mathFence && token.type === "code" && token.lang === "math")) {
+      const plan = planEquation(String(token.text ?? ""), equationIndex, mathAutoNumber);
+      equationIndex = plan.nextNumber;
+      equationPlans.push(plan);
+      for (const [label, number] of plan.labels) {
+        if (!equationLabels.has(label)) equationLabels.set(label, number);
+        else plan.labels.delete(label);
+      }
 
+    }
+  });
+  marked.walkTokens(allTokens, token => {
+    if (token.type === "footnoteDef") footnoteDescriptions.set(String(token.id), String(token.text));
+  });
+  const headingCounts = new Map<string, number>();
+  if (blockIndex >= 0) {
+    const prior = marked.lexer(blocks.slice(0, blockIndex).map(b => b.text).join("\n\n"));
+    marked.walkTokens(prior, token => {
+      if (token.type === "blockMath" || (mathFence && token.type === "code" && token.lang === "math")) equationCursor++;
+      if (token.type === "footnoteRef") {
+        const id = escapeAttr(String(token.text));
+        footnoteCounts.set(id, (footnoteCounts.get(id) ?? 0) + 1);
+      }
+      if (token.type === "heading") {
+        const base = slugBase(decodeEntities((marked.parseInline(token.text, { async: false }) as string).replace(/<[^>]+>/g, "")));
+        headingCounts.set(base, (headingCounts.get(base) ?? 0) + 1);
+      }
+    });
+  }
+  const toc = () => {
+    const headings = extractOutline(blockIndex >= 0 ? blocks.map(b => b.text) : [md]);
+    const counts = new Map<string, number>();
+    const items = (headings.length ? headings : tocProvider?.() ?? []).map(h => {
+      const label = decodeEntities((marked.parseInline(h.text, {async:false}) as string).replace(/<[^>]+>/g, ""));
+      const base = slugBase(label), n = counts.get(base) ?? 0;
+      counts.set(base, n + 1);
+      return `<li class="toc-l${h.level}"><a href="#${escapeAttr(base + (n ? `-${n}` : ""))}">${escapeHtml(label)}</a></li>`;
+    }).join("");
+    return `<ul class="toc">${items || "<li>No headings</li>"}</ul>`;
+  };
   // YAML front matter. The live view boxes a `---\n…` block (Block.tsx isFence),
   // but marked would parse `---\n…\n---` as a thematic break + setext heading.
   // Render it as a metadata code box so the active and inactive views match.
@@ -486,8 +583,35 @@ export function renderMarkdown(md: string, blockKey?: string): string {
   const src = isCodeFence
     ? md
     : md.replace(/(!\[[^\]\n]*\]\()([^<>()"\n]*\s[^<>()"\n]*)(\))/g, "$1<$2>$3");
-  const raw = transformAlerts(marked.parse(src, { async: false }) as string);
-  let html = addHeadingIds(DOMPurify.sanitize(raw, SANITIZE_OPTS));
+  const lexer = new Lexer(marked.defaults);
+  lexer.tokens.links = allTokens.links;
+  const tokens = lexer.lex(src);
+  if (marked.defaults.walkTokens) marked.walkTokens(tokens, marked.defaults.walkTokens);
+  marked.walkTokens(tokens, token => {
+    if (token.type === "paragraph" && /^(?:\[TOC\]|\[\[_TOC_\]\])$/i.test(token.text.trim())) {
+      const t = token as Tokens.Generic;
+      t.type = "html"; t.text = toc(); t.tokens = undefined;
+    }
+  });
+  let raw = transformAlerts(marked.parser(tokens, { ...marked.defaults, async: false }) as string)
+    .replace(/<p>\s*(?:\[TOC\]|\[\[_TOC_\]\])\s*<\/p>/gi, toc);
+  const embeds: string[] = [];
+  if (htmlEmbeds) {
+    const root = document.createElement("template"); root.innerHTML = raw;
+    for (const frame of root.content.querySelectorAll("iframe")) {
+      try {
+        const url = new URL(frame.getAttribute("src") ?? "");
+        if (url.protocol !== "https:" || url.username || url.password) { frame.remove(); continue; }
+        const title = frame.getAttribute("title") || "Embedded content";
+        embeds.push(`<iframe src="${escapeAttr(url.href)}" title="${escapeAttr(title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy"></iframe>`);
+        const placeholder = document.createElement("div"); placeholder.dataset.embed = String(embeds.length - 1);
+        frame.replaceWith(placeholder);
+      } catch { frame.remove(); }
+    }
+    raw = root.innerHTML;
+  }
+  let html = addHeadingIds(DOMPurify.sanitize(raw, SANITIZE_OPTS), headingCounts)
+    .replace(/<div data-embed="(\d+)"><\/div>/g, (_, i) => embeds[Number(i)] ?? "");
   // Re-inject the KaTeX markup the sanitizer left as empty placeholders, swap
   // each mermaid placeholder's numeric key for its real source (DOMPurify
   // strips it for containing "-->"), and the resolved image src (which may use
@@ -525,11 +649,33 @@ export function renderMarkdown(md: string, blockKey?: string): string {
  * leading YAML front matter are kept intact as single blocks.
  */
 export function splitBlocks(md: string): string[] {
-  const lines = md.replace(/\r\n/g, "\n").split("\n");
+  const normalized = md.replace(/\r\n/g, "\n");
+  const lines = normalized.split("\n");
+  // Blank lines inside a loose list belong to that list. Splitting there
+  // restarts ordered numbering and detaches indented continuation paragraphs.
+  const listInterior = new Set<number>();
+  let tokenLine = 0;
+  for (const token of marked.lexer(normalized)) {
+    if (["list", "code", "blockquote", "html", "blockMath", "footnoteDef"].includes(token.type)) {
+      const contentLines = token.raw.trimEnd().split("\n").length;
+      for (let n = 1; n < contentLines; n++) listInterior.add(tokenLine + n);
+    }
+    tokenLine += (token.raw.match(/\n/g) ?? []).length;
+  }
+  // HTML containers may contain Markdown and blank lines. Keep their full
+  // extent together while leaving fences and ordinary HTML parsing untouched.
+  let detailsDepth = 0;
+  lines.forEach((line, index) => {
+    const opening = (line.match(/<details(?:\s[^>]*)?>/gi) ?? []).length;
+    if (detailsDepth > 0 || opening) listInterior.add(index);
+    detailsDepth += opening - (line.match(/<\/details\s*>/gi) ?? []).length;
+    detailsDepth = Math.max(0, detailsDepth);
+  });
   const blocks: string[] = [];
   let buf: string[] = [];
   let inFence = false;
   let fenceMark = "";
+  let fenceLength = 0;
   let i = 0;
 
   // YAML front matter
@@ -554,13 +700,14 @@ export function splitBlocks(md: string): string[] {
       if (!inFence) {
         inFence = true;
         fenceMark = fence[2][0];
-      } else if (fence[2][0] === fenceMark) {
+        fenceLength = fence[2].length;
+      } else if (fence[2][0] === fenceMark && fence[2].length >= fenceLength && /^\s*$/.test(line.slice(fence[0].length))) {
         inFence = false;
       }
       buf.push(line);
       continue;
     }
-    if (!inFence && line.trim() === "") {
+    if (!inFence && !listInterior.has(i) && line.trim() === "") {
       flush();
       continue;
     }
@@ -574,13 +721,15 @@ export function splitBlocks(md: string): string[] {
 export function hasOpenFence(text: string): boolean {
   let open = false;
   let mark = "";
+  let length = 0;
   for (const line of text.split("\n")) {
     const m = line.match(/^\s*(`{3,}|~{3,})/);
     if (!m) continue;
     if (!open) {
       open = true;
       mark = m[1][0];
-    } else if (m[1][0] === mark) {
+      length = m[1].length;
+    } else if (m[1][0] === mark && m[1].length >= length && /^\s*$/.test(line.slice(m[0].length))) {
       open = false;
     }
   }
@@ -600,13 +749,8 @@ export interface Heading {
 export function extractOutline(blocks: string[]): Heading[] {
   const out: Heading[] = [];
   blocks.forEach((b, blockIndex) => {
-    if (hasOpenFence(b)) return;
-    let inFence = false;
-    for (const line of b.split("\n")) {
-      if (/^\s*(`{3,}|~{3,})/.test(line)) inFence = !inFence;
-      if (inFence) continue;
-      const m = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
-      if (m) out.push({ level: m[1].length, text: m[2], blockIndex });
+    for (const token of marked.lexer(b)) {
+      if (token.type === "heading") out.push({ level: token.depth, text: token.text, blockIndex });
     }
   });
   return out;
@@ -623,10 +767,51 @@ export function countWords(md: string): { words: number; chars: number } {
 
 /** Toggle the nth task-list checkbox inside a block's source. */
 export function toggleTask(text: string, nth: number): string {
-  let seen = -1;
-  return text.replace(/\[( |x|X)\]/g, (m, state) => {
-    seen++;
-    if (seen !== nth) return m;
-    return state === " " ? "[x]" : "[ ]";
-  });
+  const candidates: number[] = [];
+  const walk = (source: string, offsets: number[]) => {
+    let cursor = 0;
+    for (const token of marked.lexer(source)) {
+      const at = source.indexOf(token.raw, cursor);
+      if (at < 0) continue;
+      cursor = at + token.raw.length;
+      if (token.type === "blockquote") {
+        let normalized = ""; const mapped: number[] = [];
+        let pos = at;
+        for (const line of token.raw.split(/(?<=\n)/)) {
+          const prefix = /^ {0,3}>[ \t]?/.exec(line)?.[0].length ?? 0;
+          normalized += line.slice(prefix);
+          mapped.push(...offsets.slice(pos + prefix, pos + line.length));
+          pos += line.length;
+        }
+        walk(normalized, mapped);
+      }
+      if (token.type !== "list") continue;
+      let itemAt = at;
+      for (const item of (token as Tokens.List).items) {
+        const pos = source.indexOf(item.raw, itemAt);
+        if (pos < 0) continue;
+        itemAt = pos + item.raw.length;
+        const prefix = /^[ \t]*(?:[-+*]|\d+[.)])(?:[ \t]+|$)/.exec(item.raw);
+        if (!prefix) continue;
+        let skip = prefix[0].length;
+        if (item.task) {
+          const marker = /^\[[ xX]\][ \t]*/.exec(item.raw.slice(skip));
+          if (marker) { candidates.push(offsets[pos + skip]); skip += marker[0].length; }
+        }
+        let normalized = ""; const mapped: number[] = [];
+        let lineAt = pos;
+        item.raw.split(/(?<=\n)/).forEach((line, index) => {
+          const trim = index === 0 ? skip : Math.min(prefix[0].length, /^[ \t]*/.exec(line)![0].length);
+          normalized += line.slice(trim);
+          mapped.push(...offsets.slice(lineAt + trim, lineAt + line.length));
+          lineAt += line.length;
+        });
+        walk(normalized, mapped);
+      }
+    }
+  };
+  walk(text, Array.from({length: text.length}, (_, i) => i));
+  const at = [...new Set(candidates)].sort((a,b) => a-b)[nth];
+  if (at === undefined) return text;
+  return text.slice(0, at + 1) + (text[at + 1] === " " ? "x" : " ") + text.slice(at + 2);
 }

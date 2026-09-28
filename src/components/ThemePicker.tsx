@@ -1,3 +1,4 @@
+import ModalFrame from "./ModalFrame";
 /**
  * Themes gallery — the visual theme picker.
  *
@@ -14,7 +15,7 @@
  * step needed for it to appear here, correctly labelled.
  */
 
-import { For, Show, createEffect, createSignal, on, onCleanup, onMount } from "solid-js";
+import { For, Show, createEffect, createSignal, on } from "solid-js";
 import { THEMES, customScheme, theme, type ThemeId } from "../store";
 import { executeCommand } from "../commands";
 import { luminance } from "../base16";
@@ -59,12 +60,6 @@ export default function ThemePicker() {
     }),
   );
 
-  onMount(() => {
-    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && setVisible(false);
-    window.addEventListener("keydown", onEsc);
-    onCleanup(() => window.removeEventListener("keydown", onEsc));
-  });
-
   /** Drill into the editor, closing the gallery behind us. Leaving it open
    *  stacked two modals that share a backdrop z-index, and the gallery — being
    *  mounted later in App — painted on top of the editor. */
@@ -88,7 +83,7 @@ export default function ThemePicker() {
         class="settings-backdrop"
         onMouseDown={(e) => e.target === e.currentTarget && setVisible(false)}
       >
-        <div class="theme-picker" tabindex="-1">
+        <ModalFrame class="theme-picker" label="Themes" onClose={() => setVisible(false)}>
           <div class="settings-head">
             <span class="settings-title">Themes</span>
             <button class="ip-close" title="Close" onClick={() => setVisible(false)}>
@@ -109,6 +104,16 @@ export default function ThemePicker() {
                     class="tp-card"
                     classList={{ on: theme() === id, unset: id === "custom" && !customScheme() }}
                     role="radio"
+                    tabIndex={theme() === id ? 0 : -1}
+                    onKeyDown={(e) => {
+                      const step = ["ArrowRight", "ArrowDown"].includes(e.key) ? 1 : ["ArrowLeft", "ArrowUp"].includes(e.key) ? -1 : 0;
+                      if (!step) return;
+                      e.preventDefault();
+                      const index = THEMES.indexOf(id);
+                      const next = (index + step + THEMES.length) % THEMES.length;
+                      gridEl?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+                      choose(THEMES[next]);
+                    }}
                     aria-checked={theme() === id}
                     aria-label={label(id)}
                     onClick={() => choose(id)}
@@ -157,7 +162,7 @@ export default function ThemePicker() {
               )}
             </For>
           </div>
-        </div>
+        </ModalFrame>
       </div>
     </Show>
   );

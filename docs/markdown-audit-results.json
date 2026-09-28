@@ -1,0 +1,828 @@
+{
+  "summary": {
+    "cases": 90,
+    "preview": 90,
+    "editorPreview": 90,
+    "liveStructure": 65,
+    "sourcePreserved": 90
+  },
+  "extras": {
+    "setextOutline": 1,
+    "tableEscapedPipeFirstCell": "a\\|b",
+    "tableEscapedPipeColumns": 2,
+    "taskToggleIgnoresCode": true,
+    "longFenceStillOpen": true
+  },
+  "results": [
+    {
+      "id": "heading-h1",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "# Heading"
+    },
+    {
+      "id": "heading-h2",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "## Heading"
+    },
+    {
+      "id": "heading-h3",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "### Heading"
+    },
+    {
+      "id": "heading-h4",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "#### Heading"
+    },
+    {
+      "id": "heading-h5",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "##### Heading"
+    },
+    {
+      "id": "heading-h6",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "###### Heading"
+    },
+    {
+      "id": "setext-h1",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "Heading\n======="
+    },
+    {
+      "id": "setext-h2",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "Heading\n-------"
+    },
+    {
+      "id": "closing-heading-hashes",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "## Heading ##"
+    },
+    {
+      "id": "strong",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "**Bold**"
+    },
+    {
+      "id": "emphasis",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "*Italic*"
+    },
+    {
+      "id": "nested-emphasis",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "**Bold and *italic***"
+    },
+    {
+      "id": "triple-emphasis",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "***Both***"
+    },
+    {
+      "id": "intraword-underscores",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "some_variable_name"
+    },
+    {
+      "id": "escaped-emphasis",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "\\*literal\\*"
+    },
+    {
+      "id": "html-entities",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "AT&amp;T &#169;"
+    },
+    {
+      "id": "strike",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "~~Old~~"
+    },
+    {
+      "id": "highlight",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "==Bright=="
+    },
+    {
+      "id": "subscript",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "H~2~O"
+    },
+    {
+      "id": "superscript",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "x^2^"
+    },
+    {
+      "id": "underline",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "<u>Underlined</u>"
+    },
+    {
+      "id": "underline-in-bold",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "**<u>Both</u>**"
+    },
+    {
+      "id": "code-single",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "`a < b`"
+    },
+    {
+      "id": "code-multi-backtick",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "``a ` b``"
+    },
+    {
+      "id": "code-multiline",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "`a\nb`"
+    },
+    {
+      "id": "link-inline",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "[label](https://example.com)"
+    },
+    {
+      "id": "link-nested-parentheses",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "[label](https://example.com/a_(b))"
+    },
+    {
+      "id": "reference-link",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 2,
+      "source": "[label][ref]\n\n[ref]: https://example.com"
+    },
+    {
+      "id": "reference-image",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 2,
+      "source": "![alt][ref]\n\n[ref]: image.png"
+    },
+    {
+      "id": "angle-autolink",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "<https://example.com>"
+    },
+    {
+      "id": "bare-autolink",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "https://example.com"
+    },
+    {
+      "id": "image-inline",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "Text ![alt](image.png)"
+    },
+    {
+      "id": "soft-break",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "First\nsecond"
+    },
+    {
+      "id": "hard-break-spaces",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "First  \nsecond"
+    },
+    {
+      "id": "hard-break-backslash",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "First\\\nsecond"
+    },
+    {
+      "id": "horizontal-rule",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "***"
+    },
+    {
+      "id": "unordered-list",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "- A\n- B"
+    },
+    {
+      "id": "ordered-start",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "7. A\n8. B"
+    },
+    {
+      "id": "loose-list",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "- A\n\n- B"
+    },
+    {
+      "id": "nested-list",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "- A\n  - B"
+    },
+    {
+      "id": "tasks",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "- [ ] A\n- [x] B"
+    },
+    {
+      "id": "quote",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "> A\n>\n> B"
+    },
+    {
+      "id": "nested-quote",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "> A\n> > B"
+    },
+    {
+      "id": "alert-note",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "> [!NOTE]\n> Body"
+    },
+    {
+      "id": "alert-tip",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "> [!TIP]\n> Body"
+    },
+    {
+      "id": "alert-important",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "> [!IMPORTANT]\n> Body"
+    },
+    {
+      "id": "alert-warning",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "> [!WARNING]\n> Body"
+    },
+    {
+      "id": "alert-caution",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "> [!CAUTION]\n> Body"
+    },
+    {
+      "id": "table-basic",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "| A | B |\n| --- | --- |\n| 1 | 2 |"
+    },
+    {
+      "id": "table-optional-pipes",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "A | B\n--- | ---\n1 | 2"
+    },
+    {
+      "id": "table-escaped-pipe",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "| A | B |\n| --- | --- |\n| a\\|b | c |"
+    },
+    {
+      "id": "fenced-code",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "```js\nconst a = 1;\n```"
+    },
+    {
+      "id": "long-fence-with-short-inner",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "````md\n```\n\ntext\n````"
+    },
+    {
+      "id": "indented-code",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "    first\n\n    second"
+    },
+    {
+      "id": "inline-math",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "Value $x^2$ here"
+    },
+    {
+      "id": "display-math",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "$$\nx^2\n$$"
+    },
+    {
+      "id": "math-blank-line",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "$$\nx + y\n\n+ z\n$$"
+    },
+    {
+      "id": "math-chemistry",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "$\\ce{H2O}$"
+    },
+    {
+      "id": "math-physics",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "$\\qty(x)$"
+    },
+    {
+      "id": "math-reference",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "$\\ref{eq1}$"
+    },
+    {
+      "id": "mermaid",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "```mermaid\ngraph TD; A-->B\n```"
+    },
+    {
+      "id": "d2",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "```d2\na -> b\n```"
+    },
+    {
+      "id": "legacy-sequence",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "```sequence\nA->B: hello\n```"
+    },
+    {
+      "id": "legacy-flow",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "```flow\na=>start: Start\na->a\n```"
+    },
+    {
+      "id": "emoji",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": ":smile:"
+    },
+    {
+      "id": "footnote-document",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 2,
+      "source": "Text[^note].\n\n[^note]: A footnote"
+    },
+    {
+      "id": "footnote-multiline",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "[^note]: First\n\n    Second"
+    },
+    {
+      "id": "repeated-footnote-reference",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "First[^n] second[^n]"
+    },
+    {
+      "id": "frontmatter",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "---\ntitle: Hello\n---"
+    },
+    {
+      "id": "toc-upper",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "[TOC]"
+    },
+    {
+      "id": "toc-lower",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "[toc]"
+    },
+    {
+      "id": "duplicate-heading-ids",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 2,
+      "source": "# Repeat\n\n# Repeat"
+    },
+    {
+      "id": "html-kbd",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "Press <kbd>Enter</kbd>"
+    },
+    {
+      "id": "html-ruby",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "<ruby>漢<rt>kan</rt></ruby>"
+    },
+    {
+      "id": "html-details",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "<details>\n<summary>More</summary>\n\nText\n\n</details>"
+    },
+    {
+      "id": "html-video",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "<video controls src=\"movie.mp4\"></video>"
+    },
+    {
+      "id": "html-audio",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "<audio controls src=\"sound.mp3\"></audio>"
+    },
+    {
+      "id": "html-iframe",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "<iframe src=\"https://example.com\"></iframe>"
+    },
+    {
+      "id": "html-comment",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "Before <!-- hidden --> after"
+    },
+    {
+      "id": "html-br",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "First<br>Second"
+    },
+    {
+      "id": "html-span-style",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "<span style=\"color:red\">Red</span>"
+    },
+    {
+      "id": "nested-quote-in-alert",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "> [!NOTE]\n> Intro\n>\n> > Quoted\n>\n> After"
+    },
+    {
+      "id": "inline-image-title",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "![Alt](image.png \"Title\")"
+    },
+    {
+      "id": "link-title",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "[Label](https://example.com \"Title\")"
+    },
+    {
+      "id": "escaped-html",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "&lt;script&gt;"
+    },
+    {
+      "id": "unsafe-script-filtered",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": null,
+      "sourcePreserved": true,
+      "blocks": 2,
+      "source": "<script>alert(1)</script>\n\nSafe"
+    },
+    {
+      "id": "toc-inside-document",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 3,
+      "source": "# Example\n\n[TOC]\n\nText"
+    },
+    {
+      "id": "preserve-line-breaks-option",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": true,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "First\nsecond"
+    },
+    {
+      "id": "alternate-inline-math-option",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "Value \\(x+1\\) here"
+    },
+    {
+      "id": "math-fence-option",
+      "preview": true,
+      "editorPreview": true,
+      "liveStructure": false,
+      "sourcePreserved": true,
+      "blocks": 1,
+      "source": "```math\nx+1\n```"
+    }
+  ]
+}

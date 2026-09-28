@@ -1,3 +1,4 @@
+import ModalFrame from "./ModalFrame";
 import { Show, createSignal, onMount } from "solid-js";
 import { isTauri } from "../platform";
 import {
@@ -40,11 +41,7 @@ export default function UpdateModal() {
           class="about-backdrop"
           onMouseDown={(e) => e.target === e.currentTarget && !busy() && dismissUpdate()}
         >
-          <div
-            class="pandoc-dl"
-            onKeyDown={(e) => e.key === "Escape" && !busy() && dismissUpdate()}
-            tabindex="-1"
-          >
+          <ModalFrame class="pandoc-dl" label="Application update" onClose={() => { if (!busy()) dismissUpdate(); }}>
             <div class="pandoc-dl-icon" classList={{ err: !!updateError() }}>
               <Show
                 when={!updateError()}
@@ -74,7 +71,7 @@ export default function UpdateModal() {
             </Show>
 
             <Show when={busy()}>
-              <div class="pandoc-bar" classList={{ indet: !determinate() }}>
+              <div class="pandoc-bar" role="progressbar" aria-label="Download progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={determinate() ? percent() : undefined} classList={{ indet: !determinate() }}>
                 <div
                   class="pandoc-bar-fill"
                   style={{ width: determinate() ? `${percent()}%` : undefined }}
@@ -87,7 +84,7 @@ export default function UpdateModal() {
             </Show>
 
             <Show when={updateError()}>
-              <p class="pandoc-dl-text err">{updateError()}</p>
+              <p class="pandoc-dl-text err" role="alert">{updateError()}</p>
             </Show>
 
             <Show when={!busy()}>
@@ -98,7 +95,7 @@ export default function UpdateModal() {
                 </button>
               </div>
             </Show>
-          </div>
+          </ModalFrame>
         </div>
       )}
     </Show>

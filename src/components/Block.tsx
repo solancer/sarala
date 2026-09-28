@@ -1,13 +1,14 @@
 import { Show, createEffect, createSignal, on, onCleanup } from "solid-js";
+import { complexBlockKind } from "../complexblocks";
 import { renderMarkdown, hasOpenFence } from "../markdown";
 import {
-  styleSource, getCaretOffset, getSelectionOffsets, setCaret, setSelection,
+  styleSource, hydrateInlinePreviews, hasSourceLayout, getCaretOffset, getSelectionOffsets, setCaret, setSelection,
   applyMarkerVisibility, mapRenderedPrefixToSource,
 } from "../livesource";
 import { isTauri, pickImageFile } from "../platform";
 import {
   consumeCaretRequest, consumeSelectionRequest,
-  spellcheckOn, smartPunctuation, renderEpoch, mermaidEpoch,
+  spellcheckOn, smartPunctuation, renderEpoch, mermaidEpoch, mathFence, mathAltDelimiters,
   setLiveCaretOffset,
 } from "../store";
 import { renderMermaidIn } from "../mermaid";
@@ -24,6 +25,7 @@ import LinkHoverTools from "./LinkHoverTools";
 import type { ImageTarget } from "../imageactions";
 import { linkForHref, type LinkTarget } from "../links";
 import TableToolbar from "./TableToolbar";
+import TableReorder from "./TableReorder";
 import TableRails from "./TableRails";
 import CodeLangPicker from "./CodeLangPicker";
 import D2SizeControl from "./D2SizeControl";
@@ -63,6 +65,10 @@ export default function Block(props: Props) {
   let pendingCaret: number | null = null;
   let composing = false;
   let lastRevealCaret = -1;
+  const [panelKind, setPanelKind] = createSignal<string | null>(null);
+  // Keep the editor mode stable while an opening delimiter is temporarily incomplete.
+  createEffect(on(() => props.active, active => setPanelKind(active ? complexBlockKind(props.text, { mathFence: mathFence(), alternateMath: mathAltDelimiters() }) : null)));
+
 
   // Render mermaid/D2 diagrams into the rendered view after each (re)render of
   // an inactive block. renderMarkdown emits empty placeholders; this fills them.
@@ -71,10 +77,11 @@ export default function Block(props: Props) {
     renderEpoch();
     mermaidEpoch();
     void props.text;
-    if (props.active) return;
+    if (props.active && !panelKind()) return;
     const host = renderedEl;
     const key = String(props.id);
     if (host) queueMicrotask(() => {
+      if (!host.isConnected) return;
       void renderMermaidIn(host, key);
       void renderD2In(host, key);
     });
@@ -128,6 +135,7 @@ export default function Block(props: Props) {
   const blockType = () => {
     const t = props.text;
     if (isFence()) return "";
+    if (hasSourceLayout(t)) return "b-layout";
     const h = t.match(/^(#{1,6})\s/);
     if (h) return `b-h${h[1].length}`;
     if (/^\s*>/.test(t)) return "b-quote";
@@ -139,12 +147,21 @@ export default function Block(props: Props) {
   // Re-style the live source whenever the text changes while active,
   // restoring the caret to where the user left it.
   createEffect(
-    on([() => props.active, () => props.text], ([active]) => {
+    on([() => props.active, () => props.text, renderEpoch, panelKind], ([active, text], previous) => {
       if (!active || !el || composing) return;
-      const selection = consumeSelectionRequest();
-      const caret = pendingCaret ?? consumeCaretRequest() ?? props.text.length;
+      // Shiki can finish loading while a list is active. Refresh its code
+      // colors without moving the user's caret or losing a text selection.
+      const current = previous?.[0] && previous[1] === text && el.contains(window.getSelection()?.anchorNode ?? null)
+        ? getSelectionOffsets(el) : null;
+      const selection = consumeSelectionRequest() ?? (current && current.start !== current.end ? current : null);
+      const caret = pendingCaret ?? consumeCaretRequest() ?? current?.start ?? props.text.length;
       pendingCaret = null;
-      el.innerHTML = styleSource(props.text);
+      el.innerHTML = panelKind() ? props.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : styleSource(props.text);
+      // eslint-disable-next-line solid/reactivity -- renderer runs synchronously; edit callback runs on mousedown
+      hydrateInlinePreviews(el, source => renderMarkdown(source, String(props.id)), offset => {
+        if (!el) return;
+        el.focus({ preventScroll: true }); reveal(offset); setCaret(el, offset);
+      });
       // preventScroll: focusing a contenteditable otherwise yanks it into
       // view; activation should never move the viewport (find/typewriter
       // scroll deliberately below).
@@ -243,7 +260,7 @@ export default function Block(props: Props) {
       return;
     }
     // List / quote continuation.
-    const cont = line.match(/^(\s*)([-*+]\s+(?:\[[ xX]\]\s+)?|\d+\.\s+|(?:>\s*)+)/);
+    const cont = line.match(/^(\s*)([-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|(?:>\s*)+)/);
     if (cont) {
       const body = line.slice(cont[0].length);
       if (body.trim() === "" && offset >= end) {
@@ -254,8 +271,8 @@ export default function Block(props: Props) {
         return;
       }
       let marker = cont[0];
-      const num = marker.match(/^(\s*)(\d+)\.(\s+)$/);
-      if (num) marker = `${num[1]}${Number(num[2]) + 1}.${num[3]}`;
+      const num = marker.match(/^(\s*)(\d+)([.)])(\s+)$/);
+      if (num) marker = `${num[1]}${Number(num[2]) + 1}${num[3]}${num[4]}`;
       if (marker.match(/\[[xX]\]/)) marker = marker.replace(/\[[xX]\]/, "[ ]");
       insertAtCaret("\n" + marker);
       return;
@@ -266,6 +283,12 @@ export default function Block(props: Props) {
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (composing) return;
+    if (panelKind()) {
+      if (e.key === "Escape") { e.preventDefault(); props.onDeactivate(); rootEl?.closest<HTMLElement>(".editor")?.focus({ preventScroll: true }); return; }
+      if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) { e.preventDefault(); insertAtCaret("\n"); return; }
+      if (e.key === "Tab") { if (!e.shiftKey) { e.preventDefault(); insertAtCaret("  "); } return; }
+      if ((e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Backspace" || e.key === "Delete") && !e.altKey && !e.metaKey && !e.ctrlKey) return;
+    }
     const mod = e.metaKey || e.ctrlKey;
     if (mod) {
       // Under Tauri these chords are native menu accelerators that dispatch
@@ -318,7 +341,7 @@ export default function Block(props: Props) {
         }
       }
     }
-    if (e.key === "Escape") { e.preventDefault(); el?.blur(); return; }
+    if (e.key === "Escape") { e.preventDefault(); el?.closest<HTMLElement>(".editor")?.focus({ preventScroll: true }); el?.blur(); return; }
     if (e.key === "Tab") {
       e.preventDefault();
       // In a table, Tab cycles through cells (selecting each cell's content),
@@ -590,7 +613,11 @@ export default function Block(props: Props) {
       const pre = range.cloneRange();
       pre.selectNodeContents(host);
       pre.setEnd(range.startContainer, range.startOffset);
-      caret = mapRenderedPrefixToSource(props.text, pre.toString());
+      const fragment = pre.cloneContents();
+      // KaTeX includes both MathML and visual text. Map the original formula
+      // once so clicks after an equation cannot drift past the intended word.
+      fragment.querySelectorAll<HTMLElement>("[data-math-source]").forEach(math => math.replaceWith(document.createTextNode(math.dataset.mathSource ?? "")));
+      caret = mapRenderedPrefixToSource(props.text, fragment.textContent ?? "");
     }
     props.onActivate(caret);
   };
@@ -624,6 +651,8 @@ export default function Block(props: Props) {
     if (t instanceof HTMLInputElement && t.type === "checkbox") {
       return;
     }
+    const diagramLink = t.closest("a[data-diagram-link]");
+    if (diagramLink?.getAttribute("href")) { e.preventDefault(); void followLink(diagramLink.getAttribute("href")!); return; }
     const link = t.closest("a");
     if (link?.getAttribute("href") && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
@@ -700,8 +729,9 @@ export default function Block(props: Props) {
       <Show when={props.active && parseTable(props.text)}>
         <TableToolbar text={props.text} />
         <TableRails text={props.text} />
+        <TableReorder text={props.text} onMove={commit} />
       </Show>
-      <Show when={props.active && isCodeFence()}>
+      <Show when={props.active && isCodeFence() && !panelKind()}>
         <CodeLangPicker current={fenceLang()} onSelect={setFenceLang} onCancel={() => el?.focus()} />
       </Show>
       <Show
@@ -779,11 +809,19 @@ export default function Block(props: Props) {
           </>
         }
       >
+        <Show when={panelKind()}>
+          <div class="rendered" ref={renderedEl}
+            // eslint-disable-next-line solid/no-innerhtml -- shared sanitized renderer
+            innerHTML={(renderEpoch(), mermaidEpoch(), renderMarkdown(props.text, String(props.id)))} />
+        </Show>
+        <div class="source-container" classList={{ "block-source-panel": !!panelKind() }} role={panelKind() ? "region" : undefined} aria-label={panelKind() ? `${panelKind()} source editor` : undefined}>
+          <Show when={panelKind()}><div class="block-source-panel-header"><span>{panelKind()} source</span><button type="button" onClick={() => { props.onDeactivate(); rootEl?.closest<HTMLElement>(".editor")?.focus({ preventScroll: true }); }}>Done <kbd>Esc</kbd></button></div></Show>
         <div
           ref={el}
           class={`source ${blockType()}`}
-          classList={{ "code-block": isFence() }}
+          classList={{ "code-block": isFence() || !!panelKind() }}
           contentEditable={true}
+          role="textbox" aria-multiline="true" aria-label={panelKind() ? `Edit ${panelKind()?.toLowerCase()} source` : "Edit Markdown block"}
           spellcheck={spellcheckOn()}
           onMouseDown={onSourceMouseDown}
           onInput={onInput}
@@ -800,6 +838,7 @@ export default function Block(props: Props) {
           onCompositionStart={() => (composing = true)}
           onCompositionEnd={() => { composing = false; onInput(); }}
         />
+        </div>
       </Show>
     </div>
   );

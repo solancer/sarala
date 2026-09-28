@@ -1,5 +1,6 @@
-import { Show, createEffect, onMount, onCleanup } from "solid-js";
+import { Show, createEffect, onMount, onCleanup, untrack } from "solid-js";
 import Editor from "./components/Editor";
+import DocumentTabs from "./components/DocumentTabs";
 import Sidebar from "./components/Sidebar";
 import StatusBar from "./components/StatusBar";
 import SourceView from "./components/SourceView";
@@ -10,6 +11,7 @@ import TableDialog from "./components/TableDialog";
 import ImageContextMenu from "./components/ImageContextMenu";
 import EditorContextMenu from "./components/EditorContextMenu";
 import SelectionToolbar from "./components/SelectionToolbar";
+import EmojiMenu from "./components/EmojiMenu";
 import SlashMenu from "./components/SlashMenu";
 import PaletteSwitcher from "./components/PaletteSwitcher";
 import AboutModal from "./components/AboutModal";
@@ -25,13 +27,14 @@ import { initSettings } from "./settings";
 import { base16ToCss } from "./base16";
 import { autoCheckForUpdates } from "./updater";
 import {
+  activeTabId, openTabs, removeTab, currentTabView, setTabViewProvider, cycleTab, setTabExternalChange,
   doc, theme, sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
   fileName, setActive, fileTree, folderName, THEMES, targetBlockIndex,
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
   focusMode, typewriterMode, statusBarVisible, alwaysOnTop, zoom, tableFullWidth,
   mathAltDelimiters, mathFence, bumpMermaidEpoch, customScheme,
   emojiEnabled, highlightEnabled, subSupEnabled, autolinkEnabled,
-  finalNewline, autosaveInterval, setExternalChange,
+  finalNewline, autosaveInterval,
 } from "./store";
 import {
   isTauri, isMac, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS,
@@ -63,9 +66,12 @@ export default function App() {
   // Browser fallback only: in Tauri these chords are native menu accelerators,
   // which dispatch through the "menu" event; handling both would double-fire.
   const onKey = (e: KeyboardEvent) => {
+    if (document.querySelector('[aria-modal="true"]')) return;
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
     const k = e.key.toLowerCase();
+    if (k === "n" && !e.shiftKey) { e.preventDefault(); executeCommand("file.new"); }
+    if (k === "w") { e.preventDefault(); executeCommand("file.close"); }
     if (k === "z") { e.preventDefault(); executeCommand(e.shiftKey ? "edit.redo" : "edit.undo"); }
     if (k === "a") { e.preventDefault(); executeCommand("edit.select_all"); }
     if (k === "s") { e.preventDefault(); executeCommand("file.save"); }
@@ -82,10 +88,33 @@ export default function App() {
   };
 
   onMount(() => {
+    setTabViewProvider(() => {
+      const source = editorEl?.querySelector<HTMLTextAreaElement>(".source-full");
+      return { scrollTop: editorEl?.scrollTop ?? 0, sourceStart: source?.selectionStart ?? 0, sourceEnd: source?.selectionEnd ?? 0 };
+    });
+    const tabKeys = (e: KeyboardEvent) => {
+      if (document.querySelector('[aria-modal="true"]')) return;
+      if (e.ctrlKey && e.key === "Tab" && !e.altKey && !e.metaKey) {
+        e.preventDefault(); e.stopImmediatePropagation(); cycleTab(e.shiftKey ? -1 : 1);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "t" && !e.altKey && !e.shiftKey) {
+        e.preventDefault(); e.stopImmediatePropagation(); executeCommand("file.new");
+      }
+    };
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isTauri && openTabs().some((tab) => tab.dirty)) { e.preventDefault(); e.returnValue = ""; }
+    };
+    window.addEventListener("keydown", tabKeys, true);
+    window.addEventListener("beforeunload", beforeUnload);
+    onCleanup(() => {
+      setTabViewProvider(null);
+      window.removeEventListener("keydown", tabKeys, true);
+      window.removeEventListener("beforeunload", beforeUnload);
+    });
     void initSettings();
     // Command palette (Cmd/Ctrl+K). Bound globally on every platform — it isn't
     // a menu accelerator, so there's no native-menu double-fire to avoid.
     const onPaletteKey = (e: KeyboardEvent) => {
+      if (document.querySelector('[aria-modal="true"]')) return;
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
         e.preventDefault();
         executeCommand("menu.command_palette");
@@ -96,7 +125,8 @@ export default function App() {
     // Keyboard accelerators for the in-app menu (Linux/Windows/browser). macOS
     // gets them from its native menu, so it's excluded to avoid double-firing.
     if (!isMac) {
-      const onMenuKey = makeMenuKeyHandler();
+      const handleMenuKey = makeMenuKeyHandler();
+      const onMenuKey = (e: KeyboardEvent) => { if (!document.querySelector('[aria-modal="true"]')) handleMenuKey(e); };
       window.addEventListener("keydown", onMenuKey);
       onCleanup(() => window.removeEventListener("keydown", onMenuKey));
     }
@@ -110,7 +140,9 @@ export default function App() {
 
       let unlisten: (() => void) | undefined;
       import("@tauri-apps/api/event").then(async ({ listen }) => {
-        unlisten = await listen<string>("menu", (e) => executeCommand(e.payload));
+        unlisten = await listen<string>("menu", (e) => {
+          if (!document.querySelector('[aria-modal="true"]')) executeCommand(e.payload);
+        });
       });
       // Dropped image files insert through the same path as Insert Image….
       let undrop: (() => void) | undefined;
@@ -129,13 +161,15 @@ export default function App() {
       import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
         const win = getCurrentWindow();
         unclose = await win.onCloseRequested(async (event) => {
-          if (!doc.dirty) return;
+          const dirty = openTabs().filter((tab) => tab.dirty);
+          if (!dirty.length) return;
           event.preventDefault();
-          if (await confirmDialog(`Discard unsaved changes to ${fileName()}?`)) {
+          if (await confirmDialog(`Close the window and discard unsaved changes to ${dirty.map((tab) => tab.name).join(", ")}?`)) {
             // Deliberately discarding — drop the autosave shadow so the next
             // launch doesn't offer to "recover" these changes. (A crash skips
             // this handler, so genuine crash recovery still works.)
-            await discardShadowFor(doc.filePath);
+            for (const tab of dirty) removeTab(tab.id);
+            await Promise.all(dirty.map((tab) => discardShadowFor(tab.filePath)));
             await win.destroy();
           }
         });
@@ -167,7 +201,7 @@ export default function App() {
 
       // Reload-or-keep conflict banner: surface the Rust watcher's events.
       let unwatch: (() => void) | undefined;
-      onExternalChange((path, deleted) => setExternalChange({ path, deleted })).then((u) => {
+      onExternalChange((path, deleted) => setTabExternalChange(path, deleted)).then((u) => {
         unwatch = u;
       });
 
@@ -196,6 +230,14 @@ export default function App() {
       document.head.appendChild(el);
     }
     el.textContent = base16ToCss(scheme);
+  });
+
+  createEffect(() => {
+    const id = activeTabId();
+    const view = untrack(currentTabView);
+    requestAnimationFrame(() => {
+      if (activeTabId() === id && editorEl) editorEl.scrollTop = view.scrollTop;
+    });
   });
 
   // Window title: "Notes.md — Edited".
@@ -287,7 +329,7 @@ export default function App() {
       class="app"
       data-theme={theme()}
       classList={{ "focus-mode": focusMode(), "tables-full": tableFullWidth(), "is-tauri": isTauri, "is-mac": isMac }}
-      style={{ "--zoom": `${zoom()}%` }}
+      style={{ "--zoom": `${zoom()}%`, "--editor-scale": zoom() / 100 }}
     >
       {/* In-app menubar strip, replacing the OS menu bar (not on macOS). */}
       <Show when={!isMac}>
@@ -304,47 +346,23 @@ export default function App() {
           onJump={jumpTo}
         />
         <main class="main">
-          {/* Controls float directly on the editor surface — no bar, no border.
-              The sidebar now owns the full window height beside it, so the
-              content pane reads as one continuous sheet instead of a boxed
-              region under a band. A gradient mask (see .topfloat::before) keeps
-              them legible as content scrolls underneath. */}
-          {/* "deep" rather than a bare attribute: Tauri's drag script only
-              treats a bare region as draggable when the click lands on that
-              exact element (`el === composedPath[0]`), so clicks on the filename
-              or the flex spacer inside it were not drag targets. "deep" makes
-              the whole strip draggable while still exempting real controls —
-              the script blocks dragging at any clickable element it walks past. */}
-          <header class="topfloat" aria-label="Document" data-tauri-drag-region="deep">
-            {/* Spacer over the native macOS traffic lights, which sit above the
-                sidebar — it only takes width when the sidebar is collapsed and
-                they would otherwise land on these controls. A drag region here
-                would swallow their clicks (close/minimize/zoom). */}
+          <header class="topfloat document-toolbar" aria-label="Documents and controls" data-tauri-drag-region="deep">
             {isTauri && isMac && <span class="topbar-traffic" aria-hidden="true" />}
             <button
               class="topbar-toggle icon-btn"
               title="Toggle sidebar (Shift+Cmd/Ctrl+L)"
+              aria-label="Toggle sidebar" aria-expanded={sidebarOpen()} aria-controls="workspace-sidebar"
               onClick={() => setSidebarOpen(!sidebarOpen())}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                 <rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" />
               </svg>
             </button>
-            <span class="topbar-file" title={doc.filePath ?? "Not saved to a file yet"}>
-              {fileName()}
-              {/* Shown only when dirty. It used to render always and merely
-                  change colour between --select and --accent — which are the
-                  same value on the default theme, and on the five themes that
-                  never define --select, so "unsaved" was pixel-identical to
-                  "saved" on 6 of 13 themes. Absence is the unambiguous signal. */}
-              <Show when={doc.dirty}>
-                <span class="topbar-dot" title="Unsaved changes" aria-label="Unsaved changes" />
-              </Show>
-            </span>
-            <span class="spacer" />
+            <DocumentTabs />
+            <div class="document-header-actions">
             <button
               class="topbar-search"
-              title="Command palette (Cmd/Ctrl+K)"
+              title="Command palette (Cmd/Ctrl+K)" aria-label="Search commands"
               onClick={() => executeCommand("menu.command_palette")}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -360,7 +378,7 @@ export default function App() {
             <button
               class="topbar-toggle icon-btn"
               classList={{ on: focusMode() }}
-              title="Focus mode"
+              title="Focus mode" aria-label="Focus mode" aria-pressed={focusMode()}
               onClick={() => executeCommand("view.focus_mode")}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
@@ -368,15 +386,18 @@ export default function App() {
                 <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
               </svg>
             </button>
-            <div class="view-toggle">
-              <button classList={{ on: !sourceMode() }} onClick={() => setSourceMode(false)}>Live</button>
-              <button classList={{ on: sourceMode() }} onClick={() => setSourceMode(true)}>Source</button>
+            <div class="view-toggle" role="group" aria-label="Editor view">
+              <button aria-pressed={!sourceMode()} classList={{ on: !sourceMode() }} onClick={() => setSourceMode(false)}>Live</button>
+              <button aria-pressed={sourceMode()} classList={{ on: sourceMode() }} onClick={() => setSourceMode(true)}>Source</button>
+            </div>
             </div>
           </header>
           <FindBar />
           <ConflictBanner />
-          <div class="scroll" ref={editorEl}>
-            <Show when={!sourceMode()} fallback={<SourceView />}>
+          <div class="scroll" ref={editorEl} id="document-panel" role="tabpanel" aria-labelledby={`document-tab-${activeTabId()}`}>
+            <Show when={!sourceMode()} fallback={
+              <Show when={activeTabId()} keyed>{(id) => id && <SourceView />}</Show>
+            }>
               <Editor />
             </Show>
           </div>
@@ -395,6 +416,7 @@ export default function App() {
       <Show when={!sourceMode()}>
         <SelectionToolbar />
         <SlashMenu />
+        <EmojiMenu />
       </Show>
       <AboutModal />
       <SettingsModal />

@@ -1,3 +1,4 @@
+import ModalFrame from "./ModalFrame";
 import { Show, createSignal, onCleanup } from "solid-js";
 import { hasPandoc, downloadPandoc, isTauri } from "../platform";
 
@@ -116,7 +117,7 @@ export default function PandocDownloadModal() {
           }
         }}
       >
-        <div class="pandoc-dl" onKeyDown={(e) => e.key === "Escape" && phase() !== "done" && !busy() && finish(false)} tabindex="-1">
+        <ModalFrame class="pandoc-dl" label="Install Pandoc" onClose={() => { if (phase() !== "done" && !busy()) finish(false); }}>
           <div class="pandoc-dl-icon" classList={{ ok: phase() === "done", err: phase() === "error" }}>
             <Show
               when={phase() === "done"}
@@ -159,7 +160,7 @@ export default function PandocDownloadModal() {
           </Show>
 
           <Show when={busy() || phase() === "done"}>
-            <div class="pandoc-bar" classList={{ indet: !determinate() && phase() !== "done" }}>
+            <div class="pandoc-bar" role="progressbar" aria-label="Download progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={determinate() ? percent() : undefined} classList={{ indet: !determinate() && phase() !== "done" }}>
               <div class="pandoc-bar-fill" style={{ width: determinate() || phase() === "done" ? `${percent()}%` : undefined }} />
             </div>
             <p class="pandoc-dl-step">
@@ -169,7 +170,7 @@ export default function PandocDownloadModal() {
           </Show>
 
           <Show when={phase() === "error"}>
-            <p class="pandoc-dl-text err">{errorMsg()}</p>
+            <p class="pandoc-dl-text err" role="alert">{errorMsg()}</p>
             <p class="pandoc-dl-hint">You can also install Pandoc yourself from pandoc.org.</p>
           </Show>
 
@@ -183,7 +184,7 @@ export default function PandocDownloadModal() {
               <button class="pandoc-btn primary" onClick={() => void startDownload()}>Retry</button>
             </Show>
           </div>
-        </div>
+        </ModalFrame>
       </div>
     </Show>
   );

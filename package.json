@@ -10,12 +10,13 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node tests/livesource.test.mjs && node tests/format.test.mjs",
-    "test:e2e": "node tests/e2e-seltoolbar.mjs && node tests/e2e-tablerails.mjs && node tests/e2e-slashmenu.mjs && node tests/e2e-imageprops.mjs && node tests/e2e-sidebar.mjs && node tests/e2e-theme.mjs && node tests/e2e-settings.mjs && node tests/e2e-chrome.mjs && node tests/e2e-links.mjs",
+    "test": "node tests/livesource.test.mjs && node tests/format.test.mjs && node tests/tabs.test.mjs && node tests/autosave-tabs.test.mjs && node tests/accessibility.test.mjs && node tests/markdown-regressions.test.mjs && node tests/compatibility.test.mjs && node tests/editor-interactions.test.mjs",
+    "test:e2e": "node tests/e2e-seltoolbar.mjs && node tests/e2e-tablerails.mjs && node tests/e2e-slashmenu.mjs && node tests/e2e-imageprops.mjs && node tests/e2e-sidebar.mjs && node tests/e2e-theme.mjs && node tests/e2e-settings.mjs && node tests/e2e-chrome.mjs && node tests/e2e-links.mjs && node tests/e2e-lists.mjs && node tests/e2e-tabs.mjs",
     "lint": "eslint src",
     "lint:rust": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
     "release": "bash scripts/release.sh",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "audit:markdown": "node scripts/audit-markdown.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
@@ -32,7 +33,8 @@
     "shiki": "^4.2.0",
     "solid-js": "^1.9.5",
     "turndown": "^7.2.4",
-    "turndown-plugin-gfm": "^1.0.2"
+    "turndown-plugin-gfm": "^1.0.2",
+    "js-yaml": "^4.2.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.4.0",
