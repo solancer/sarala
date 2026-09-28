@@ -56,7 +56,6 @@ export default function ImageContextMenu() {
   });
 
   // Snapshot the target BEFORE closing the menu — closing clears the signal.
-  // eslint-disable-next-line solid/reactivity -- read at click time inside the handler
   const run = (fn: (t: ImageTarget) => void | Promise<void>) => () => {
     const tgt = target();
     closeImageMenu();

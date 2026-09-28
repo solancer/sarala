@@ -101,10 +101,6 @@ export default function ImageProperties(props: Props) {
     // Deliberate imperative read: the target must be re-read when the timer
     // fires, not captured now, so a commit lands against the occurrence's
     // current offsets rather than the ones it had when the keystroke happened.
-    // (The directive must sit immediately above the statement — with the prose
-    // after it, it was disabling the following *comment* line and the real
-    // warning went unsuppressed.)
-    // eslint-disable-next-line solid/reactivity
     fieldTimers.set(name, window.setTimeout(() => {
       fieldTimers.delete(name);
       commit(name, value);

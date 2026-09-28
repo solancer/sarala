@@ -138,9 +138,11 @@ fn decode_bytes(bytes: &[u8], forced: Option<&'static Encoding>) -> EncodedDoc {
             lossy,
         };
     }
-    let mut det = chardetng::EncodingDetector::new();
+    // Local files, not script-running web content: consider every encoding,
+    // UTF-8 and ISO-2022-JP included (chardetng 0.1's only behaviour).
+    let mut det = chardetng::EncodingDetector::new(chardetng::Iso2022JpDetection::Allow);
     det.feed(bytes, true);
-    let enc = det.guess(None, true);
+    let enc = det.guess(None, chardetng::Utf8Detection::Allow);
     let (cow, _, lossy) = enc.decode(bytes);
     EncodedDoc {
         content: cow.into_owned(),
@@ -1148,7 +1150,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_bytes, encode_contents, font_faces_b64, list_system_fonts, search_in_folder,
+        decode_bytes, encode_contents, enumerate_system_fonts, font_faces_b64, search_in_folder,
     };
 
     #[test]
@@ -1231,6 +1233,18 @@ mod tests {
         let bytes = encode_contents("日本語", Some("Shift_JIS"), false).unwrap();
         let doc = decode_bytes(&bytes, Some(encoding_rs::SHIFT_JIS));
         assert_eq!(doc.content, "日本語");
+    }
+
+    #[test]
+    fn unlabeled_japanese_is_sniffed() {
+        // No BOM, no forced label: chardetng must still find these encodings.
+        let text = "日本語のテキストです。これは文字コードの判定テストです。";
+        for label in ["Shift_JIS", "ISO-2022-JP"] {
+            let bytes = encode_contents(text, Some(label), false).unwrap();
+            let doc = decode_bytes(&bytes, None);
+            assert_eq!(doc.encoding, label, "sniffed {label}");
+            assert_eq!(doc.content, text);
+        }
     }
 
     #[test]

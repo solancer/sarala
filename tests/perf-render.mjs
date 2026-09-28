@@ -2,8 +2,8 @@
  * Rendering performance benchmark. Loads the Kafka fixture (tables, Mermaid,
  * math, code, footnotes) into the browser build and times the interactions
  * that must feel instant: tab switches, table row/column moves, block moves,
- * and typing. Each timing covers the synchronous update plus two animation
- * frames, so style/layout/paint are included.
+ * and typing. Each timing covers the synchronous update until the next frame
+ * has rendered, so style/layout/paint are included.
  *
  *   node tests/perf-render.mjs            # print timings
  *   node tests/perf-render.mjs --assert   # also fail on budget regressions
@@ -56,7 +56,10 @@ try {
     const time = async (fn) => {
       const t0 = performance.now(); fn(); const t1 = performance.now();
       if (bucket) (scripting[bucket] ??= []).push(t1 - t0);
-      await frames(); return performance.now() - t0;
+      // Until the next frame has run style/layout/paint: one rAF, then a task
+      // (a double-rAF wait costs two full frame intervals in newer Chromium).
+      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+      return performance.now() - t0;
     };
     const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
     const out = {};

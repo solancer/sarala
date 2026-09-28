@@ -16,12 +16,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-clipboard-manager = "2.3.2"
 regex = "1"
-notify = "6"
-notify-debouncer-mini = "0.4"
+notify = "8"
+notify-debouncer-mini = "0.7"
 encoding_rs = "0.8"
-chardetng = "0.1"
+chardetng = "1"
 font-kit = "0.14"
-base64 = "0.22"
+base64 = "0.23"
 
 # File dialogs. On Linux, use rfd's xdg-desktop-portal backend instead of the
 # default GTK one: the portal draws the picker *outside* the snap sandbox and
