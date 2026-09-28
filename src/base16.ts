@@ -252,7 +252,12 @@ export function base16ToCss(scheme: Base16Scheme, selector = '[data-theme="custo
   const body = Object.entries(tokens)
     .map(([k, v]) => `  ${k}: ${v};`)
     .join("\n");
-  return `${selector} {\n${body}\n}\n`;
+  // A dark custom scheme needs code in Shiki's dark palette, which the curated
+  // dark themes get from a rule keyed on their names (see app.css).
+  const code = scheme.variant === "dark"
+    ? `${selector} .shiki, ${selector} .shiki span { color: var(--shiki-dark) !important; }\n`
+    : "";
+  return `${selector} {\n${body}\n}\n${code}`;
 }
 
 /** A neutral starting scheme for the editor when nothing has been imported. */

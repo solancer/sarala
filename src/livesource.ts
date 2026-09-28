@@ -443,6 +443,31 @@ function styleLayoutTokens(tokens: Token[], tight = false): string {
   }).join("");
 }
 
+/**
+ * Source for a complex block's editing card (diagram, equation, metadata):
+ * the delimiter lines stay visible as muted markers, and the body is coloured
+ * with its language's grammar (mermaid, latex, yaml). textContent stays
+ * byte-identical; styleCodeContent falls back to plain text if highlighting
+ * would change it, or until the grammar has loaded.
+ */
+export function stylePanelSource(src: string): string {
+  const marker = (s: string) => `<span class="md-tok md-fence"><span class="md-mark">${esc(s)}</span></span>`;
+  // `.shiki` on the body opts it into the dark themes' --shiki-dark palette,
+  // exactly like code blocks; the delimiter markers keep the marker colour.
+  const wrap = (open: string, body: string, close: string, lang: string) =>
+    marker(open) + `<span class="shiki">${styleCodeContent(body, lang)}</span>` + marker(close);
+  const fence = /^([ \t]*(`{3,}|~{3,})[ \t]*([^\s`]*)[^\n]*\n)([\s\S]*?)(\n[ \t]*\2[`~]*[ \t]*)$/.exec(src);
+  if (fence) {
+    const lang = fence[3].toLowerCase();
+    return wrap(fence[1], fence[4], fence[5], lang === "math" ? "latex" : lang);
+  }
+  const math = /^(\$\$|\\\[)([\s\S]*?)(\$\$|\\\])$/.exec(src);
+  if (math) return wrap(math[1], math[2], math[3], "latex");
+  const meta = /^(---\n)([\s\S]*?)(\n---)$/.exec(src);
+  if (meta) return wrap(meta[1], meta[2], meta[3], "yaml");
+  return esc(src);
+}
+
 export function styleSource(src: string): string {
   const tokens = layoutTokens(src);
   // Keep specialized fence/table editing; structured layout keeps
@@ -496,19 +521,39 @@ export function applyMarkerVisibility(el: HTMLElement, source: string, caret: nu
 /** Shadow previews do not add duplicate text to the editable source tree.
  * This keeps range offsets exact while equations retain their rendered size.
  */
+/**
+ * KaTeX rules for the shadow previews, collected once (re-collected only if
+ * the set of stylesheets changes) rather than by walking every rule of every
+ * sheet on each keystroke. Rules scoped to `.rendered` apply unscoped: a
+ * preview *is* rendered output, and without that the app's
+ * `.rendered .katex { font-size }` never matched inside the shadow root, so
+ * live formulas came out ~15% wider than the preview's and reflowed the line.
+ */
+let previewStyleCache: { sheets: number; css: string } | null = null;
+function previewStyles(): string {
+  const sheets = document.styleSheets.length;
+  if (previewStyleCache?.sheets === sheets) return previewStyleCache.css;
+  const rules: string[] = [];
+  for (const sheet of Array.from(document.styleSheets)) {
+    try {
+      for (const rule of Array.from(sheet.cssRules)) {
+        if (rule.cssText.includes(".katex")) rules.push(rule.cssText.replace(/(^|,\s*)\.rendered\s+/g, "$1"));
+      }
+    } catch { /* Cross-origin stylesheets cannot be inspected. */ }
+  }
+  const css = rules.join("\n") + "\n:host { display:inline-block; } p { display:contents; margin:0; }";
+  previewStyleCache = { sheets, css };
+  return css;
+}
+
 export function hydrateInlinePreviews(el: HTMLElement, render: (source: string) => string, edit: (offset: number) => void) {
   const previews = el.querySelectorAll<HTMLElement>(".md-inline-preview");
   if (!previews.length) return;
-  const styles: string[] = [];
-  for (const sheet of Array.from(document.styleSheets)) {
-    try {
-      for (const rule of Array.from(sheet.cssRules)) if (rule.cssText.includes(".katex")) styles.push(rule.cssText);
-    } catch { /* Cross-origin stylesheets cannot be inspected. */ }
-  }
+  const styles = previewStyles();
   for (const preview of previews) {
     const shadow = preview.attachShadow({ mode: "open" });
     const style = document.createElement("style");
-    style.textContent = styles.join("\n") + "\n:host { display:inline-block; } p { display:contents; margin:0; }";
+    style.textContent = styles;
     shadow.append(style);
     const body = document.createElement("span");
     body.innerHTML = render(preview.dataset.markdown ?? "");

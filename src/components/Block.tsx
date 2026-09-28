@@ -2,7 +2,7 @@ import { Show, createEffect, createMemo, createSignal, on, onCleanup, untrack } 
 import { complexBlockKind } from "../complexblocks";
 import { renderMarkdown, hasOpenFence } from "../markdown";
 import {
-  styleSource, hydrateInlinePreviews, hasSourceLayout, getCaretOffset, getSelectionOffsets, setCaret, setSelection,
+  styleSource, stylePanelSource, hydrateInlinePreviews, hasSourceLayout, getCaretOffset, getSelectionOffsets, setCaret, setSelection,
   applyMarkerVisibility, mapRenderedPrefixToSource,
 } from "../livesource";
 import { isTauri, pickImageFile } from "../platform";
@@ -74,6 +74,32 @@ export default function Block(props: Props) {
   let composing = false;
   let lastRevealCaret = -1;
   const [panelKind, setPanelKind] = createSignal<string | null>(null);
+  let panelEl: HTMLDivElement | undefined;
+  // "Mermaid diagram", "D2 diagram", "Equation", "Metadata"…
+  const DIAGRAM_NAMES: Record<string, string> = { mermaid: "Mermaid", d2: "D2", sequence: "Sequence", flow: "Flowchart" };
+  const panelTitle = () => {
+    const kind = panelKind();
+    if (kind !== "Diagram") return kind ?? "";
+    const lang = props.text.match(/^\s*(?:`{3,}|~{3,})\s*(\w+)/)?.[1]?.toLowerCase() ?? "";
+    return `${DIAGRAM_NAMES[lang] ?? "Diagram"} diagram`;
+  };
+  // What the preview does as the source changes, per kind.
+  const panelHint = () => {
+    switch (panelKind()) {
+      case "Table of contents": return "Built from the document's headings";
+      case "Metadata": return "YAML front matter";
+      default: return "Preview updates as you type";
+    }
+  };
+  // The card opens below its preview; bring it into view if that is below the
+  // fold (scrolling moves the viewport, never the layout).
+  createEffect(on(panelKind, (kind) => {
+    if (!kind) return;
+    requestAnimationFrame(() => panelEl?.scrollIntoView({
+      block: "nearest",
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    }));
+  }, { defer: true }));
   // Keep the editor mode stable while an opening delimiter is temporarily incomplete.
   createEffect(on(() => props.active, active => setPanelKind(active ? complexBlockKind(props.text, { mathFence: mathFence(), alternateMath: mathAltDelimiters() }) : null)));
 
@@ -85,32 +111,45 @@ export default function Block(props: Props) {
   // Diagram SVGs bake in theme colours; everything else follows CSS variables,
   // so only diagram blocks re-render on a theme switch.
   const hasDiagram = () => /^[ \t>]*(?:`{3,}|~{3,})[ \t]*(?:mermaid|d2|sequence|flow)\b/im.test(props.text);
+  // While a diagram's source is open, its preview follows the text after a
+  // short pause rather than on every keystroke: each layout is expensive, and
+  // the previous diagram stays on screen meanwhile (see renderMermaidIn).
+  const [settledText, setSettledText] = createSignal(untrack(() => props.text));
+  createEffect(() => {
+    const text = props.text;
+    if (panelKind() !== "Diagram") return setSettledText(text);
+    const timer = setTimeout(() => setSettledText(text), 250);
+    onCleanup(() => clearTimeout(timer));
+  });
+  const previewText = () => (panelKind() === "Diagram" ? settledText() : props.text);
   const renderKey = createMemo(() =>
-    `${renderEpoch()}\u0002${hasDiagram() ? mermaidEpoch() : ""}\u0002${contextSig()}\u0002${props.text}`);
+    `${renderEpoch()}\u0002${hasDiagram() ? mermaidEpoch() : ""}\u0002${contextSig()}\u0002${previewText()}`);
   const renderedHtml = () => {
     const key = renderKey();
     const hit = htmlCache.get(props.id);
     if (hit?.key === key) return hit.html;
-    const html = untrack(() => renderMarkdown(props.text, String(props.id)));
+    const html = untrack(() => renderMarkdown(previewText(), String(props.id)));
     if (htmlCache.size > 5000) htmlCache.clear();
     htmlCache.set(props.id, { key, html });
     return html;
   };
 
-  // Render mermaid/D2 diagrams into the rendered view after each (re)render of
-  // an inactive block. renderMarkdown emits empty placeholders; this fills them.
-  // Both engines re-render on a theme switch (the shared mermaidEpoch bump).
-  createEffect(() => {
-    renderKey();
-    if (props.active && !panelKind()) return;
-    const host = renderedEl;
-    const key = String(props.id);
-    if (host) queueMicrotask(() => {
-      if (!host.isConnected) return;
-      void renderMermaidIn(host, key, true);
-      void renderD2In(host, key);
-    });
+  // Fill mermaid/D2 placeholders in a rendered view. renderMarkdown emits them
+  // empty; each preview element schedules its own fill when it mounts (see
+  // bindRendered) and again whenever its HTML is re-rendered. Driving it from
+  // the element itself matters: an effect holding a shared ref could fire
+  // before the source panel's preview existed and leave it blank for good.
+  // eslint-disable-next-line solid/reactivity -- a Block's id never changes
+  const fillDiagrams = (host: HTMLElement) => queueMicrotask(() => {
+    if (!host.isConnected) return;
+    void renderMermaidIn(host, String(props.id), true);
+    void renderD2In(host, String(props.id));
   });
+  const bindRendered = (host: HTMLDivElement) => {
+    renderedEl = host;
+    fillDiagrams(host);
+  };
+  createEffect(on(renderKey, () => { if (renderedEl) fillDiagrams(renderedEl); }, { defer: true }));
 
   const reveal = (caret: number) => {
     if (!el) return;
@@ -183,8 +222,7 @@ export default function Block(props: Props) {
       const selection = consumeSelectionRequest() ?? (current && current.start !== current.end ? current : null);
       const caret = pendingCaret ?? consumeCaretRequest() ?? current?.start ?? props.text.length;
       pendingCaret = null;
-      el.innerHTML = panelKind() ? props.text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : styleSource(props.text);
-      // eslint-disable-next-line solid/reactivity -- renderer runs synchronously; edit callback runs on mousedown
+      el.innerHTML = panelKind() ? stylePanelSource(props.text) : styleSource(props.text);
       hydrateInlinePreviews(el, source => renderMarkdown(source, String(props.id)), offset => {
         if (!el) return;
         el.focus({ preventScroll: true }); reveal(offset); setCaret(el, offset);
@@ -771,7 +809,7 @@ export default function Block(props: Props) {
           <>
             <div
               class="rendered"
-              ref={renderedEl}
+              ref={bindRendered}
               onMouseDown={onRenderedClick}
               onClick={onRenderedCheckboxClick}
               onContextMenu={onRenderedContextMenu}
@@ -841,12 +879,18 @@ export default function Block(props: Props) {
         }
       >
         <Show when={panelKind()}>
-          <div class="rendered" ref={renderedEl}
+          <div class="rendered" ref={bindRendered}
             // eslint-disable-next-line solid/no-innerhtml -- shared sanitized renderer
             innerHTML={renderedHtml()} />
         </Show>
-        <div class="source-container" classList={{ "block-source-panel": !!panelKind() }} role={panelKind() ? "region" : undefined} aria-label={panelKind() ? `${panelKind()} source editor` : undefined}>
-          <Show when={panelKind()}><div class="block-source-panel-header"><span>{panelKind()} source</span><button type="button" onClick={() => { props.onDeactivate(); rootEl?.closest<HTMLElement>(".editor")?.focus({ preventScroll: true }); }}>Done <kbd>Esc</kbd></button></div></Show>
+        <div ref={panelEl} class="source-container" classList={{ "block-source-panel": !!panelKind() }} role={panelKind() ? "region" : undefined} aria-label={panelKind() ? `${panelTitle()} source editor` : undefined}>
+          <Show when={panelKind()}>
+            <div class="block-source-panel-header">
+              <span>{panelTitle()}</span>
+              <Show when={panelHint()}><span class="block-source-panel-hint">{panelHint()}</span></Show>
+              <button type="button" onClick={() => { props.onDeactivate(); rootEl?.closest<HTMLElement>(".editor")?.focus({ preventScroll: true }); }}>Done <kbd>Esc</kbd></button>
+            </div>
+          </Show>
         <div
           ref={el}
           class={`source ${blockType()}`}

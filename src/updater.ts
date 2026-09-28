@@ -1,6 +1,6 @@
 import { createSignal } from "solid-js";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { isTauri, isFlatpak, alertDialog, relaunchApp } from "./platform";
+import { isTauri, isFlatpak, isMac, alertDialog, relaunchApp } from "./platform";
 
 /**
  * Auto-updater flow. On launch the app silently checks the updater endpoint (a
@@ -19,8 +19,15 @@ import { isTauri, isFlatpak, alertDialog, relaunchApp } from "./platform";
 export type UpdatePhase =
   | { kind: "idle" }
   | { kind: "checking" }
-  | { kind: "downloading"; percent: number }
+  /** `total` is 0 when the size is unknown (then `percent` is meaningless). */
+  | { kind: "downloading"; percent: number; received: number; total: number }
   | { kind: "installing" };
+
+/** "12.4 MB" (one decimal below 100 MB). */
+export function formatMegabytes(bytes: number): string {
+  const mb = bytes / 1_000_000;
+  return `${mb < 100 ? mb.toFixed(1) : Math.round(mb)} MB`;
+}
 
 const [updatePhase, setUpdatePhase] = createSignal<UpdatePhase>({ kind: "idle" });
 export { updatePhase };
@@ -122,6 +129,24 @@ async function runCheck(silent: boolean): Promise<void> {
   }
 }
 
+/**
+ * Expected download size from the manifest (`size`, added by the release
+ * workflow), used when the server omits Content-Length. The updater picks the
+ * entry for this OS and install type, which the page can't see, so a size is
+ * trusted only when every entry for this OS agrees (always true on macOS,
+ * whose universal bundle serves both architectures).
+ */
+function manifestSize(update: Update): number {
+  const platforms = (update.rawJson?.platforms ?? {}) as Record<string, { size?: unknown }>;
+  const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  const prefix = isMac ? "darwin-" : /Windows/i.test(ua) ? "windows-" : "linux-";
+  const sizes = new Set(Object.entries(platforms)
+    .filter(([key]) => key.startsWith(prefix))
+    .map(([, entry]) => Number(entry?.size)));
+  const [size] = sizes;
+  return sizes.size === 1 && Number.isFinite(size) && size > 0 ? size : 0;
+}
+
 /** Download + install the pending update, then relaunch. Drives `updatePhase`
  *  for the modal/StatusBar; on failure records the message and reopens for a
  *  Retry. Invoked by the modal's "Update now" button. */
@@ -130,23 +155,32 @@ export async function startInstall(): Promise<void> {
   inFlight = true;
   setUpdateError("");
 
-  let total = 0;
+  const fallbackTotal = manifestSize(pending);
+  let total = fallbackTotal;
   let received = 0;
-  setUpdatePhase({ kind: "downloading", percent: 0 });
+  let shown = -1;
+  setUpdatePhase({ kind: "downloading", percent: 0, received: 0, total });
   try {
     await pending.downloadAndInstall((event) => {
       switch (event.event) {
         case "Started":
-          total = event.data.contentLength ?? 0;
+          // Without Content-Length the bar used to sit at 0% for the whole
+          // download; fall back to the manifest size, else show bytes only.
+          total = event.data.contentLength || fallbackTotal;
           received = 0;
           break;
-        case "Progress":
+        case "Progress": {
           received += event.data.chunkLength;
-          setUpdatePhase({
-            kind: "downloading",
-            percent: total ? Math.round((received / total) * 100) : 0,
-          });
+          // Never claim 100% before the download actually finishes.
+          const percent = total ? Math.min(99, Math.floor((received / total) * 100)) : 0;
+          // One UI update per visible change (percent, or each 0.1 MB when the
+          // size is unknown), not one per network chunk.
+          const step = total ? percent : Math.floor(received / 100_000);
+          if (step === shown) break;
+          shown = step;
+          setUpdatePhase({ kind: "downloading", percent, received, total });
           break;
+        }
         case "Finished":
           setUpdatePhase({ kind: "installing" });
           break;

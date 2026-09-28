@@ -644,6 +644,7 @@ const dracula = parseBase16(TINTED).scheme;
   assert(!css.startsWith(".app"), "selector is not scoped to .app, so previews inherit it");
   assert(css.includes("--bg-page: #282a36;"), "css carries derived values");
   assert(css.trimEnd().endsWith("}"), "css block is closed");
+  assert(css.includes('[data-theme="custom"] .shiki span { color: var(--shiki-dark) !important; }'), "a dark scheme switches code to Shiki's dark palette");
 }
 {
   const round = parseBase16(toBase16Yaml(dracula)).scheme;

@@ -7,6 +7,7 @@ import {
   updateError,
   startInstall,
   dismissUpdate,
+  formatMegabytes,
 } from "../updater";
 
 const FALLBACK_VERSION = "0.4.1";
@@ -28,10 +29,18 @@ export default function UpdateModal() {
 
   const phase = updatePhase;
   const busy = () => phase().kind === "downloading" || phase().kind === "installing";
-  const determinate = () => phase().kind === "downloading";
-  const percent = () => {
+  const download = () => {
     const p = phase();
-    return p.kind === "downloading" ? p.percent : 0;
+    return p.kind === "downloading" ? p : null;
+  };
+  // A percentage only when the size is known; otherwise an animated bar and a
+  // running byte count, never a bar frozen at 0%.
+  const determinate = () => !!download()?.total;
+  const percent = () => download()?.percent ?? 0;
+  const detail = () => {
+    const d = download();
+    if (!d) return "";
+    return d.total ? `${formatMegabytes(d.received)} of ${formatMegabytes(d.total)}` : `${formatMegabytes(d.received)} downloaded`;
   };
 
   return (
@@ -81,6 +90,9 @@ export default function UpdateModal() {
                 {phase().kind === "installing" ? "Installing… the app will restart" : "Downloading…"}
                 <Show when={determinate()}> <span class="pandoc-dl-pct">{percent()}%</span></Show>
               </p>
+              <Show when={download()}>
+                <p class="pandoc-dl-bytes">{detail()}</p>
+              </Show>
             </Show>
 
             <Show when={updateError()}>

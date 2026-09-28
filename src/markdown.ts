@@ -281,7 +281,7 @@ export function buildRenderContext(blocks: readonly { id: number | string; text:
     if (/\[TOC\]|\[\[_TOC_\]\]/i.test(text)) sig.push("toc", outlineKey);
     // Lazily loaded render data (grammars, KaTeX, emoji): blocks that use it
     // re-render once it arrives.
-    if (text.includes("```") || text.includes("~~~") || text.includes("$") || text.includes("\\(") || text.includes("\\[") || shortcode.test(text)) sig.push("asset", assetKey);
+    if (text.includes("```") || text.includes("~~~") || text.includes("$") || text.startsWith("---\n") || text.includes("\\(") || text.includes("\\[") || shortcode.test(text)) sig.push("asset", assetKey);
     // Image srcs resolve against the document's folder and its front matter's
     // image-root-url / typora-root-url (images.ts).
     if (text.includes("![") || /<img\b/i.test(text)) sig.push("img", docPath ?? "", frontMatter);

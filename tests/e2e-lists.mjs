@@ -57,6 +57,12 @@ try {
         ["1. First loose item\n\n1. Second loose item", ["First loose item", "Second loose item"]],
         ["- [ ] Task first\n- [x] Task second", ["Task first", "Task second"]],
         ["## 2. Numbered section\n- Alpha\n- Bravo", ["2. Numbered section", "Alpha", "Bravo"]],
+        // Inline math: each live formula must match the preview's width, or the
+        // error accumulates along the line and rewraps it.
+        ["With $n$ producers and $m$ consumers the integrations grow as $O(n \\cdot m)$. A shared log collapses them to $O(n + m)$, so every system writes once and reads what it needs. " + "Replay stays cheap. ".repeat(6), ["producers", "consumers", "collapses", "Replay"]],
+        // Tables: long unbroken code, a wrapping cell and short cells must keep
+        // their column widths and vertical alignment when the table activates.
+        ["| File | Purpose | Sparse? |\n| --- | --- | --- |\n| `leader-epoch-checkpoint` | Epoch → start offset, for truncation after an unclean election | No |\n| `.index` | Offset → file position | Yes, every `index.interval.bytes` |", ["File", "Purpose", "No", "Offset"]],
       ];
       for (const [text, needles] of fixtures) {
         await load(text);

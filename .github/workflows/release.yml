@@ -100,6 +100,24 @@ jobs:
             --pattern latest.json \
             --output latest.json --clobber
 
+      # Record each platform's download size. The app uses it for its progress
+      # bar when a CDN or proxy omits Content-Length, which otherwise left the
+      # bar frozen at 0% for the whole download. The updater ignores unknown
+      # fields, so older installs still read this manifest.
+      - name: Add download sizes to latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" \
+            --json assets --jq '[.assets[] | {key: .name, value: .size}] | from_entries' > sizes.json
+          jq --slurpfile sizes sizes.json '
+            .platforms |= with_entries(
+              .value.size = ($sizes[0][.value.url | split("/") | last] // null)
+              | if .value.size == null then del(.value.size) else . end)
+          ' latest.json > latest.sized.json
+          mv latest.sized.json latest.json
+          jq '.platforms | map_values(.size)' latest.json
+
       - name: Push latest.json to the updater gist
         env:
           # PAT with the `gist` scope — the default GITHUB_TOKEN cannot edit

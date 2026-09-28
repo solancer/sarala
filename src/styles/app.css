@@ -1651,6 +1651,13 @@ ul.toc li.toc-l6 { padding-left: 92px; }
   border: 1px solid var(--rule);
   padding: 6px 14px;
   min-width: 3ch;
+  /* Match the rendered <td>, or the table reflows on activation: a real cell
+     inherits vertical-align: middle, and the preview wraps words normally.
+     .source's break-word would shrink long tokens' min-content width
+     (leader-epoch-checkpoint), so auto layout sized columns differently. */
+  vertical-align: middle;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 .source .md-table .md-trow:first-child .md-tcell {
   font-weight: var(--fw-semibold);
@@ -1717,7 +1724,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
   left: 0;
   right: 0;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   z-index: 30;
   pointer-events: none; /* the bar spans the row; only its buttons are live */
@@ -1747,13 +1754,12 @@ ul.toc li.toc-l6 { padding-left: 92px; }
   cursor: pointer;
   padding: 0;
 }
-.tt-btn:hover, .tt-btn.on { background: var(--accent-soft); color: var(--accent); }
-.table-toolbar > .tt-delete {
-  background: var(--bg-page);
-  border: 1px solid var(--rule);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-}
-.tt-delete:hover { color: #c0392b; }
+.tt-btn:hover:not(:disabled), .tt-btn.on { background: var(--accent-soft); color: var(--accent); }
+.tt-btn:disabled { opacity: 0.35; cursor: default; }
+.tt-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+/* Hairline between the toolbar's groups: grid | alignment + width | moves | delete. */
+.tt-sep { align-self: center; width: 1px; height: 14px; margin: 0 3px; background: var(--rule); }
+.tt-btn.tt-delete:hover { background: color-mix(in srgb, #c0392b 12%, transparent); color: #c0392b; }
 
 .tt-popover {
   position: absolute;
@@ -1971,6 +1977,17 @@ body.tables-full .rendered table { width: 100%; }
 
 .mermaid-block, .d2-block { margin: 0.6em 0; text-align: center; overflow-x: auto; }
 .mermaid-block svg, .d2-block svg { max-width: 100%; height: auto; }
+/* First render of a diagram (no previous render to keep): a quiet framed
+   placeholder of typical diagram height, so the swap to the SVG settles
+   rather than jumping from a single line of text. */
+.mermaid-block:not(.rendered):empty,
+.d2-block:not(.rendered):empty {
+  display: grid;
+  place-items: center;
+  min-height: 140px;
+  border-radius: 10px;
+  background: var(--tint);
+}
 .mermaid-block:not(.rendered):empty::before,
 .d2-block:not(.rendered):empty::before {
   content: "Rendering diagram…";
@@ -3122,6 +3139,7 @@ body.tables-full .rendered table { width: 100%; }
   color: var(--ink-soft);
 }
 .pandoc-dl-pct { color: var(--accent); font-weight: var(--fw-semibold); }
+.pandoc-dl-bytes { margin: 0; font: var(--fw-regular) 12px var(--font-ui); color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .pandoc-dl-actions {
   display: flex;
   justify-content: center;
@@ -3622,8 +3640,45 @@ input::placeholder, textarea::placeholder { color: var(--ink-soft); opacity: 1; 
 
 /* Complex blocks retain their preview; the source editor does not affect page geometry. */
 .source-container { display: contents; }
-.source-container.block-source-panel { display: flex; flex-direction: column; position: fixed; z-index: 70; right: 24px; bottom: 24px; width: min(520px, calc(100vw - 48px)); height: min(360px, 45vh); border: 1px solid var(--rule); border-radius: 12px; background: var(--paper); box-shadow: 0 12px 40px #0003; overflow: hidden; }
-.block-source-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; color: var(--ink); border-bottom: 1px solid var(--rule); font-size: 13px; font-weight: var(--fw-medium); }
-.block-source-panel-header button { padding: 4px 8px; border: 0; border-radius: 5px; background: var(--code-bg); color: var(--ink); cursor: pointer; }
-.block-source-panel-header kbd { margin-left: 5px; color: var(--ink-soft); font-size: 11px; }
-.block-source-panel > .source { flex: 1; overflow: auto; margin: 0; padding: 14px; border: 0; border-radius: 0; white-space: pre-wrap; font: var(--fw-regular) 13px/1.6 var(--font-mono); }
+/* Complex blocks (diagrams, equations, metadata, footnotes, HTML) edit in a
+   card anchored under their preview. The preview stays exactly where it was,
+   so the page never shifts; the card floats over what follows and is sized to
+   its source. A ring marks which preview is being edited. */
+.block:has(> .block-source-panel) > .rendered {
+  border-radius: 10px;
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 5px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.source-container.block-source-panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 10px);
+  /* Overhang the text column slightly, so edges aligned with it (a callout's
+     border, a table's side) can't peek out at the card's rounded corners. */
+  left: -8px;
+  right: -8px;
+  display: flex;
+  flex-direction: column;
+  max-height: min(420px, 55vh);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--bg-page);
+  /* Black-based: --ink is light in dark themes and would glow as a halo. */
+  box-shadow: 0 14px 36px rgb(0 0 0 / 0.16), 0 2px 6px rgb(0 0 0 / 0.08);
+  overflow: hidden;
+  animation: block-panel-in 140ms var(--ease-out, ease-out);
+}
+@keyframes block-panel-in { from { opacity: 0; transform: translateY(-6px); } }
+.block-source-panel-header { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; color: var(--ink); background: var(--tint); border-bottom: 1px solid var(--rule); font: var(--fw-medium) 12.5px var(--font-ui, inherit); }
+.block-source-panel-header > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.block-source-panel-hint { flex: none; color: var(--ink-soft); font-weight: var(--fw-regular); }
+.block-source-panel-header button { flex: none; padding: 4px 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg-page); color: var(--ink); font: inherit; cursor: pointer; }
+.block-source-panel-header button:hover { border-color: var(--accent); }
+.block-source-panel-header button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.block-source-panel-header kbd { margin-left: 6px; color: var(--ink-soft); font: 11px var(--font-ui, inherit); }
+.block-source-panel > .source { flex: 1; overflow: auto; margin: 0; padding: 12px 14px; border: 0; border-radius: 0; background: transparent; white-space: pre-wrap; font: var(--fw-regular) 13px/1.6 var(--font-mono); }
+@media (prefers-reduced-motion: reduce) { .source-container.block-source-panel { animation: none; } }
+
+/* A diagram re-laying out after an edit keeps its previous render, dimmed,
+   instead of collapsing to a placeholder. */
+.mermaid-block.diagram-pending > svg, .d2-block.diagram-pending > svg { opacity: 0.5; transition: opacity 120ms ease; }
+@media (prefers-reduced-motion: reduce) { .mermaid-block.diagram-pending > svg, .d2-block.diagram-pending > svg { transition: none; } }

@@ -95,6 +95,14 @@ function currentTheme(): { themeID: number; darkThemeID: number } {
 export async function renderD2In(container: HTMLElement, blockKey?: string): Promise<void> {
   const nodes = [...container.querySelectorAll<HTMLElement>(".d2-block[data-d2]")];
   if (!nodes.length) return;
+  // Keep the previous diagram on screen (dimmed) while the new source
+  // compiles, instead of collapsing to a placeholder on every edit.
+  for (const node of nodes) {
+    const last = blockKey != null && node.dataset.rendered !== "1" && !node.firstChild ? lastGoodSvg.get(blockKey) : undefined;
+    if (!last) continue;
+    node.innerHTML = last;
+    node.classList.add("diagram-pending");
+  }
   const d2 = await getD2();
   const auto = currentTheme();
   for (const node of nodes) {
@@ -119,6 +127,7 @@ export async function renderD2In(container: HTMLElement, blockKey?: string): Pro
       }
       node.innerHTML = clean;
       node.dataset.rendered = "1";
+      node.classList.remove("diagram-pending");
       if (blockKey != null) lastGoodSvg.set(blockKey, clean);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -127,6 +136,7 @@ export async function renderD2In(container: HTMLElement, blockKey?: string): Pro
         (last ?? "") +
         `<div class="render-error">⚠ D2 error: ${escapeHtml(msg)}</div>`;
       node.dataset.rendered = "1";
+      node.classList.remove("diagram-pending");
     }
   }
 }

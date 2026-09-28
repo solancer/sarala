@@ -102,6 +102,15 @@ export async function renderMermaidIn(container: HTMLElement, blockKey?: string,
     return false;
   });
   if (!nodes.length) return;
+  // Keep the previous diagram on screen (dimmed) while the new source lays
+  // out, instead of collapsing to a "Rendering…" placeholder on every edit.
+  for (const node of nodes) {
+    const last = blockKey != null && !node.firstChild ? lastGoodSvg.get(blockKey) : undefined;
+    if (!last) continue;
+    node.innerHTML = last;
+    if (shareStyles) shareSvgStyles(node);
+    node.classList.add("diagram-pending");
+  }
   // Clear any orphaned Mermaid measuring/error nodes left on <body> by a prior
   // failed render (these are the stray full-page "bomb" graphics).
   document.querySelectorAll('body > [id^="sarala-mmd-"], body > [id^="dsarala-mmd-"]')
@@ -134,6 +143,7 @@ export async function renderMermaidIn(container: HTMLElement, blockKey?: string,
       svgCache.set(`${theme}\0${src}\0${node.dataset.legacyLinks ?? ""}`, node.innerHTML);
       if (blockKey != null) lastGoodSvg.set(blockKey, node.innerHTML);
       if (shareStyles) shareSvgStyles(node);
+      node.classList.remove("diagram-pending");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const last = blockKey != null ? lastGoodSvg.get(blockKey) : undefined;
@@ -141,6 +151,7 @@ export async function renderMermaidIn(container: HTMLElement, blockKey?: string,
         (last ?? "") +
         `<div class="render-error">⚠ Mermaid error: ${escapeHtml(msg)}</div>`;
       if (shareStyles) shareSvgStyles(node);
+      node.classList.remove("diagram-pending");
       node.dataset.rendered = "1";
     } finally {
       // Mermaid appends a temporary measuring node to <body>; on a parse error

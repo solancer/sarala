@@ -4,7 +4,7 @@ import { THEME_LABELS } from "../menudata";
 import { togglePalette, isPaletteOpen } from "./PaletteSwitcher";
 import { openSettings, isSettingsOpen } from "./SettingsModal";
 import { executeCommand } from "../commands";
-import { updatePhase, type UpdatePhase } from "../updater";
+import { updatePhase, formatMegabytes, type UpdatePhase } from "../updater";
 
 /** Human name for the open file's format, from its extension.
  *  Was hardcoded to "Markdown", which is wrong for the .txt files the app
@@ -20,7 +20,7 @@ function updateLabel(p: UpdatePhase): string {
     case "checking":
       return "Checking for updates…";
     case "downloading":
-      return `Downloading update… ${p.percent}%`;
+      return p.total ? `Downloading update… ${p.percent}%` : `Downloading update… ${formatMegabytes(p.received)}`;
     case "installing":
       return "Installing update…";
     default:

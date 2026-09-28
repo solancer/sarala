@@ -55,6 +55,9 @@ const LOADERS: Record<string, Loader> = {
   graphql: () => import("shiki/langs/graphql.mjs"),
   vue: () => import("shiki/langs/vue.mjs"),
   ini: () => import("shiki/langs/ini.mjs"),
+  // Complex-block editing cards: diagram, equation and front-matter sources.
+  mermaid: () => import("shiki/langs/mermaid.mjs"),
+  latex: () => import("shiki/langs/latex.mjs"),
 };
 const LANGS = Object.keys(LOADERS);
 
