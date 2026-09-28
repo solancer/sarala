@@ -15,8 +15,14 @@ import path from "node:path";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const outfile = path.join(here, ".build", "livesource.mjs");
 
+// One bundle for livesource + markdown so the lazily loaded render data
+// (KaTeX, emoji catalog) is shared, and can be awaited before the checks.
 await build({
-  entryPoints: [path.join(here, "..", "src", "livesource.ts")],
+  stdin: {
+    contents: 'export * from "./src/livesource.ts"; export { prepareRender } from "./src/markdown.ts";',
+    resolveDir: path.join(here, ".."),
+    loader: "ts",
+  },
   bundle: true,
   format: "esm",
   outfile,
@@ -31,7 +37,8 @@ globalThis.NodeFilter = dom.window.NodeFilter;
 globalThis.HTMLElement = dom.window.HTMLElement;
 globalThis.Text = dom.window.Text;
 
-const { styleSource, applyMarkerVisibility, mapRenderedPrefixToSource, setCaret, getCaretOffset } = await import(outfile);
+const { styleSource, applyMarkerVisibility, mapRenderedPrefixToSource, setCaret, getCaretOffset, prepareRender } = await import(outfile);
+await prepareRender("$x$ :smile:");
 
 let failures = 0;
 let passes = 0;
@@ -463,6 +470,7 @@ assert(!styleSource("| lone | row |").includes("md-table"),
     outfile: out,
   });
   const md = await import(out);
+  await md.prepareRender("$x$"); // KaTeX loads lazily
 
   assert(md.renderMarkdown("inline $x^2$ here").includes('class="katex"'),
     "inline $...$ renders KaTeX");

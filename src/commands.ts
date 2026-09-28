@@ -35,7 +35,7 @@ import {
   setWindowAlwaysOnTop, toggleFullscreen, minimizeWindow, toggleMaximizeWindow,
 } from "./platform";
 import {
-  renderMarkdown, joinBlocks, setPreserveBreaksOption,
+  renderMarkdown, joinBlocks, setPreserveBreaksOption, prepareRender,
   setMathAltDelimiters as setMathAltDelimitersOpt,
   setMathFence as setMathFenceOpt,
   setEmojiEnabled as setEmojiEnabledOpt,
@@ -372,7 +372,9 @@ function loadExportCss(): string {
 async function renderBody(md: string): Promise<string> {
   const div = document.createElement("div");
   // Front matter is document metadata, never part of the rendered body.
-  div.innerHTML = renderMarkdown(stripFrontMatter(md));
+  const body = stripFrontMatter(md);
+  await prepareRender(body); // grammars, KaTeX and emoji load lazily; exports need them now
+  div.innerHTML = renderMarkdown(body);
   await renderMermaidIn(div);
   await renderD2In(div);
   return div.innerHTML;

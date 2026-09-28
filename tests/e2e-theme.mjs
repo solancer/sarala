@@ -68,7 +68,7 @@ const tokenOf = (name) =>
 // Baseline: the default curated theme.
 const saralaInk = await tokenOf("--ink");
 const saralaAccent = await tokenOf("--accent");
-check(saralaAccent === "#c25a3c", `curated theme active to start (accent ${saralaAccent})`);
+check(saralaAccent === "#8e422c", `curated theme active to start (accent ${saralaAccent})`);
 
 // --- open the editor from the palette's Custom dot ---
 await page.locator(".palette-toggle, .status-palette").first().click().catch(() => {});

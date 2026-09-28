@@ -30,8 +30,9 @@ const baseName = (p: string) => p.replace(/\\/g, "/").split("/").pop() || p;
 const normalizeForCompare = (s: string) => s.replace(/\r\n?/g, "\n").replace(/\n+$/, "");
 
 // Track each tab's shadow independently; switching to a clean tab must never
-// clear another tab's recovery data.
-const shadowKeys = new Set<string>();
+// clear another tab's recovery data. The value is what was last written, so an
+// unchanged dirty buffer isn't re-serialized to disk every tick.
+const shadowKeys = new Map<string, string>();
 let ticking = false;
 
 /** Wire up the autosave loop: a re-arming interval that shadows the dirty buffer,
@@ -47,7 +48,7 @@ export function startAutosave(): void {
   createEffect(() => {
     const dirtyKeys = new Set(openDocuments().filter(({ document }) => document.dirty && document.filePath)
       .map(({ document }) => keyForPath(document.filePath!)));
-    for (const key of shadowKeys) {
+    for (const key of shadowKeys.keys()) {
       if (!dirtyKeys.has(key)) { shadowKeys.delete(key); void clearShadow(key); }
     }
   });
@@ -61,11 +62,19 @@ async function tick(): Promise<void> {
       if (!document.dirty || !document.filePath) continue;
       const path = document.filePath;
       const key = keyForPath(path);
-      shadowKeys.add(key);
-      await writeShadow(key, {
-        path, content: joinBlocks(document.blocks.map((b) => b.text)), savedAt: Date.now(),
-        encoding: document.encoding, hadBom: document.hadBom,
-      });
+      const content = joinBlocks(document.blocks.map((b) => b.text));
+      const written = `${document.encoding}\u0000${document.hadBom ? 1 : 0}\u0000${content}`;
+      if (shadowKeys.get(key) === written) continue;
+      shadowKeys.set(key, written);
+      try {
+        await writeShadow(key, {
+          path, content, savedAt: Date.now(),
+          encoding: document.encoding, hadBom: document.hadBom,
+        });
+      } catch (error) {
+        shadowKeys.set(key, ""); // not written: retry next tick
+        throw error;
+      }
       // A save or close may have completed while this write was in flight.
       if (!openDocuments().some(({ document: d }) => d.filePath === path && d.dirty)) {
         shadowKeys.delete(key);

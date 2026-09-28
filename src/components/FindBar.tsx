@@ -1,5 +1,5 @@
 import { Show, createSignal, createEffect } from "solid-js";
-import { doc, fullText, updateBlock, renderEpoch } from "../store";
+import { doc, fullText, updateBlock, renderEpoch, activeTabId } from "../store";
 import { buildSearchRegex } from "../search";
 
 /**
@@ -167,6 +167,7 @@ export default function FindBar() {
   createEffect(() => {
     fullText();
     renderEpoch();
+    activeTabId();
     void doc.activeIndex;
     const q = query();
     // Read the option toggles so flipping any of them re-runs the search.

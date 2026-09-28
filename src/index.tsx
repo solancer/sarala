@@ -8,7 +8,7 @@ import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";
 import "katex/dist/katex.min.css";
 import "./images"; // registers the markdown image-src resolver
-import "./highlighter"; // registers the Shiki code highlighter + kicks off load
+import "./highlighter"; // registers the Shiki code highlighter (grammars load on demand)
 import "./styles/app.css";
 
 render(() => <App />, document.getElementById("root")!);

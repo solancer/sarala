@@ -33,7 +33,9 @@ try {
           const i = node.data.indexOf(needle);
           if (i < 0) continue;
           const r = document.createRange(); r.setStart(node, i); r.setEnd(node, i + needle.length);
-          const box = r.getBoundingClientRect();
+          // First line fragment: a needle that wraps has a bounding box spanning
+          // both lines, whose centre sits on other text.
+          const box = r.getClientRects()[0];
           return { x: box.x, y: box.y, height: box.height, width: box.width };
         }
         throw new Error(`Missing text: ${needle}`);
@@ -58,6 +60,7 @@ try {
       ];
       for (const [text, needles] of fixtures) {
         await load(text);
+        await page.evaluate(() => document.fonts.ready); // web font swap shifts text by ~1px
         const before = await Promise.all(needles.map(position));
         const target = before[before.length - 1];
         await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);

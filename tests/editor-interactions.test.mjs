@@ -15,6 +15,7 @@ import { createSignal } from "solid-js";
 import { render } from "solid-js/web";
 import Block from "./src/components/Block";
 import TableReorder from "./src/components/TableReorder";
+export { prepareRender } from "./src/markdown";
 export function mountBlock(host, initial) {
  const [text,setText] = createSignal(initial), [active,setActive] = createSignal(false);
  let changes=0;
@@ -41,7 +42,8 @@ globalThis.requestAnimationFrame=fn=>(frames.push(fn),frames.length);
 globalThis.cancelAnimationFrame=()=>{};
 globalThis.ResizeObserver=class {constructor(fn){observers.push(fn)} observe(){} disconnect(){}};
 const flush=async()=>{await Promise.resolve();for(let i=0;frames.length&&i<10;i++){const run=frames;frames=[];for(const fn of run)fn(0);await Promise.resolve()}};
-const {mountBlock,mountTable}=await import("./.build/editor-interactions.mjs");
+const {mountBlock,mountTable,prepareRender}=await import("./.build/editor-interactions.mjs");
+await prepareRender("$x$"); // KaTeX loads lazily
 let count=0;const check=(value,message)=>{assert.ok(value,message);count++};
 const host=document.createElement("div");host.className="page";document.body.append(host);
 const block=mountBlock(host,"$$\nx^2\n$$");await flush();

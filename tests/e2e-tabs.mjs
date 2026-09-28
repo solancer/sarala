@@ -16,32 +16,34 @@ try {
   const page = await browser.newPage();
   await page.goto(`http://localhost:${port}`);
   await page.waitForSelector('[role="tab"]');
+  // The sidebar's view switcher is also a tablist; count document tabs only.
+  const docTabs = page.getByRole("tablist", { name: "Open documents" });
   await page.evaluate(async () => {
     const store = await import("/src/store.ts");
     store.openDocument("Alpha", "/notes/A.md");
     store.openDocument("Beta", "/notes/B.md");
   });
-  assert.equal(await page.getByRole("tab").count(), 2);
+  assert.equal(await docTabs.getByRole("tab").count(), 2);
   await page.getByRole("button", { name: "Source", exact: true }).click();
   await page.locator(".source-full").fill("Beta edited");
-  await page.getByRole("tab", { name: /A.md/ }).click();
+  await docTabs.getByRole("tab", { name: /A.md/ }).click();
   assert.equal(await page.locator(".rendered").textContent().then((s) => s.trim()), "Alpha");
-  await page.getByRole("tab", { name: /B.md/ }).click();
+  await docTabs.getByRole("tab", { name: /B.md/ }).click();
   assert.equal(await page.locator(".source-full").inputValue(), "Beta edited\n");
   page.once("dialog", (dialog) => dialog.dismiss());
   await page.getByRole("button", { name: "Close B.md", exact: true }).click();
-  assert.equal(await page.getByRole("tab").count(), 2, "cancel keeps dirty tab");
+  assert.equal(await docTabs.getByRole("tab").count(), 2, "cancel keeps dirty tab");
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Close B.md", exact: true }).click();
-  await page.getByRole("tab", { name: /B.md/ }).waitFor({ state: "detached" });
-  assert.equal(await page.getByRole("tab").count(), 1);
+  await docTabs.getByRole("tab", { name: /B.md/ }).waitFor({ state: "detached" });
+  assert.equal(await docTabs.getByRole("tab").count(), 1);
   await page.keyboard.press("Control+t");
-  assert.equal(await page.getByRole("tab").count(), 2, "new tab shortcut");
+  assert.equal(await docTabs.getByRole("tab").count(), 2, "new tab shortcut");
   await page.keyboard.press("Control+Tab");
-  assert.match(await page.locator('[role="tab"][aria-selected="true"]').textContent(), /A.md/);
+  assert.match(await docTabs.locator('[role="tab"][aria-selected="true"]').textContent(), /A.md/);
   await page.getByRole("button", { name: "Close A.md", exact: true }).click();
   await page.getByRole("button", { name: "Close Untitled.md", exact: true }).click();
-  assert.equal(await page.getByRole("tab").count(), 1, "last close leaves blank tab");
-  assert.match(await page.locator('[role="tab"][aria-selected="true"]').textContent(), /Untitled.md/);
+  assert.equal(await docTabs.getByRole("tab").count(), 1, "last close leaves blank tab");
+  assert.match(await docTabs.locator('[role="tab"][aria-selected="true"]').textContent(), /Untitled.md/);
   console.log("PASS tab switching, source edits, close protection and shortcuts");
 } finally { await browser?.close(); server.kill("SIGTERM"); }

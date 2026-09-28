@@ -156,20 +156,28 @@ await page.locator(".sel-menu-item", { hasText: "Text" }).first().click();
 await page.waitForTimeout(200);
 check(await activeText() === before, "converting back restores the paragraph");
 
-// Near the top of the document there is no room above — the bar must flip
-// below rather than collide with the floating controls.
+// Near the top of the document the bar must never cover the document toolbar.
 await page.locator(".block .rendered").first().click();
 await page.waitForSelector(".block.active .source");
 await page.waitForTimeout(150);
-await selectWord("first");
-check(await bar.isVisible(), "bar appears for a selection in the first block");
-const flipped = await page.evaluate(() => {
+const barGeometry = () => page.evaluate(() => {
   const b = document.querySelector(".sel-bar").getBoundingClientRect();
   const s = window.getSelection().getRangeAt(0).getBoundingClientRect();
-  return { below: b.top >= s.bottom - 1, clearsControls: b.top >= 48 };
+  const edge = document.querySelector(".main .scroll").getBoundingClientRect().top;
+  return { below: b.top >= s.bottom - 1, clearsControls: b.top >= edge };
 });
+await selectWord("first");
+check(await bar.isVisible(), "bar appears for a selection in the first block");
+check((await barGeometry()).clearsControls, "a bar near the top stays clear of the document toolbar");
+// With the first line flush under the toolbar there is no room above, so the
+// bar flips below the selection.
+await page.addStyleTag({ content: ".page { padding-top: 0 !important; } .page > .block:first-child .source { margin-top: 0 !important; }" });
+await page.keyboard.press("ArrowRight"); // collapse, so the next drag selects rather than drags
+await page.waitForTimeout(150);
+await selectWord("first");
+const flipped = await barGeometry();
 check(flipped.below, "with no room above, the bar flips below the selection");
-check(flipped.clearsControls, "the flipped bar clears the floating controls");
+check(flipped.clearsControls, "the flipped bar clears the document toolbar");
 
 // Escape dismisses.
 await page.keyboard.press("Escape");

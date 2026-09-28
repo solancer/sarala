@@ -1,10 +1,7 @@
-import { UNICODE_EMOJI } from "./data/unicode-emoji";
-import { EMOJI_CATALOG } from "./data/emoji-catalog";
+import { assetsReady, whenIdle } from "./assets";
 
-/** Full bundled catalog plus established Sarala aliases. No runtime requests. */
-export const EMOJI: Record<string, string> = {
-  ...EMOJI_CATALOG,
-  ...UNICODE_EMOJI,
+/** Established Sarala aliases, available immediately. */
+const ALIASES: Record<string, string> = {
   smile: "😄", smiley: "😃", grin: "😁", laughing: "😆", joy: "😂",
   rofl: "🤣", blush: "😊", wink: "😉", heart_eyes: "😍", kissing_heart: "😘",
   thinking: "🤔", neutral_face: "😐", expressionless: "😑", unamused: "😒",
@@ -43,11 +40,32 @@ export const EMOJI: Record<string, string> = {
   hand: "✋", raising_hand: "🙋", shrug: "🤷", facepalm: "🤦",
 };
 
-const EMOJI_NAMES = Object.keys(EMOJI).sort();
+/**
+ * Full bundled catalog plus the aliases. The catalog (~350 KB of Unicode data)
+ * loads after first paint; a lookup miss before then starts it at once, and
+ * blocks with shortcodes re-render when it lands. No network requests: the
+ * data ships in the app bundle as its own chunk.
+ */
+export const EMOJI: Record<string, string> = { ...ALIASES };
+let EMOJI_NAMES = Object.keys(EMOJI).sort();
+
+let catalog: Promise<void> | null = null;
+export function loadEmojiCatalog(): Promise<void> {
+  catalog ??= Promise.all([import("./data/emoji-catalog"), import("./data/unicode-emoji")]).then(([c, u]) => {
+    // Same precedence as before: catalog, then Unicode names, then aliases.
+    Object.assign(EMOJI, c.EMOJI_CATALOG, u.UNICODE_EMOJI, ALIASES);
+    EMOJI_NAMES = Object.keys(EMOJI).sort();
+    assetsReady();
+  });
+  return catalog;
+}
+whenIdle(() => void loadEmojiCatalog());
 
 /** Look up a shortcode (without the surrounding colons). */
 export function emojiFor(name: string): string | undefined {
-  return Object.hasOwn(EMOJI, name) ? EMOJI[name] : undefined;
+  if (Object.hasOwn(EMOJI, name)) return EMOJI[name];
+  if (!catalog) void loadEmojiCatalog();
+  return undefined;
 }
 
 /** Shortcodes whose name starts with `prefix` (for autocomplete), capped. */

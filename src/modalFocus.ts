@@ -41,11 +41,19 @@ export function containModalFocus(el: HTMLElement, close: () => void): () => voi
       e.preventDefault(); first.focus();
     }
   };
+  // Clicking the inert page behind a modal drops focus to <body>, where the
+  // modal's own listener never hears Escape; still close the topmost modal.
+  const onStrayKey = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape' || e.defaultPrevented || stack.at(-1) !== el || el.contains(e.target as Node)) return;
+    e.preventDefault(); close();
+  };
   el.addEventListener('keydown', onKey);
+  document.addEventListener('keydown', onStrayKey);
   document.addEventListener('focusin', onFocus);
   focusFirst();
   return () => {
     el.removeEventListener('keydown', onKey);
+    document.removeEventListener('keydown', onStrayKey);
     document.removeEventListener('focusin', onFocus);
     const wasTop = stack.at(-1) === el;
     const index = stack.indexOf(el);

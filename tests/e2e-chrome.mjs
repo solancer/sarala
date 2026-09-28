@@ -3,10 +3,9 @@
  *
  *   node tests/e2e-chrome.mjs   (starts its own server on :1442)
  *
- * The design claim is that the content pane is one uninterrupted sheet: the
- * sidebar owns the full window height, and the top controls float on the page
- * with no band and no border. These checks pin exactly that, because it is the
- * kind of thing a stray `background` or `border-bottom` quietly undoes.
+ * The sidebar owns the full window height; the content pane opens with a solid
+ * document toolbar (tabs + controls) that sits above the editor scroller rather
+ * than floating over it. These checks pin that layout and the controls in it.
  */
 import { spawn } from "node:child_process";
 import { chromium } from "playwright";
@@ -37,6 +36,15 @@ const check = (cond, label) => {
 };
 const css = (sel, prop) =>
   page.locator(sel).evaluate((el, p) => getComputedStyle(el).getPropertyValue(p), prop);
+// The theme's accent, resolved to rgb() so it compares with computed colours.
+const accent = () => page.evaluate(() => {
+  const probe = document.createElement("span");
+  probe.style.color = "var(--accent)";
+  document.querySelector(".app").appendChild(probe);
+  const value = getComputedStyle(probe).color;
+  probe.remove();
+  return value;
+});
 
 // --- the sheet: sidebar and content both reach the top ---
 const side = await page.locator(".sidebar").boundingBox();
@@ -50,17 +58,22 @@ check(
   "sidebar and content pane are the same height (no band above either)",
 );
 
-// --- no bar: the whole point ---
+// --- the document toolbar: a solid panel band above the editor ---
 check(
-  (await css(".topfloat", "background-color")) === "rgba(0, 0, 0, 0)",
-  "the control strip has no background",
+  (await css(".topfloat", "background-color")) !== "rgba(0, 0, 0, 0)",
+  "the document toolbar is a solid band, not see-through",
 );
 check(
-  (await css(".topfloat", "border-bottom-width")) === "0px",
-  "the control strip has no bottom border",
+  (await css(".topfloat", "box-shadow")).includes("inset"),
+  "a hairline rule separates the toolbar from the page",
 );
 const pageBg = await css(".main", "background-color");
 check(pageBg === "rgb(250, 246, 239)", `the pane is the editor page colour (${pageBg})`);
+{
+  const strip = await page.locator(".topfloat").boundingBox();
+  const scroller = await page.locator(".main .scroll").first().boundingBox();
+  check(scroller.y >= strip.y + strip.height - 1, `the editor scrolls below the toolbar, not under it (${strip.y + strip.height} / ${scroller.y})`);
+}
 
 // The strip is the window's drag handle, so it must take pointer events:
 // Tauri's drag script reads the mouse event's target, and a `pointer-events:
@@ -74,63 +87,9 @@ check(
   "the strip is a deep drag region, so the filename and spacer drag too",
 );
 check(
-  (await page.locator(".topfloat").evaluate(
-    (el) => getComputedStyle(el, "::before").pointerEvents,
-  )) === "none",
-  "the gradient mask itself stays click-through",
+  (await page.locator(".topfloat").evaluate((el) => getComputedStyle(el, "::before").display)) === "none",
+  "the old floating gradient mask is switched off",
 );
-
-// --- the fade extends past the strip so scrolled text cannot ghost through ---
-const fade = await page.locator(".topfloat").evaluate((el) => {
-  const s = getComputedStyle(el, "::before");
-  return { bottom: s.bottom, image: s.backgroundImage };
-});
-check(
-  fade.bottom.startsWith("-"),
-  `the mask extends below the strip so the fade completes (${fade.bottom})`,
-);
-
-// Translucency: content should read *through* the chrome, blurred, rather than
-// be painted over by an opaque fade.
-const glass = await page.locator(".topfloat").evaluate((el) => {
-  const s = getComputedStyle(el, "::before");
-  return {
-    backdrop: s.backdropFilter || s.webkitBackdropFilter,
-    bg: s.backgroundColor,
-    mask: s.maskImage || s.webkitMaskImage,
-  };
-});
-check(
-  glass.backdrop && glass.backdrop !== "none" && glass.backdrop.includes("blur"),
-  `the strip blurs what is behind it (${glass.backdrop})`,
-);
-check(
-  /\/\s*0?\.[0-9]/.test(glass.bg) || glass.bg.includes("rgba"),
-  `the strip's own fill is translucent, not opaque (${glass.bg})`,
-);
-check(
-  glass.mask.includes("linear-gradient"),
-  "the blurred pane dissolves at its bottom edge rather than ending on a hard line",
-);
-// The opaque fade must survive as the fallback for webviews without
-// backdrop-filter (WebKitGTK), or those users get unreadable text under a
-// transparent strip.
-const fallback = await page.evaluate(() => {
-  for (const sheet of document.styleSheets) {
-    let rules;
-    try { rules = sheet.cssRules; } catch { continue; }
-    for (const r of rules) {
-      // Read the `background` shorthand, not `background-image`: the value
-      // contains a var(), so the browser cannot expand the shorthand at parse
-      // time and background-image comes back empty.
-      if (r.selectorText === ".topfloat::before" && r.style.background.includes("linear-gradient")) {
-        return true;
-      }
-    }
-  }
-  return false;
-});
-check(fallback, "an opaque gradient remains as the no-backdrop-filter fallback");
 
 // --- controls still work from their new home ---
 await page.locator(".view-toggle button", { hasText: "Source" }).click();
@@ -185,26 +144,27 @@ await page.evaluate(async () => {
   m.setFilePath("/Users/me/notes/README.md");
 });
 await page.waitForTimeout(300);
-check(await page.locator(".topbar-dot").count() === 0, "a saved document shows no dot");
+const dot = '.document-tab.selected .document-tab-dirty.dirty';
+check(await page.locator(dot).count() === 0, "a saved document shows no dot");
 await page.locator(".block").first().click();
 await page.waitForSelector(".block.active .source");
 await page.keyboard.type("x");
 await page.waitForTimeout(400);
-check(await page.locator(".topbar-dot").count() === 1, "editing shows the unsaved dot");
+check(await page.locator(dot).count() === 1, "editing shows the unsaved dot");
 check(
-  (await page.getAttribute(".topbar-dot", "aria-label")) === "Unsaved changes",
+  (await page.getAttribute(dot, "aria-label")) === "Unsaved changes",
   "the dot says what it means",
 );
 // --accent is defined by every theme; --select is not, which is what broke it.
 check(
-  (await css(".topbar-dot", "background-color")) === "rgb(194, 90, 60)",
+  (await css(dot, "background-color")) === await accent(),
   "the dot uses --accent, which every theme defines",
 );
 
 // --- filename carries its path ---
 check(
-  (await page.getAttribute(".topbar-file", "title")) === "/Users/me/notes/README.md",
-  "the filename's tooltip disambiguates same-named files",
+  (await page.getAttribute('.document-tab.selected [role="tab"]', "title")) === "/Users/me/notes/README.md",
+  "the tab's tooltip disambiguates same-named files",
 );
 
 // --- landmark semantics survived the float rewrite ---
@@ -213,7 +173,7 @@ check(
   "the strip is a <header> landmark, not a bare div",
 );
 check(
-  (await page.getAttribute("header.topfloat", "aria-label")) === "Document",
+  (await page.getAttribute("header.topfloat", "aria-label")) === "Documents and controls",
   "the landmark is named",
 );
 
@@ -223,7 +183,7 @@ check(
   "a divider separates the command palette from the view controls",
 );
 {
-  const order = await page.locator(".topfloat > *").evaluateAll((els) =>
+  const order = await page.locator(".document-header-actions > *").evaluateAll((els) =>
     els.map((e) => e.className.split(" ")[0] || e.tagName.toLowerCase()),
   );
   const sep = order.indexOf("topfloat-sep");
@@ -285,7 +245,7 @@ await page.evaluate(async () => {
 });
 await page.waitForTimeout(300);
 check(
-  (await css(".sb-saved .sync-dot", "background-color")) === "rgb(194, 90, 60)",
+  (await css(".sb-saved .sync-dot", "background-color")) === await accent(),
   "the unsaved dot switches to the theme accent",
 );
 check(
@@ -371,26 +331,14 @@ check(!band.fileTree, "the file tree below is not a drag region");
 // --- the old solid bar is gone entirely ---
 check(await page.locator(".topbar").count() === 0, "the old solid top bar no longer exists");
 
-// --- the top strip holds clear of the editor scrollbar ---
-// The scroller had no scrollbar styling, so the platform's was painted as part
-// of it and sat *under* the floating strip, where the blur dimmed the thumb's
-// top few pixels. Styling it gives a known lane the strip's mask avoids.
-// (The visible result is only checkable in a real webview: headless Chromium
-// uses overlay scrollbars, which take no layout width and do not paint.)
+// --- the editor scrollbar has its own lane and styling ---
+// (Headless Chromium uses overlay scrollbars, so only the declared styling is
+// checkable here; the toolbar no longer overlaps the scroller at all.)
 {
   const w = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue("--scrollbar-w").trim(),
   );
   check(w === "10px", `the scrollbar lane has a declared width (${w})`);
-  const maskRight = await page.locator(".topfloat").evaluate(
-    (el) => getComputedStyle(el, "::before").right,
-  );
-  check(maskRight === w, `the strip's mask stops short of that lane (${maskRight})`);
-  const pad = await css(".topfloat", "padding-right");
-  check(
-    parseFloat(pad) >= 14 + parseFloat(w),
-    `the controls clear the lane rather than sitting on it (${pad})`,
-  );
   // `background: var(--rule)` does not survive CSSOM serialization (Chromium
   // drops the var() from the shorthand's longhands), so assert on the parts
   // that do — they are what distinguishes our thumb from the platform default.

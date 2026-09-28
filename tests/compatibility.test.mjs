@@ -10,6 +10,7 @@ const dom=new JSDOM("<!doctype html><body></body>",{url:"https://sarala.test"});
 for(const name of ["window","document","Node","NodeFilter","HTMLElement","Text","DOMParser"]) globalThis[name]=name==="window"?dom.window:dom.window[name];
 const md=await import(outdir+"/markdown.js");
 const live=await import(outdir+"/livesource.js");
+await md.prepareRender("$x$ :smile:");
 const physics=await import(outdir+"/physics.js");
 const equations=await import(outdir+"/equations.js");
 const emoji=await import(outdir+"/emoji.js");

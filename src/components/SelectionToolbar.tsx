@@ -93,13 +93,13 @@ const MARK_GROUPS: { kind: Exclude<MarkKind, "image">; title: string; icon: stri
   ],
 ];
 
-/**
- * Height of the floating control strip (`.topfloat`). A selection near the top
- * of the document has no room above it without colliding with those controls,
- * so the bar flips below instead. Keep in step with `.topfloat`'s height.
- */
-const TOP_LIMIT = 48;
 const GAP = 8;
+/**
+ * Top edge of the visible editing area. Above it sit the document toolbar and,
+ * on Linux/Windows, the in-app menubar, so their height varies; a bar that
+ * would rise past this edge flips below the selection instead.
+ */
+const topLimit = () => document.querySelector(".main .scroll")?.getBoundingClientRect().top ?? 0;
 
 export default function SelectionToolbar() {
   let barEl: HTMLDivElement | undefined;
@@ -151,7 +151,7 @@ export default function SelectionToolbar() {
     setRect(r);
   };
 
-  /** Clamp into the viewport, flipping below the selection near the top bar. */
+  /** Clamp into the viewport, flipping below the selection near the toolbar. */
   const place = () => {
     const r = rect();
     if (!r || !barEl) return;
@@ -163,7 +163,7 @@ export default function SelectionToolbar() {
     );
     const above = r.top - h - GAP;
     barEl.style.left = `${left}px`;
-    barEl.style.top = `${above < TOP_LIMIT ? r.bottom + GAP : above}px`;
+    barEl.style.top = `${above < topLimit() + GAP ? r.bottom + GAP : above}px`;
   };
 
   createEffect(() => {

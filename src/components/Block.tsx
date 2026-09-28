@@ -1,4 +1,4 @@
-import { Show, createEffect, createSignal, on, onCleanup } from "solid-js";
+import { Show, createEffect, createMemo, createSignal, on, onCleanup, untrack } from "solid-js";
 import { complexBlockKind } from "../complexblocks";
 import { renderMarkdown, hasOpenFence } from "../markdown";
 import {
@@ -9,7 +9,7 @@ import { isTauri, pickImageFile } from "../platform";
 import {
   consumeCaretRequest, consumeSelectionRequest,
   spellcheckOn, smartPunctuation, renderEpoch, mermaidEpoch, mathFence, mathAltDelimiters,
-  setLiveCaretOffset,
+  setLiveCaretOffset, renderContext,
 } from "../store";
 import { renderMermaidIn } from "../mermaid";
 import { renderD2In } from "../d2";
@@ -58,6 +58,14 @@ interface Props {
   setHeading: (level: number) => void;
 }
 
+/**
+ * Rendered HTML per block id, reused while the block's render key is
+ * unchanged. Tab switches remount every block of the incoming document;
+ * block ids survive the switch, so this turns a full re-render into string
+ * lookups. Mermaid/D2 SVGs are cached separately by source.
+ */
+const htmlCache = new Map<number, { key: string; html: string }>();
+
 export default function Block(props: Props) {
   let el: HTMLDivElement | undefined;
   let rootEl: HTMLDivElement | undefined;
@@ -70,19 +78,36 @@ export default function Block(props: Props) {
   createEffect(on(() => props.active, active => setPanelKind(active ? complexBlockKind(props.text, { mathFence: mathFence(), alternateMath: mathAltDelimiters() }) : null)));
 
 
+  // Everything this block's rendered HTML depends on: its text, the global
+  // render options, and the slice of document context it uses (see
+  // buildRenderContext). Edits elsewhere leave the key, and the DOM, untouched.
+  const contextSig = createMemo(() => renderContext().blocks.get(String(props.id))?.sig ?? "");
+  // Diagram SVGs bake in theme colours; everything else follows CSS variables,
+  // so only diagram blocks re-render on a theme switch.
+  const hasDiagram = () => /^[ \t>]*(?:`{3,}|~{3,})[ \t]*(?:mermaid|d2|sequence|flow)\b/im.test(props.text);
+  const renderKey = createMemo(() =>
+    `${renderEpoch()}\u0002${hasDiagram() ? mermaidEpoch() : ""}\u0002${contextSig()}\u0002${props.text}`);
+  const renderedHtml = () => {
+    const key = renderKey();
+    const hit = htmlCache.get(props.id);
+    if (hit?.key === key) return hit.html;
+    const html = untrack(() => renderMarkdown(props.text, String(props.id)));
+    if (htmlCache.size > 5000) htmlCache.clear();
+    htmlCache.set(props.id, { key, html });
+    return html;
+  };
+
   // Render mermaid/D2 diagrams into the rendered view after each (re)render of
   // an inactive block. renderMarkdown emits empty placeholders; this fills them.
   // Both engines re-render on a theme switch (the shared mermaidEpoch bump).
   createEffect(() => {
-    renderEpoch();
-    mermaidEpoch();
-    void props.text;
+    renderKey();
     if (props.active && !panelKind()) return;
     const host = renderedEl;
     const key = String(props.id);
     if (host) queueMicrotask(() => {
       if (!host.isConnected) return;
-      void renderMermaidIn(host, key);
+      void renderMermaidIn(host, key, true);
       void renderD2In(host, key);
     });
   });
@@ -147,7 +172,9 @@ export default function Block(props: Props) {
   // Re-style the live source whenever the text changes while active,
   // restoring the caret to where the user left it.
   createEffect(
-    on([() => props.active, () => props.text, renderEpoch, panelKind], ([active, text], previous) => {
+    // contextSig: re-style when this block's own document context or lazily
+    // loaded render data changes (not on every global asset arrival).
+    on([() => props.active, () => props.text, renderEpoch, panelKind, contextSig], ([active, text], previous) => {
       if (!active || !el || composing) return;
       // Shiki can finish loading while a list is active. Refresh its code
       // colors without moving the user's caret or losing a text selection.
@@ -388,15 +415,19 @@ export default function Block(props: Props) {
       }
       if (!rect) return;
       const cs = getComputedStyle(el);
-      const host = el.getBoundingClientRect();
       const line = rect.height || parseFloat(cs.lineHeight) || 24;
+      // Measure against the content's own first/last line boxes: layout blocks
+      // (headings, lists, quotes) carry margins inside the editable host, so
+      // its padding edge sits well above the first line.
+      const all = document.createRange();
+      all.selectNodeContents(el);
+      const lines = [...all.getClientRects()].filter((r) => r.height > 0);
+      const host = el.getBoundingClientRect();
+      const top = lines.length ? Math.min(...lines.map((r) => r.top)) : host.top + parseFloat(cs.paddingTop);
+      const bottom = lines.length ? Math.max(...lines.map((r) => r.bottom)) : host.bottom - parseFloat(cs.paddingBottom);
       if (e.key === "ArrowUp") {
-        const innerTop = host.top + parseFloat(cs.paddingTop);
-        if (rect.top - innerTop < line * 0.5) { e.preventDefault(); props.onNavigate(-1); }
-      } else {
-        const innerBottom = host.bottom - parseFloat(cs.paddingBottom);
-        if (innerBottom - rect.bottom < line * 0.5) { e.preventDefault(); props.onNavigate(1); }
-      }
+        if (rect.top - top < line * 0.5) { e.preventDefault(); props.onNavigate(-1); }
+      } else if (bottom - rect.bottom < line * 0.5) { e.preventDefault(); props.onNavigate(1); }
     }
   };
 
@@ -747,7 +778,7 @@ export default function Block(props: Props) {
               onMouseOver={onRenderedMouseOver}
               onMouseOut={onRenderedMouseOut}
               // eslint-disable-next-line solid/no-innerhtml -- renderMarkdown output is DOMPurify-sanitized
-              innerHTML={(renderEpoch(), mermaidEpoch(), renderMarkdown(props.text, String(props.id)))}
+              innerHTML={renderedHtml()}
             />
             <Show when={imgTool()}>
               {(it) => (
@@ -812,7 +843,7 @@ export default function Block(props: Props) {
         <Show when={panelKind()}>
           <div class="rendered" ref={renderedEl}
             // eslint-disable-next-line solid/no-innerhtml -- shared sanitized renderer
-            innerHTML={(renderEpoch(), mermaidEpoch(), renderMarkdown(props.text, String(props.id)))} />
+            innerHTML={renderedHtml()} />
         </Show>
         <div class="source-container" classList={{ "block-source-panel": !!panelKind() }} role={panelKind() ? "region" : undefined} aria-label={panelKind() ? `${panelKind()} source editor` : undefined}>
           <Show when={panelKind()}><div class="block-source-panel-header"><span>{panelKind()} source</span><button type="button" onClick={() => { props.onDeactivate(); rootEl?.closest<HTMLElement>(".editor")?.focus({ preventScroll: true }); }}>Done <kbd>Esc</kbd></button></div></Show>

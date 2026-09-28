@@ -1011,7 +1011,10 @@ body { font-family: var(--font-ui); }
 .rendered ul { list-style: none; }
 .rendered ul > li:not(:has(> input[type="checkbox"]))::before {
   content: "•";
-  display: inline-block;
+  /* A float, not inline-block: in a loose item the first child is a <p>, and an
+     inline box before a block gets a line of its own, stranding the bullet
+     above its text. The -1.5em margin gives it zero net width either way. */
+  float: left;
   width: 1.5em;
   margin-left: -1.5em;
   text-align: right;
@@ -1962,6 +1965,8 @@ body.tables-full .rendered table { width: 100%; }
 .rendered .math-block { margin: 0.6em 0; text-align: center; overflow-x: auto; }
 .rendered .katex { font-size: 1.05em; }
 .math-error { color: #c0392b; border-bottom: 1px dotted #c0392b; cursor: help; }
+/* Formula source shown for the moment before KaTeX loads (not an error). */
+.math-pending { font-family: var(--font-mono); font-size: 0.9em; color: var(--ink-soft); }
 .math-block-error { text-align: left; }
 
 .mermaid-block, .d2-block { margin: 0.6em 0; text-align: center; overflow-x: auto; }
@@ -3381,7 +3386,13 @@ body.tables-full .rendered table { width: 100%; }
 
 /* Source-backed list structure: reserve the marker gutter even while its
    syntax is revealed, and wrap every item beneath its own text. */
-.source.b-layout { padding: 2px 0; white-space: normal; }
+.source.b-layout { padding: 2px 0; white-space: pre-wrap; }
+/* Typed spaces must stay literal: under `white-space: normal` the browser
+   writes them as U+00A0 into the source, or deletes an invisible trailing one
+   (typing after "## "). Soft line breaks still collapse to a space, as in
+   preview; quote prefixes injected after a break keep their own spacing. */
+.source .md-soft { white-space: normal; }
+.source .md-soft > * { white-space: pre-wrap; }
 .source .md-layout-space { display: none; }
 .source .md-layout-literal { display: block; white-space: pre-wrap; }
 .source .md-list { display: block; margin: 0.35em 0; line-height: 2.06; }

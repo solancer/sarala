@@ -1,7 +1,7 @@
 import { emojiFor, emojiShortcode } from "./emoji";
 import { inlineSourceTokens, resolveMarkdownImage } from "./markdown";
 import { splitPipeRow } from "./tabletools";
-import { Marked, type Token, type Tokens } from "marked";
+import { Lexer, Marked, type Token, type Tokens } from "marked";
 
 /**
  * Live-styled Markdown source — WYSIWYG inline editing.
@@ -287,6 +287,17 @@ export function hasSourceLayout(src: string): boolean {
   return layoutTokens(src) !== null;
 }
 
+/** Lex a list item's contents as marked's list tokenizer does (nested, not
+ * top level). There a numbered line such as `3. Deep` opens a nested list;
+ * top-level lexing would fold it into the paragraph above and shift the item
+ * when the block activates. */
+function itemTokens(src: string): Token[] {
+  const lexer = new Lexer(blockLexer.defaults);
+  lexer.state.top = false;
+  const tokens = lexer.blockTokens(src, []);
+  return tokens.map((token) => token.raw).join("") === src ? tokens : blockLexer.lexer(src);
+}
+
 function styleList(token: Tokens.List): string {
   if (!token.raw.startsWith(token.items.map((item) => item.raw).join(""))) {
     return styleFlatSource(token.raw);
@@ -310,7 +321,7 @@ function styleList(token: Tokens.List): string {
       indents.push(removed);
       return "\n" + spaces.slice(removed.length);
     });
-    let html = styleLayoutTokens(blockLexer.lexer(normalized), !token.loose);
+    let html = styleLayoutTokens(itemTokens(normalized), !token.loose);
     let line = 0;
     html = html.replace(/\n/g, () => "\n" + concealed(indents[line++] ?? ""));
     const cls = item.task ? `md-task${item.checked ? " md-done" : ""}`
@@ -407,17 +418,26 @@ function styleLayoutTokens(tokens: Token[], tight = false): string {
     const raw = token.raw;
     const tail = raw.match(/\n*$/)![0];
     const body = tail ? raw.slice(0, -tail.length) : raw;
-    if (token.type === "heading" && !/^#{1,6}\s/.test(body)) {
+    // Setext: text over an =/- underline. Decide by the underline, not by
+    // "# " — a bare "#" is an empty ATX heading, and concealing it as an
+    // underline hid the text the caret had just typed.
+    if (token.type === "heading" && /\n[ \t]*(?:=+|-+)[ \t]*$/.test(body)) {
       const heading = token as Tokens.Heading;
       const end = body.lastIndexOf("\n");
       return `<span class="md-layout-heading md-layout-h${heading.depth}"><span class="md-h${heading.depth}">${inline(esc(body.slice(0,end)))}</span>${concealed(body.slice(end))}</span>${concealed(tail)}`;
     }
     if (token.type === "hr") return `<span class="md-live-hr">${concealed(raw)}<hr></span>`;
-    if (token.type === "heading" && /^#{1,6}\s/.test(body)) {
+    if (token.type === "heading") {
       return `<span class="md-layout-heading md-layout-h${(token as Tokens.Heading).depth}">${styleFlatSource(body)}</span>${concealed(tail)}`;
     }
     if (token.type === "paragraph" || token.type === "text") {
-      return `<span class="md-layout-paragraph${tight ? " md-tight" : ""}">${inline(esc(body)).replace(/(?: {2,}|\\)\n/g, (br) => `${concealed(br.slice(0, -1))}<span class="md-hard-break">\n</span>`)}</span>${concealed(tail)}`;
+      // Layout blocks keep typed spaces literal (pre-wrap), so a soft line
+      // break, with any blanks around it, gets its own collapsing span that
+      // reads as one space, as it does in preview.
+      const lines = inline(esc(body)).replace(/(?: {2,}|\\)\n|[ \t]*\n[ \t]*/g, (br) => /^(?: {2,}|\\)\n$/.test(br)
+        ? `${concealed(br.slice(0, -1))}<span class="md-hard-break">\n</span>`
+        : `<span class="md-soft">${br}</span>`);
+      return `<span class="md-layout-paragraph${tight ? " md-tight" : ""}">${lines}</span>${concealed(tail)}`;
     }
     return `<span class="md-layout-literal">${styleFlatSource(raw)}</span>`;
   }).join("");

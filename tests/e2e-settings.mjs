@@ -71,7 +71,13 @@ check(
 
 await page.locator(".set-rail-item", { hasText: "Markdown" }).click();
 await page.waitForTimeout(300);
-check(await page.locator(".set-row").count() === 7, "switching category swaps the rows");
+{
+  const labels = await page.locator(".set-row-label").allTextContents();
+  check(
+    labels.length === 10 && labels[0] === "Preserve single line breaks" && !labels.includes("Theme"),
+    `switching category swaps the rows (${JSON.stringify(labels)})`,
+  );
+}
 check(
   await page.locator(".set-rail-item.on").textContent() === "Markdown",
   "the selected category is marked",

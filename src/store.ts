@@ -2,14 +2,16 @@ import { batch, createSignal, createMemo } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 import type { FileNode } from "./platform";
 import type { Base16Scheme } from "./base16";
+import { onAssetsReady } from "./assets";
 import {
   splitBlocks,
   joinBlocks,
   hasOpenFence,
-  extractOutline,
   countWords,
   setTocProvider,
-  setMarkdownDocumentProvider,
+  setRenderContextProvider,
+  buildRenderContext,
+  type Heading,
 } from "./markdown";
 
 export interface Block {
@@ -183,16 +185,34 @@ export const [autolinkEnabled, setAutolinkEnabledSig] = createSignal(true);
 export const [renderEpoch, setRenderEpoch] = createSignal(0);
 export const bumpRenderEpoch = () => setRenderEpoch((n) => n + 1);
 
+// Bumped when lazily loaded render data (grammars, KaTeX, emoji) arrives;
+// re-renders only the blocks that use it (see buildRenderContext).
+export const [assetEpoch, setAssetEpoch] = createSignal(0);
+onAssetsReady(() => setAssetEpoch((n) => n + 1));
+
 // Bumped when the theme changes so mermaid diagrams re-render in the new theme.
 export const [mermaidEpoch, setMermaidEpoch] = createSignal(0);
 export const bumpMermaidEpoch = () => setMermaidEpoch((n) => n + 1);
 
 export const fullText = createMemo(() => joinBlocks(state.blocks.map((b) => b.text)));
-export const outline = createMemo(() => extractOutline(state.blocks.map((b) => b.text)));
+/**
+ * Document-wide render context, rebuilt once per document change (per-block
+ * facts are cached by text, so this is a cheap O(blocks) pass). Blocks read
+ * their own `sig` from it and re-render only when that changes.
+ */
+export const renderContext = createMemo(() => {
+  renderEpoch();
+  return buildRenderContext(state.blocks, state.filePath, String(assetEpoch()));
+});
+// Structural equality: typing in a paragraph must not hand the sidebar a new
+// outline array (and rebuild every row) when no heading changed.
+const sameOutline = (a: Heading[], b: Heading[]) =>
+  a.length === b.length && a.every((h, i) => h.level === b[i].level && h.text === b[i].text && h.blockIndex === b[i].blockIndex);
+export const outline = createMemo(() => renderContext().outline, [], { equals: sameOutline });
 // eslint-disable-next-line solid/reactivity -- the provider runs inside Block's render (a tracked scope)
 setTocProvider(() => outline());
-// eslint-disable-next-line solid/reactivity -- evaluated in the rendering scope
-setMarkdownDocumentProvider(() => state.blocks);
+// eslint-disable-next-line solid/reactivity -- read inside Block's keyed render
+setRenderContextProvider(() => renderContext());
 export const stats = createMemo(() => countWords(fullText()));
 /** Estimated reading time in whole minutes (200 wpm), never below 1. */
 export const readTime = createMemo(() => Math.max(1, Math.ceil(stats().words / 200)));
@@ -523,11 +543,29 @@ export function setHeading(index: number, level: number) {
   );
 }
 
+/**
+ * Blocks for `text`, reusing the id of each unchanged block. Source-mode edits
+ * replace the whole document on every keystroke; keeping ids lets unchanged
+ * blocks hit Block's render cache when Live mode returns.
+ */
+function reconcileBlocks(text: string): Block[] {
+  const spare = new Map<string, number[]>();
+  for (const b of state.blocks) {
+    const ids = spare.get(b.text);
+    if (ids) ids.push(b.id); else spare.set(b.text, [b.id]);
+  }
+  return splitBlocks(text).map((t) => {
+    const id = spare.get(t)?.shift();
+    return id === undefined ? mkBlock(t) : { id, text: t };
+  });
+}
+
 export function replaceAll(text: string) {
   pushHistory();
+  const blocks = reconcileBlocks(text);
   setState(
     produce((s) => {
-      s.blocks = splitBlocks(text).map(mkBlock);
+      s.blocks = blocks;
       s.activeIndex = -1;
       s.dirty = true;
     })
@@ -607,7 +645,6 @@ export function switchTab(id: number) {
     setLiveCaretOffset(tab.caret ?? 0);
     setSourceCaret({ line: 1, col: 1 });
     setActiveTabId(id);
-    bumpRenderEpoch();
   });
 }
 export function cycleTab(direction: -1 | 1) {

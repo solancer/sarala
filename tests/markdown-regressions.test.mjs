@@ -9,6 +9,7 @@ const dom = new JSDOM("<!doctype html><body></body>");
 for (const name of ["window", "document", "Node", "NodeFilter", "HTMLElement", "Text"]) globalThis[name] = name === "window" ? dom.window : dom.window[name];
 const md = await import(outdir + "/markdown.js");
 const live = await import(outdir + "/livesource.js");
+await md.prepareRender("$x$ :smile:"); // KaTeX and the emoji catalog load lazily
 const table = await import(outdir + "/tabletools.js");
 const yaml = await import(outdir + "/frontmatter.js");
 const diagrams = await import(outdir + "/legacydiagrams.js");
@@ -102,4 +103,28 @@ const equationHost = host(live.styleSource("Before $x^2$ after"));
 live.hydrateInlinePreviews(equationHost, source => md.renderMarkdown(source), () => {});
 equal(equationHost.textContent, "Before $x^2$ after", "Inline equation preview preserves editable source offsets");
 check(equationHost.querySelector(".md-inline-preview").shadowRoot.querySelector(".katex"), "Inline equation retains rendered math when editing surrounding text");
+// Render-context signatures: a block re-renders only when its own sig changes,
+// so every piece of document context it consumes must appear in that sig.
+{
+  const sigOf = (texts, i, path = null) => md.buildRenderContext(texts.map((text, id) => ({ id, text })), path).blocks.get(String(i)).sig;
+  const base = ["# Intro", "See [the docs][ref] and $$a$$", "Plain words only", "[ref]: https://a.example", "Note[^n]", "[^n]: First", "# Intro", "$$b \\label{eq:b}$$", "Cite $\\eqref{eq:b}$", "![pic](img.png)"];
+  const edit = (i, text) => base.map((t, j) => j === i ? text : t);
+  check(sigOf(base, 2) === sigOf(edit(0, "# Changed"), 2), "Unrelated edit leaves a plain block's sig alone");
+  check(sigOf(base, 1) !== sigOf(edit(3, "[ref]: https://b.example"), 1), "Reference definition change re-renders its users");
+  check(sigOf(base, 4) !== sigOf(edit(5, "[^n]: Second"), 4), "Footnote text change re-renders its reference");
+  check(sigOf(base, 6) !== sigOf(edit(0, "# Other"), 6), "Duplicate heading slug count feeds later heading ids");
+  md.setMathAutoNumber(true);
+  check(sigOf(base, 7) !== sigOf(edit(1, "See [the docs][ref]"), 7), "Removing an earlier equation renumbers later ones");
+  md.setMathAutoNumber(false);
+  check(sigOf(base, 8) !== sigOf(edit(7, "$$b \\label{eq:c}$$"), 8), "Equation label change re-renders \\eqref users");
+  check(sigOf(base, 9, "/a/doc.md") !== sigOf(base, 9, "/b/doc.md"), "Image blocks re-resolve when the document moves");
+  check(sigOf(base, 2, "/a/doc.md") === sigOf(base, 2, "/b/doc.md"), "Blocks without images ignore the document path");
+  check(sigOf(["---\nimage-root-url: /a\n---", "![p](/x.png)"], 1) !== sigOf(["---\nimage-root-url: /b\n---", "![p](/x.png)"], 1), "Image blocks re-resolve when image-root-url changes");
+  const toc = ["[TOC]", "# One"];
+  check(sigOf(toc, 0) !== sigOf(["[TOC]", "# Two"], 0), "TOC re-renders when headings change");
+  const blocks = base.map((text, id) => ({ id, text }));
+  md.setMarkdownDocumentProvider(() => blocks);
+  check(md.renderMarkdown(blocks[8].text, "8").includes("(1)"), "Keyed render reads equation labels from the document");
+  md.setMarkdownDocumentProvider(() => []);
+}
 console.log(`${checks} Markdown regression checks passed`);

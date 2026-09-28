@@ -1,12 +1,12 @@
 import { Marked, Lexer, type Tokens } from "marked";
 import DOMPurify from "dompurify";
-import katex from "katex";
-import "katex/dist/contrib/mhchem.mjs";
+import type Katex from "katex";
 import { planEquation, type EquationPlan } from "./equations";
 import { expandPhysics } from "./physics";
 import { slugBase } from "./slug";
 import { parseLegacyDiagram } from "./legacydiagrams";
-import { emojiFor, emojiShortcode } from "./emoji";
+import { emojiFor, emojiShortcode, loadEmojiCatalog } from "./emoji";
+import { assetsReady, whenIdle } from "./assets";
 
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -65,6 +65,7 @@ let d2Stash: string[] = [];
 let imgStash: string[] = [];
 let shikiStash: string[] = [];
 let mathErrored = false;
+let mathPending = false;
 
 // Resolve a markdown image src to a loadable URL (relative→doc dir, Tauri
 // asset protocol). Injected by images.ts; identity until then / in browser.
@@ -77,8 +78,53 @@ export function setImageResolver(fn: (src: string) => string) {
 // Syntax-highlight a code block to HTML (Shiki). Injected by highlighter.ts;
 // returns null until Shiki has loaded, falling back to plain escaped code.
 let codeHighlighter: (code: string, lang: string) => string | null = () => null;
-export function setCodeHighlighter(fn: (code: string, lang: string) => string | null) {
+let codePreparer: (md: string) => Promise<void> = async () => {};
+export function setCodeHighlighter(fn: (code: string, lang: string) => string | null, prepare?: (md: string) => Promise<void>) {
   codeHighlighter = fn;
+  if (prepare) codePreparer = prepare;
+}
+
+// KaTeX (~290 KB) loads after first paint, or at once when math first renders.
+// Until then formulas show their source; blocks with math re-render on arrival.
+let katex: typeof Katex | null = null;
+let katexLoad: Promise<void> | null = null;
+export function loadMath(): Promise<void> {
+  katexLoad ??= import("katex").then(async (module) => {
+    await import("katex/dist/contrib/mhchem.mjs");
+    katex = module.default;
+    assetsReady();
+  });
+  return katexLoad;
+}
+whenIdle(() => void loadMath());
+
+/** Load everything a synchronous full render of `md` needs (export). */
+export async function prepareRender(md: string): Promise<void> {
+  await Promise.all([codePreparer(md), loadMath(), /:\S+:/u.test(md) ? loadEmojiCatalog() : null]);
+}
+
+// KaTeX output is a pure function of the expanded TeX and display mode, and
+// re-typesetting unchanged formulas dominated re-render cost in math-heavy docs.
+const katexCache = new Map<string, { html: string } | { error: unknown }>();
+function katexHtml(tex: string, display: boolean): string {
+  const key = `${display ? 1 : 0}${physicsEnabled ? 1 : 0}\0${tex}`;
+  let hit = katexCache.get(key);
+  if (!hit) {
+    try {
+      hit = { html: katex!.renderToString(expandPhysics(tex, 0, physicsEnabled), {
+        displayMode: display,
+        throwOnError: true,
+        strict: false,
+        trust: context => context.command === "\\href" && !!context.url?.startsWith("#eq-"),
+      }) };
+    } catch (error) {
+      hit = { error };
+    }
+    if (katexCache.size > 2000) katexCache.clear();
+    katexCache.set(key, hit);
+  }
+  if ("error" in hit) throw hit.error;
+  return hit.html;
 }
 
 function renderMathHtml(tex: string, display: boolean): string {
@@ -90,15 +136,14 @@ function renderMathHtml(tex: string, display: boolean): string {
     return equationLabels.has(name) ? `\\href{#eq-${encodeURIComponent(name)}}{${label}}` : label;
   });
 
+  if (!katex) {
+    void loadMath();
+    mathPending = true;
+    const pending = `<span class="math-pending">${escapeHtml(t)}</span>`;
+    return display ? `<div class="math-block">${pending}</div>` : pending;
+  }
   try {
-    t = expandPhysics(t, 0, physicsEnabled);
-    const html = katex.renderToString(t, {
-      displayMode: display,
-      throwOnError: true,
-      strict: false,
-      trust: context => context.command === "\\href" && !!context.url?.startsWith("#eq-"),
-
-    });
+    const html = katexHtml(t, display);
     const anchors = plan ? [...plan.labels.keys()].map(label => `<span id="eq-${escapeAttr(label)}" class="equation-anchor"></span>`).join("") : "";
     return display ? `<div class="math-block">${anchors}${html}</div>` : html;
   } catch (e) {
@@ -120,18 +165,145 @@ const marked = new Marked({ gfm: true, breaks: false });
 let footnoteCounts = new Map<string, number>();
 let footnoteDescriptions = new Map<string, string>();
 
-let referenceCacheSource = "";
-let referenceCache = new Lexer().tokens.links;
-let documentProvider: () => { id: number; text: string }[] = () => [];
-export function setMarkdownDocumentProvider(provider: typeof documentProvider) { documentProvider = provider; }
+/* ---------- document render context ----------
+   A block's HTML depends on a few document-wide facts: reference-link
+   definitions, footnote text, equation numbering, and how many same-slug
+   headings/footnote refs precede it. Those facts are gathered once per
+   document change from per-block facts (cached by block text), never by
+   re-lexing the whole document inside every block's render. Each block also
+   gets a `sig` naming exactly the context it consumes, so a block re-renders
+   only when its own text or that context changes. */
+
+type Links = ReturnType<typeof marked.lexer>["links"];
+
+interface BlockFacts {
+  links: Links;
+  math: string[];
+  footnoteDefs: [string, string][];
+  footnoteRefs: string[];
+  headingBases: string[];
+  headings: { level: number; text: string }[];
+}
+
+interface BlockContext {
+  eqStart: number;
+  footnotePrefix: Map<string, number>;
+  headingPrefix: Map<string, number>;
+  sig: string;
+}
+
+export interface RenderContext {
+  links: Links;
+  footnoteDescriptions: Map<string, string>;
+  equationPlans: EquationPlan[];
+  equationLabels: Map<string, string>;
+  outline: Heading[];
+  blocks: Map<string, BlockContext>;
+}
+
+const optionsKey = () =>
+  `${mathAltDelimiters ? 1 : 0}${mathFence ? 1 : 0}${mathAutoNumber ? 1 : 0}${highlightOn ? 1 : 0}${subSupOn ? 1 : 0}${emojiOn ? 1 : 0}${autolinkOn ? 1 : 0}${marked.defaults.breaks ? 1 : 0}`;
+
+const factsCache = new Map<string, BlockFacts>();
+function blockFacts(text: string): BlockFacts {
+  const key = optionsKey() + "\0" + text;
+  const hit = factsCache.get(key);
+  if (hit) return hit;
+  const tokens = marked.lexer(text);
+  const facts: BlockFacts = { links: tokens.links, math: [], footnoteDefs: [], footnoteRefs: [], headingBases: [], headings: [] };
+  for (const token of tokens) if (token.type === "heading") facts.headings.push({ level: token.depth, text: token.text });
+  marked.walkTokens(tokens, token => {
+    if (token.type === "blockMath" || (mathFence && token.type === "code" && token.lang === "math")) facts.math.push(String(token.text ?? ""));
+    else if (token.type === "footnoteDef") facts.footnoteDefs.push([String(token.id), String(token.text)]);
+    else if (token.type === "footnoteRef") facts.footnoteRefs.push(escapeAttr(String(token.text)));
+    else if (token.type === "heading") facts.headingBases.push(slugBase(decodeEntities((marked.parseInline(token.text, { async: false }) as string).replace(/<[^>]+>/g, ""))));
+  });
+  if (factsCache.size > 5000) factsCache.clear();
+  factsCache.set(key, facts);
+  return facts;
+}
+
+/** Everything a block render needs from the rest of the document. `codeKey`
+ *  changes when syntax grammars finish loading. */
+export function buildRenderContext(blocks: readonly { id: number | string; text: string }[], docPath: string | null = null, assetKey = ""): RenderContext {
+  const all = blocks.map(b => blockFacts(b.text));
+  const links: Links = Object.create(null);
+  const footnoteDescriptions = new Map<string, string>();
+  const equationPlans: EquationPlan[] = [];
+  const equationLabels = new Map<string, string>();
+  const outline: Heading[] = [];
+  let equationIndex = 0;
+  all.forEach((facts, blockIndex) => {
+    // First definition wins, as in a single CommonMark pass.
+    for (const [label, def] of Object.entries(facts.links)) if (!(label in links)) links[label] = def;
+    // A footnote's indented continuation paragraphs are separate blocks;
+    // read the definition across them, as a whole-document lex would.
+    let defs = facts.footnoteDefs;
+    if (defs.length) {
+      let end = blockIndex + 1;
+      while (end < blocks.length && /^(?: {4}|\t)\S/.test(blocks[end].text)) end++;
+      if (end > blockIndex + 1) defs = blockFacts(blocks.slice(blockIndex, end).map(b => b.text).join("\n\n")).footnoteDefs;
+    }
+    for (const [id, text] of defs) footnoteDescriptions.set(id, text);
+    for (const h of facts.headings) outline.push({ ...h, blockIndex });
+    for (const tex of facts.math) {
+      const plan = planEquation(tex, equationIndex, mathAutoNumber);
+      equationIndex = plan.nextNumber;
+      equationPlans.push(plan);
+      for (const [label, number] of plan.labels) {
+        if (!equationLabels.has(label)) equationLabels.set(label, number);
+        else plan.labels.delete(label);
+      }
+    }
+  });
+  const linksKey = JSON.stringify(links);
+  const labelsKey = JSON.stringify([...equationLabels]);
+  const outlineKey = JSON.stringify(outline.map(h => [h.level, h.text]));
+  const frontMatter = blocks[0]?.text.startsWith("---\n") ? blocks[0].text : "";
+  const contexts = new Map<string, BlockContext>();
+  const shortcode = emojiShortcode();
+  const footnoteSeen = new Map<string, number>();
+  const headingSeen = new Map<string, number>();
+  let eqCursor = 0;
+  blocks.forEach((block, i) => {
+    const facts = all[i];
+    const text = block.text;
+    const footnotePrefix = new Map<string, number>();
+    const headingPrefix = new Map<string, number>();
+    for (const id of facts.footnoteRefs) if (!footnotePrefix.has(id)) footnotePrefix.set(id, footnoteSeen.get(id) ?? 0);
+    for (const base of facts.headingBases) if (!headingPrefix.has(base)) headingPrefix.set(base, headingSeen.get(base) ?? 0);
+    const sig: string[] = [];
+    if (facts.math.length) sig.push("eq", JSON.stringify(equationPlans.slice(eqCursor, eqCursor + facts.math.length).map(p => [p.tex, [...p.labels]])));
+    if (text.includes("ref{")) sig.push("lbl", labelsKey);
+    if (footnotePrefix.size) sig.push("fn", JSON.stringify([...footnotePrefix].map(([id, n]) => [id, n, footnoteDescriptions.get(id)])));
+    if (headingPrefix.size) sig.push("h", JSON.stringify([...headingPrefix]));
+    if (text.includes("[")) sig.push("ln", linksKey);
+    if (/\[TOC\]|\[\[_TOC_\]\]/i.test(text)) sig.push("toc", outlineKey);
+    // Lazily loaded render data (grammars, KaTeX, emoji): blocks that use it
+    // re-render once it arrives.
+    if (text.includes("```") || text.includes("~~~") || text.includes("$") || text.includes("\\(") || text.includes("\\[") || shortcode.test(text)) sig.push("asset", assetKey);
+    // Image srcs resolve against the document's folder and its front matter's
+    // image-root-url / typora-root-url (images.ts).
+    if (text.includes("![") || /<img\b/i.test(text)) sig.push("img", docPath ?? "", frontMatter);
+    contexts.set(String(block.id), { eqStart: eqCursor, footnotePrefix, headingPrefix, sig: sig.join("\u0001") });
+    eqCursor += facts.math.length;
+    for (const id of facts.footnoteRefs) footnoteSeen.set(id, (footnoteSeen.get(id) ?? 0) + 1);
+    for (const base of facts.headingBases) headingSeen.set(base, (headingSeen.get(base) ?? 0) + 1);
+  });
+  return { links, footnoteDescriptions, equationPlans, equationLabels, outline, blocks: contexts };
+}
+
+let contextProvider: (() => RenderContext) | null = null;
+/** The store supplies a memoized context for the open document. */
+export function setRenderContextProvider(provider: () => RenderContext) { contextProvider = provider; }
+/** Convenience for callers without a memoized context (tests, scripts). */
+export function setMarkdownDocumentProvider(provider: () => readonly { id: number | string; text: string }[]) {
+  setRenderContextProvider(() => buildRenderContext(provider()));
+}
+
 export function inlineSourceTokens(source: string) {
   const lexer = new Lexer(marked.defaults);
-  const docSource = documentProvider().map(b => b.text).join("\n\n");
-  if (docSource !== referenceCacheSource) {
-    referenceCacheSource = docSource;
-    referenceCache = marked.lexer(docSource).links;
-  }
-  lexer.tokens.links = referenceCache;
+  lexer.tokens.links = contextProvider?.().links ?? lexer.tokens.links;
   const tokens = lexer.inlineTokens(source);
   if (marked.defaults.walkTokens) marked.walkTokens(tokens, marked.defaults.walkTokens);
   return tokens;
@@ -508,48 +680,20 @@ const EMPTY_IMG_HINT =
 export function renderMarkdown(md: string, blockKey?: string): string {
   if (!md.trim()) return `<p class="empty-block">&nbsp;</p>`;
   const trimmed = md.trim();
-  const blocks = documentProvider();
-  const blockIndex = blockKey == null ? -1 : blocks.findIndex(b => String(b.id) === blockKey);
-  const whole = blockIndex >= 0 ? blocks.map(b => b.text).join("\n\n") : md;
-  const allTokens = marked.lexer(whole);
-  footnoteCounts = new Map();
-  footnoteDescriptions = new Map();
-  equationLabels = new Map();
-  equationCursor = 0;
-  equationPlans = [];
-  let equationIndex = 0;
-  marked.walkTokens(allTokens, token => {
-    if (token.type === "blockMath" || (mathFence && token.type === "code" && token.lang === "math")) {
-      const plan = planEquation(String(token.text ?? ""), equationIndex, mathAutoNumber);
-      equationIndex = plan.nextNumber;
-      equationPlans.push(plan);
-      for (const [label, number] of plan.labels) {
-        if (!equationLabels.has(label)) equationLabels.set(label, number);
-        else plan.labels.delete(label);
-      }
-
-    }
-  });
-  marked.walkTokens(allTokens, token => {
-    if (token.type === "footnoteDef") footnoteDescriptions.set(String(token.id), String(token.text));
-  });
-  const headingCounts = new Map<string, number>();
-  if (blockIndex >= 0) {
-    const prior = marked.lexer(blocks.slice(0, blockIndex).map(b => b.text).join("\n\n"));
-    marked.walkTokens(prior, token => {
-      if (token.type === "blockMath" || (mathFence && token.type === "code" && token.lang === "math")) equationCursor++;
-      if (token.type === "footnoteRef") {
-        const id = escapeAttr(String(token.text));
-        footnoteCounts.set(id, (footnoteCounts.get(id) ?? 0) + 1);
-      }
-      if (token.type === "heading") {
-        const base = slugBase(decodeEntities((marked.parseInline(token.text, { async: false }) as string).replace(/<[^>]+>/g, "")));
-        headingCounts.set(base, (headingCounts.get(base) ?? 0) + 1);
-      }
-    });
-  }
+  // A keyed block renders against the open document's context; anything else
+  // (export, a detached snippet) is its own whole document.
+  const docContext = blockKey != null ? contextProvider?.() : undefined;
+  const own = docContext?.blocks.get(blockKey!);
+  const context = own ? docContext! : buildRenderContext([{ id: "", text: md }]);
+  const blockContext = own ?? context.blocks.get("")!;
+  footnoteCounts = new Map(blockContext.footnotePrefix);
+  footnoteDescriptions = context.footnoteDescriptions;
+  equationLabels = context.equationLabels;
+  equationPlans = context.equationPlans;
+  equationCursor = blockContext.eqStart;
+  const headingCounts = new Map(blockContext.headingPrefix);
   const toc = () => {
-    const headings = extractOutline(blockIndex >= 0 ? blocks.map(b => b.text) : [md]);
+    const headings = context.outline;
     const counts = new Map<string, number>();
     const items = (headings.length ? headings : tocProvider?.() ?? []).map(h => {
       const label = decodeEntities((marked.parseInline(h.text, {async:false}) as string).replace(/<[^>]+>/g, ""));
@@ -575,6 +719,7 @@ export function renderMarkdown(md: string, blockKey?: string): string {
   imgStash = [];
   shikiStash = [];
   mathErrored = false;
+  mathPending = false;
   // marked (CommonMark) rejects image destinations that contain spaces, so a
   // dropped path like `.../Screenshot from 2026.png` renders as literal text.
   // Wrap bare, unquoted image destinations containing whitespace in <> so they
@@ -584,7 +729,7 @@ export function renderMarkdown(md: string, blockKey?: string): string {
     ? md
     : md.replace(/(!\[[^\]\n]*\]\()([^<>()"\n]*\s[^<>()"\n]*)(\))/g, "$1<$2>$3");
   const lexer = new Lexer(marked.defaults);
-  lexer.tokens.links = allTokens.links;
+  lexer.tokens.links = context.links;
   const tokens = lexer.lex(src);
   if (marked.defaults.walkTokens) marked.walkTokens(tokens, marked.defaults.walkTokens);
   marked.walkTokens(tokens, token => {
@@ -638,7 +783,7 @@ export function renderMarkdown(md: string, blockKey?: string): string {
     if (mathErrored && lastGoodBlock.has(blockKey)) {
       return `${lastGoodBlock.get(blockKey)}<div class="render-error">⚠ Math error — showing last valid render</div>`;
     }
-    if (hasMath && !mathErrored) lastGoodBlock.set(blockKey, html);
+    if (hasMath && !mathErrored && !mathPending) lastGoodBlock.set(blockKey, html);
   }
   return html;
 }
@@ -747,13 +892,7 @@ export interface Heading {
 }
 
 export function extractOutline(blocks: string[]): Heading[] {
-  const out: Heading[] = [];
-  blocks.forEach((b, blockIndex) => {
-    for (const token of marked.lexer(b)) {
-      if (token.type === "heading") out.push({ level: token.depth, text: token.text, blockIndex });
-    }
-  });
-  return out;
+  return blocks.flatMap((b, blockIndex) => blockFacts(b).headings.map(h => ({ ...h, blockIndex })));
 }
 
 export function countWords(md: string): { words: number; chars: number } {

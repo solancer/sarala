@@ -5,6 +5,7 @@
  *   node tests/e2e-reveal.mjs   (starts its own server on :1421)
  */
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { chromium } from "playwright";
 
 const PORT = 1421;
@@ -28,6 +29,17 @@ page.on("console", (m) => {
 page.on("pageerror", (e) => console.log("[pageerror]", e.message));
 await page.goto(`http://localhost:${PORT}`);
 await page.waitForSelector(".block");
+// The app launches into a blank document; load the sample these checks use
+// (again after every reload, which restores the blank document).
+const WELCOME = readFileSync(new URL("./fixtures/welcome.md", import.meta.url), "utf8");
+const loadWelcome = async () => {
+  await page.evaluate(async (text) => {
+    const store = await import("/src/store.ts");
+    store.loadDocument(text, null);
+  }, WELCOME);
+  await page.waitForSelector(".block .rendered pre");
+};
+await loadWelcome();
 
 let failures = 0;
 const check = (cond, label) => {
@@ -83,11 +95,10 @@ check(!!isTok(), "italic *is* token exists");
 check(isTok() && !isTok().on && isTok().markDisplay === "none",
   `caret away from token → markers hidden (display:${isTok()?.markDisplay})`);
 
-// Move the caret inside *is* purely via selection (exercises selectionchange).
-await page.evaluate(() => {
+// Place the caret purely via selection (exercises selectionchange).
+const placeCaret = (delta) => page.evaluate((delta) => {
   const el = document.querySelector(".block.active .source");
-  const target = el.textContent.indexOf("*is*") + 2;
-  let remaining = target;
+  let remaining = el.textContent.indexOf("*is*") + delta;
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     if (remaining <= node.data.length) {
@@ -101,11 +112,20 @@ await page.evaluate(() => {
     }
     remaining -= node.data.length;
   }
-});
+}, delta);
+// Inside the styled text the syntax stays concealed, so a click never reflows
+// the paragraph...
+await placeCaret(2);
+await page.waitForTimeout(120);
+s = await state();
+check(isTok() && !isTok().on && isTok().markDisplay === "none",
+  `caret inside styled text → markers stay hidden (display:${isTok()?.markDisplay})`);
+// ...and moving onto a delimiter reveals it.
+await placeCaret(0);
 await page.waitForTimeout(120); // let selectionchange run
 s = await state();
 check(isTok() && isTok().on && isTok().markDisplay === "inline",
-  `caret inside token → markers revealed (display:${isTok()?.markDisplay})`);
+  `caret on the opening delimiter → markers revealed (display:${isTok()?.markDisplay})`);
 
 // Arrow out of the token: markers must hide again without re-render.
 for (let i = 0; i < 8; i++) await page.keyboard.press("ArrowRight");
@@ -227,6 +247,7 @@ check(afterResize.hasOld, "existing cells survive the resize");
 // below it (zero layout shift). Reload first to discard earlier edits.
 await page.reload();
 await page.waitForSelector(".block");
+await loadWelcome();
 const JANK_TARGETS = [
   ["h1", "Welcome to Sarala"],
   ["paragraph", "Split panes duplicate"],
@@ -258,6 +279,7 @@ for (const [label, text] of JANK_TARGETS) {
 // width toggle stretches the table to the page column.
 await page.reload();
 await page.waitForSelector(".block");
+await loadWelcome();
 await page.locator(".block .rendered", { hasText: "Cmd/Ctrl+S" }).click({ position: { x: 30, y: 12 } });
 await page.waitForSelector(".block.active .source .md-table");
 // Park the caret deterministically inside the first header cell ("Shortcut").
@@ -359,6 +381,7 @@ check((await page.evaluate(() => CSS.highlights?.get("sarala-find")?.size ?? 0))
 // Sidebar resize: dragging the handle changes the width within clamps.
 await page.reload();
 await page.waitForSelector(".sidebar");
+await loadWelcome();
 const sidebarW = () => page.evaluate(() => document.querySelector(".sidebar").getBoundingClientRect().width);
 const startW = await sidebarW();
 const handle = await page.locator(".sidebar-resize").boundingBox();
@@ -383,6 +406,7 @@ check((await sidebarW()) === 180, `drag clamps to the 180px minimum (${await sid
 // block and scrolled the page away).
 await page.reload();
 await page.waitForSelector(".block");
+await loadWelcome();
 await page.evaluate(() => document.querySelector(".scroll").scrollTo({ top: 0 }));
 await page.waitForTimeout(80);
 const scrollTop = () => page.evaluate(() => document.querySelector(".scroll").scrollTop);
@@ -406,6 +430,7 @@ await page.waitForTimeout(80);
 // offset 0 (the whole line is a display:none marker until revealed).
 await page.reload();
 await page.waitForSelector(".block");
+await loadWelcome();
 await page.locator(".block").last().locator(".rendered").click();
 await page.waitForSelector(".block.active .source");
 await page.evaluate(() => {
@@ -523,6 +548,7 @@ for (const [label, blockText, needle] of [
 await page.setViewportSize({ width: 900, height: 800 }); // force the paragraph to wrap
 await page.reload();
 await page.waitForSelector(".block");
+await loadWelcome();
 await page.locator(".block .rendered", { hasText: "Split panes duplicate" }).click({ position: { x: 30, y: 12 } });
 await page.waitForSelector(".block.active .source");
 const caretState = () =>
@@ -561,6 +587,7 @@ check(nav && nav.text.startsWith("Split panes") && nav.caret === nav.text.length
 // Math: renders KaTeX in the inactive block, shows raw source when active.
 await page.reload();
 await page.waitForSelector(".block");
+await loadWelcome();
 await page.locator(".block .rendered", { hasText: "Split panes duplicate" }).first().click();
 await page.waitForSelector(".block.active .source");
 await page.keyboard.press("End");
