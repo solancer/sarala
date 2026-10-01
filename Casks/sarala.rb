@@ -7,7 +7,7 @@ cask "sarala" do
   desc "Seamless WYSIWYG Markdown editor"
   homepage "https://github.com/solancer/sarala"
 
-  depends_on macos: :catalina
+  depends_on :macos
 
   # `version`/`sha256` above are bumped automatically by .github/workflows/release.yml.
   app "Sarala.app"

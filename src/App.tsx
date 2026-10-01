@@ -1,4 +1,5 @@
 import { Show, createEffect, onMount, onCleanup, untrack } from "solid-js";
+import { connectFileOpen } from "./fileopen";
 import Editor from "./components/Editor";
 import DocumentTabs from "./components/DocumentTabs";
 import Sidebar from "./components/Sidebar";
@@ -158,6 +159,8 @@ export default function App() {
       });
       // Confirm before closing a window with unsaved changes.
       let unclose: (() => void) | undefined;
+      let unopen: (() => void) | undefined;
+      let disposed = false;
       import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
         const win = getCurrentWindow();
         unclose = await win.onCloseRequested(async (event) => {
@@ -197,6 +200,20 @@ export default function App() {
           // release exists, stays silent otherwise.
           void autoCheckForUpdates();
         }
+
+        // Wait for startup recovery before opening Finder requests, so its
+        // restore cannot replace a document the user just asked to open.
+        if (disposed) return;
+        const [{ invoke }, { listen }] = await Promise.all([
+          import("@tauri-apps/api/core"), import("@tauri-apps/api/event"),
+        ]);
+        const stop = await connectFileOpen(
+          (notify) => listen("open-files", notify, { target: { kind: "WebviewWindow", label: win.label } }),
+          () => invoke<string[]>("take_open_files"),
+          openFile,
+        );
+        if (disposed) stop();
+        else unopen = stop;
       });
 
       // Reload-or-keep conflict banner: surface the Rust watcher's events.
@@ -208,7 +225,7 @@ export default function App() {
       // Autosave shadows of dirty (saved) documents.
       startAutosave();
 
-      onCleanup(() => { unlisten?.(); undrop?.(); unclose?.(); unwatch?.(); });
+      onCleanup(() => { disposed = true; unlisten?.(); undrop?.(); unclose?.(); unwatch?.(); unopen?.(); });
     } else if (isMac) {
       // Browser dev on macOS has neither a native menu nor the in-app menubar,
       // so keep the minimal chord fallback there.
