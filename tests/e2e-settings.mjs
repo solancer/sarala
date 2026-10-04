@@ -58,8 +58,8 @@ check(rail.height > dialog.height * 0.8, "the rail spans the dialog's height");
 // --- categories ---
 const sections = await page.locator(".set-rail-item").allTextContents();
 check(
-  JSON.stringify(sections) === '["Appearance","Editor","Markdown","Files","Images","Fonts"]',
-  `six categories in order (${JSON.stringify(sections)})`,
+  JSON.stringify(sections) === '["Appearance","Editor","Markdown","Files","Images","Fonts","AI","Voice"]',
+  `eight categories in order (${JSON.stringify(sections)})`,
 );
 {
   const labels = await page.locator(".set-row-label").allTextContents();

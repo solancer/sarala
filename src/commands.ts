@@ -21,7 +21,7 @@ import {
 } from "./store";
 import { selectAllDocument } from "./blockselect";
 import { toggleMark, type MarkKind } from "./inlineformat";
-import { linkDestination } from "./links";
+import { linkAt, linkDestination, removeLink, type LinkTarget } from "./links";
 import { applyBlockKind, type BlockKind } from "./blocktype";
 import { fontEmbedCss } from "./fonts";
 import {
@@ -71,6 +71,9 @@ import { openSettings } from "./components/SettingsModal";
 import { openThemePicker } from "./components/ThemePicker";
 import { openThemeEditor } from "./components/ThemeEditor";
 import { checkForUpdates } from "./updater";
+import { aiPanelOpen, setAiPanelOpen } from "./ai/config";
+import { askAboutSelection, newChat, reviewDocument, runQuickAction, stop as stopAi } from "./ai/session";
+import { cancelDictation, openVoiceCommands, openVoiceSetup, removeLastDictation, selectLastDictation, toggleDictation } from "./voice/session";
 import {
   skeletonTable, editTable, resizeTable, prettifyTable, parseTable, cellRanges, columnAtOffset, lineAtOffset,
   appendTableRow, appendTableColumn, type TableAppend, type TableEdit, type Align,
@@ -88,6 +91,14 @@ export interface BlockApi {
   selectRange(start: number, end: number): void;
   caretOffset(): number;
   selectionOffsets(): { start: number; end: number };
+}
+
+/** A focused plain text field (not the editor), where edit commands belong to it. */
+function focusedTextField(): HTMLInputElement | HTMLTextAreaElement | null {
+  const el = document.activeElement;
+  if (el instanceof HTMLTextAreaElement) return el;
+  if (el instanceof HTMLInputElement && /^(text|search|url|email|number|password|tel)$/.test(el.type)) return el;
+  return null;
 }
 
 let blockApi: BlockApi | null = null;
@@ -614,7 +625,7 @@ function toggleQuote(text: string): string {
   return lines.map((l) => "> " + l).join("\n");
 }
 
-function applyTableEdit(edit: TableEdit) {
+export function applyTableEdit(edit: TableEdit) {
   const i = targetBlockIndex();
   if (i < 0) return;
   const text = doc.blocks[i].text;
@@ -932,6 +943,14 @@ function clearFormat() {
  * nothing at all. Resolve first, then route: documents open in the editor,
  * other local files go to the desktop, and `#anchors` scroll this document.
  */
+/** The link at the caret in the block being edited (keyboard access to links). */
+export function linkTargetAtCaret(): LinkTarget | null {
+  const i = doc.activeIndex;
+  if (i < 0 || !blockApi) return null;
+  const ref = linkAt(doc.blocks[i].text, blockApi.caretOffset());
+  return ref ? { ...ref, blockId: doc.blocks[i].id } : null;
+}
+
 export async function followLink(href: string) {
   const dest = linkDestination(href);
   switch (dest.kind) {
@@ -1163,8 +1182,14 @@ const registry: Record<string, Command> = {
   "file.print": () => { window.print(); },
 
   // Edit
-  "edit.undo": undo,
-  "edit.redo": redo,
+  // In a text field (AI composer, rename box, search) these act on the field,
+  // as everywhere else on the system: the native menu and the shortcut
+  // engine route Cmd/Ctrl+A/Z here before the field sees them.
+  // Undo goes to a field with text in it (there is something of its own to
+  // undo); an empty one, like the AI composer right after accepting a
+  // change, leaves undo to the document.
+  "edit.undo": () => (focusedTextField()?.value ? void document.execCommand("undo") : undo()),
+  "edit.redo": () => (focusedTextField()?.value ? void document.execCommand("redo") : redo()),
   "edit.copy_markdown": copyAsMarkdown,
   "edit.copy_html": async () => clipboardWriteText(await renderBody(fullText())),
   "edit.copy_plain": copyPlain,
@@ -1176,7 +1201,15 @@ const registry: Record<string, Command> = {
   "edit.select_block": () => {
     if (doc.activeIndex >= 0) blockApi?.selectRange(0, doc.blocks[doc.activeIndex].text.length);
   },
-  "edit.select_all": () => selectAllDocument(),
+  "edit.select_all": () => {
+    const field = focusedTextField();
+    if (field) field.select();
+    else selectAllDocument();
+  },
+  // Keyboard equivalents of the link hover card (which is pointer-only).
+  "edit.open_link": () => { const l = linkTargetAtCaret(); if (l) void followLink(l.url); },
+  "edit.copy_link": () => { const l = linkTargetAtCaret(); if (l) void clipboardWriteText(l.url); },
+  "edit.remove_link": () => { const l = linkTargetAtCaret(); if (l) removeLink(l); },
   "edit.select_line": selectLine,
   "edit.select_word": selectWord,
   "edit.find": () => { openFind(false); },
@@ -1301,6 +1334,25 @@ const registry: Record<string, Command> = {
     await setWindowAlwaysOnTop(v);
   },
   "view.fullscreen": () => toggleFullscreen(),
+
+  // AI assistant (src/ai/). Commands work with the feature off too: the panel
+  // then shows how to turn it on.
+  "ai.toggle_panel": () => { setAiPanelOpen(!aiPanelOpen()); },
+  "ai.ask_selection": askAboutSelection,
+  "ai.review_document": reviewDocument,
+  "ai.improve": () => runQuickAction("improve"),
+  "ai.shorten": () => runQuickAction("shorten"),
+  "ai.fix_grammar": () => runQuickAction("fix"),
+  "ai.explain": () => runQuickAction("explain"),
+  "ai.new_chat": newChat,
+  "ai.stop": stopAi,
+  "voice.toggle": toggleDictation,
+  "voice.setup": openVoiceSetup,
+  "voice.cancel": () => void cancelDictation(),
+  "voice.scratch": removeLastDictation,
+  "voice.select_last": selectLastDictation,
+  "voice.commands": openVoiceCommands,
+  "voice.settings": () => openSettings("voice"),
 
   // Window (in-app menubar on Linux/Windows; macOS uses native Window menu)
   "window.minimize": () => minimizeWindow(),

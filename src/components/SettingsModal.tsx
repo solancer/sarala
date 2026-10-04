@@ -28,6 +28,21 @@ import { setSetting } from "../settings";
 import { executeCommand, toggleTableFullWidth } from "../commands";
 import { openThemePicker } from "./ThemePicker";
 import { openThemeEditor } from "./ThemeEditor";
+import { AiAgentStatus } from "./AiSettings";
+import {
+  AGENTS, aiAgent, aiAgentPath, aiEnabled, aiModel, aiRailVisible, setAiAgent, setAiAgentPath, setAiEnabled,
+  setAiModel, setAiRailVisible,
+} from "../ai/config";
+import type { AgentId } from "../ai/types";
+import { VoiceDeviceRow, VoiceInstalledRow, VoiceModelRow, VoiceShortcutRow } from "./VoiceSettings";
+import {
+  COMMAND_KEYS, IDLE_OPTIONS, LANGUAGES, setVoiceCommandKey, voiceCommandKey, PAUSE_OPTIONS, PAUSE_SECONDS, TRIGGER_OPTIONS, setVoiceCommands, setVoiceEnabled,
+  setVoiceIdleMinutes, setVoiceLanguage, setVoicePause, setVoicePauseSeconds, setVoicePunctuation, setVoiceReadBack,
+  setVoiceSounds, setVoiceTrigger, voiceCommands, voiceEnabled, voiceIdleMinutes, voiceLanguage, voiceModel, voicePause,
+  voicePauseSeconds, voicePunctuation, voiceReadBack, voiceSounds, voiceTrigger, type PauseMode, type TriggerMode,
+} from "../voice/config";
+import { cancelDictation, openVoiceSetup } from "../voice/session";
+import { voiceBackend } from "../voice/transport";
 
 const [visible, setVisible] = createSignal(false);
 const [families, setFamilies] = createSignal<string[]>([]);
@@ -40,6 +55,12 @@ export const isSettingsOpen = visible;
 export function openSettings(section?: string) {
   setVisible(true);
   if (section) setSection(section);
+  // The dialog focuses its first control (the Appearance tab); when it opens
+  // on another section, move focus to that section's tab instead, so focus
+  // and the selected section agree.
+  requestAnimationFrame(() =>
+    document.querySelector<HTMLElement>('.settings .set-rail-item[aria-current="page"]')?.focus({ preventScroll: true }),
+  );
   if (!loaded) {
     loaded = true;
     setLoading(true);
@@ -271,6 +292,122 @@ const SECTIONS = (): Section[] => [
     ],
   },
   { id: "fonts", label: "Fonts", rows: [] },
+  {
+    id: "ai",
+    label: "AI",
+    rows: [
+      {
+        kind: "toggle", id: "ai_enabled", label: "AI assistant",
+        desc: "Chat about the open document and review the agent's edits before they apply. Runs an agent CLI on this computer with its own sign-in; Sarala stores no keys.",
+        get: aiEnabled, run: () => void setAiEnabled(!aiEnabled()),
+      },
+      {
+        kind: "toggle", id: "ai_rail", label: "Show assistant bar",
+        desc: "The slim bar on the right edge with the assistant button. The View menu and command palette work either way.",
+        get: aiRailVisible, run: () => void setAiRailVisible(!aiRailVisible()),
+      },
+      {
+        kind: "select", id: "ai_agent", label: "Agent",
+        desc: "The agent works on a private copy of the document with file tools only.",
+        get: aiAgent, options: AGENTS.map((a) => ({ value: a.id, label: a.label })),
+        run: (v) => void setAiAgent(v as AgentId),
+      },
+      { kind: "node", id: "ai_status", label: "Status", node: () => <AiAgentStatus /> },
+      {
+        kind: "text", id: "ai_model", label: "Model",
+        desc: "Leave empty for the agent's default. Otherwise a model name the CLI accepts (its --model option).",
+        get: aiModel, run: (v) => void setAiModel(v),
+      },
+      {
+        kind: "text", id: "ai_path", label: "Program path",
+        desc: "Leave empty to find it automatically. Set it if the agent is installed somewhere unusual.",
+        get: aiAgentPath, run: (v) => void setAiAgentPath(v),
+      },
+    ],
+  },
+  {
+    id: "voice",
+    label: "Voice",
+    rows: [
+      {
+        kind: "toggle", id: "voice_enabled", label: "Voice typing",
+        desc: "Speak and Sarala types it. Speech is turned into text on this computer: nothing is uploaded, and there is no account or key.",
+        get: voiceEnabled,
+        run: () => {
+          if (voiceEnabled()) {
+            void cancelDictation();
+            void setVoiceEnabled(false);
+            void voiceBackend().then((b) => b.unload());
+          } else if (!voiceModel()) {
+            // Turning it on starts the set-up: a model has to be chosen and downloaded.
+            openVoiceSetup();
+          } else {
+            void setVoiceEnabled(true);
+          }
+        },
+      },
+      { kind: "node", id: "voice_model", label: "Speech model", desc: "Downloaded once, then works offline.", node: () => <VoiceModelRow /> },
+      { kind: "node", id: "voice_device", label: "Microphone", node: () => <VoiceDeviceRow /> },
+      {
+        kind: "select", id: "voice_language", label: "Language",
+        desc: "For multilingual models. English-only models ignore it.",
+        get: voiceLanguage, options: LANGUAGES, run: (v) => void setVoiceLanguage(v),
+      },
+      {
+        kind: "node", id: "voice_shortcut", label: "Shortcut",
+        desc: "Works while Sarala is in front. Record any key you can press comfortably; letters and numbers need Ctrl, Alt (Option) or Cmd.",
+        node: () => <VoiceShortcutRow />,
+      },
+      {
+        kind: "select", id: "voice_command_key", label: "Command key",
+        desc: "Press it on its own: tap to start or stop dictating, hold to say a command (what you said so far is typed first; the command never is).",
+        get: voiceCommandKey, options: COMMAND_KEYS.map((k) => ({ value: k.id, label: k.label })),
+        run: (v) => void setVoiceCommandKey(v),
+      },
+      {
+        kind: "select", id: "voice_trigger", label: "Shortcut behaviour",
+        desc: "Hold to talk, or tap to start and tap to stop. Press to toggle suits anyone for whom holding keys is hard; hold only avoids starting by accident.",
+        get: voiceTrigger, options: TRIGGER_OPTIONS, run: (v) => void setVoiceTrigger(v as TriggerMode),
+      },
+      {
+        kind: "select", id: "voice_pause", label: "When you pause",
+        desc: "“Type, keep going” types what you said at each pause and keeps listening, for hands-free dictation. “Type and stop” finishes at a pause.",
+        get: voicePause, options: PAUSE_OPTIONS, run: (v) => void setVoicePause(v as PauseMode),
+      },
+      {
+        kind: "select", id: "voice_pause_length", label: "Pause length",
+        desc: "How long a silence counts as a pause.",
+        get: () => String(voicePauseSeconds()), options: PAUSE_SECONDS, run: (v) => void setVoicePauseSeconds(Number(v)),
+      },
+      {
+        kind: "toggle", id: "voice_sounds", label: "Sounds",
+        desc: "Short tones when listening starts, stops or text is typed, so you know without looking.",
+        get: voiceSounds, run: () => void setVoiceSounds(!voiceSounds()),
+      },
+      {
+        kind: "toggle", id: "voice_read_back", label: "Read back what was typed",
+        desc: "Screen readers announce the typed words, so you can check them without moving the cursor.",
+        get: voiceReadBack, run: () => void setVoiceReadBack(!voiceReadBack()),
+      },
+      {
+        kind: "toggle", id: "voice_commands", label: "Voice commands",
+        desc: "“New paragraph”, “new bullet …”, “scratch that”, “bold that”, “stop listening” and more. Say “what can I say” for the full list (also Edit > Voice Typing > Voice Commands).",
+        get: voiceCommands, run: () => void setVoiceCommands(!voiceCommands()),
+      },
+      {
+        kind: "toggle", id: "voice_punctuation", label: "Spoken punctuation",
+        desc: "Say “comma”, “period”, “question mark”, “open quote”… The models punctuate on their own, so this is off unless you prefer to say it.",
+        get: voicePunctuation, run: () => void setVoicePunctuation(!voicePunctuation()),
+      },
+      {
+        kind: "select", id: "voice_idle", label: "Free the model's memory",
+        desc: "Keeping it loaded makes the next start instant but holds a few hundred MB.",
+        get: () => String(voiceIdleMinutes()), options: IDLE_OPTIONS,
+        run: (v) => void setVoiceIdleMinutes(Number(v)),
+      },
+      { kind: "node", id: "voice_installed", label: "Downloaded models", node: () => <VoiceInstalledRow /> },
+    ],
+  },
 ];
 
 /* ---------- rendering ---------- */

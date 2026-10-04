@@ -510,7 +510,16 @@ marked.use({
     // owns the toggle (preventDefault + rewrite source), so the box is never
     // edited natively.
     checkbox(token: Tokens.Checkbox) {
-      return `<input type="checkbox"${token.checked ? " checked" : ""}>`;
+      // Named after its task (an attribute only: rendered text is unchanged).
+      const label = pendingTaskLabel ? ` aria-label="${escapeAttr(pendingTaskLabel)}"` : "";
+      pendingTaskLabel = "";
+      return `<input type="checkbox"${token.checked ? " checked" : ""}${label}>`;
+    },
+    // Remember a task item's text for the checkbox marked renders first
+    // inside it; returning false keeps marked's own list-item rendering.
+    listitem(item: Tokens.ListItem) {
+      pendingTaskLabel = item.task ? taskLabel(item.text) : "";
+      return false;
     },
     // Own the code renderer so ```mermaid and ```math fences are intercepted;
     // everything else is Shiki-highlighted (stashed past DOMPurify, which would
@@ -676,6 +685,17 @@ const EMPTY_IMG_HINT =
   '<span class="img-empty-browse" data-img-browse role="button" tabindex="0">' +
   '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">' +
   '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Browse…</span></span>';
+
+/** Set by the list-item renderer for the task checkbox rendered next. */
+let pendingTaskLabel = "";
+/** Plain text of a task item's first line, for its checkbox's accessible name. */
+function taskLabel(text: string): string {
+  const first = text.split("\n")[0] ?? "";
+  return first
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[*_~`=^]+/g, "")
+    .trim() || "Task";
+}
 
 export function renderMarkdown(md: string, blockKey?: string): string {
   if (!md.trim()) return `<p class="empty-block">&nbsp;</p>`;

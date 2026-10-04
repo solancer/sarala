@@ -75,6 +75,11 @@ export function findLinks(text: string): LinkRef[] {
  * The link a rendered anchor came from. `nth` counts anchors carrying the same
  * href, so repeated links to one URL still resolve to the right occurrence.
  */
+/** The link whose source span contains `offset` (the caret), if any. */
+export function linkAt(text: string, offset: number): LinkRef | null {
+  return findLinks(text).find((l) => offset >= l.start && offset <= l.end) ?? null;
+}
+
 export function linkForHref(text: string, href: string, nth: number): LinkRef | null {
   const matches = findLinks(text).filter((l) => l.url === href);
   return matches[nth] ?? null;

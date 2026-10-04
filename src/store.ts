@@ -284,6 +284,8 @@ function snapshot(): Snapshot {
 function pushHistory(coalesceKey: string | null = null) {
   const now = Date.now();
   redoStack.length = 0;
+  // Inside an edit group the entry taken when it began covers everything.
+  if (editGroup) return;
   if (coalesceKey !== null && coalesceKey === lastPushKey && now - lastPushAt < 800) {
     lastPushAt = now;
     return;
@@ -292,6 +294,30 @@ function pushHistory(coalesceKey: string | null = null) {
   if (undoStack.length > 200) undoStack.shift();
   lastPushKey = coalesceKey;
   lastPushAt = now;
+}
+
+let editGroup = false;
+
+/**
+ * Make everything until `endEditGroup()` one undo step, however long it takes
+ * (voice typing streams words into a block over many seconds and pauses,
+ * which the 800 ms keystroke coalescing would split up).
+ */
+export function beginEditGroup() {
+  if (editGroup) return;
+  pushHistory(null);
+  editGroup = true;
+}
+
+export function endEditGroup() {
+  editGroup = false;
+  lastPushKey = null;
+}
+
+/** End a group whose changes were all reverted: drop its undo entry too. */
+export function cancelEditGroup() {
+  if (editGroup) undoStack.pop();
+  endEditGroup();
 }
 
 function applySnapshot(s: Snapshot) {
@@ -304,6 +330,7 @@ function applySnapshot(s: Snapshot) {
   );
   if (s.caret != null) requestCaret(s.caret);
   lastPushKey = null; // the next edit starts a fresh history entry
+  editGroup = false;
 }
 
 export function undo() {
@@ -529,6 +556,34 @@ export function replaceBlocks(start: number, end: number, text: string) {
     })
   );
   requestCaret(text.length);
+}
+
+/** Replace `deleteCount` blocks at `start` with one block per entry of
+ *  `texts` (an empty list deletes; deleteCount 0 inserts). Used to apply AI
+ *  proposals, which are already split into blocks. */
+export function spliceBlocks(start: number, deleteCount: number, texts: string[]): number[] {
+  return spliceMany([{ start, deleteCount, texts }])[0];
+}
+
+/** Several splices as one store update and one undo step (Accept all). The
+ *  ops apply in order, so callers pass them highest position first. Returns
+ *  the ids of the blocks each op created. */
+export function spliceMany(ops: { start: number; deleteCount: number; texts: string[] }[]): number[][] {
+  pushHistory();
+  const created: number[][] = [];
+  setState(
+    produce((s) => {
+      for (const op of ops) {
+        const blocks = op.texts.map(mkBlock);
+        created.push(blocks.map((b) => b.id));
+        s.blocks.splice(op.start, op.deleteCount, ...blocks);
+      }
+      if (s.blocks.length === 0) s.blocks.push(mkBlock(""));
+      s.activeIndex = -1;
+      s.dirty = true;
+    })
+  );
+  return created;
 }
 
 /** Set heading level (0 = paragraph) on a block. */

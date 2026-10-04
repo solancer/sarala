@@ -48,6 +48,7 @@ function parseAccel(accel: string): Chord {
 export function makeMenuKeyHandler(): (e: KeyboardEvent) => void {
   const chords = menuAccelerators().map(({ accel, id }) => ({ chord: parseAccel(accel), id }));
   return (e: KeyboardEvent) => {
+    if (e.defaultPrevented) return; // handled already (see App's onKey)
     const ctrlMeta = e.ctrlKey || e.metaKey;
     for (const { chord, id } of chords) {
       if (

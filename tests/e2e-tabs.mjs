@@ -31,18 +31,21 @@ try {
   await docTabs.getByRole("tab", { name: /B.md/ }).click();
   assert.equal(await page.locator(".source-full").inputValue(), "Beta edited\n");
   page.once("dialog", (dialog) => dialog.dismiss());
-  await page.getByRole("button", { name: "Close B.md", exact: true }).click();
+  // Keyboard path (deletable tabs): Delete on the focused tab.
+  await docTabs.getByRole("tab", { name: /B.md/ }).focus();
+  await page.keyboard.press("Delete");
   assert.equal(await docTabs.getByRole("tab").count(), 2, "cancel keeps dirty tab");
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Close B.md", exact: true }).click();
+  // Pointer path: the ✕ on the tab.
+  await page.locator(".document-tab", { hasText: "B.md" }).locator(".document-tab-close").click();
   await docTabs.getByRole("tab", { name: /B.md/ }).waitFor({ state: "detached" });
   assert.equal(await docTabs.getByRole("tab").count(), 1);
   await page.keyboard.press("Control+t");
   assert.equal(await docTabs.getByRole("tab").count(), 2, "new tab shortcut");
   await page.keyboard.press("Control+Tab");
   assert.match(await docTabs.locator('[role="tab"][aria-selected="true"]').textContent(), /A.md/);
-  await page.getByRole("button", { name: "Close A.md", exact: true }).click();
-  await page.getByRole("button", { name: "Close Untitled.md", exact: true }).click();
+  await page.locator(".document-tab", { hasText: "A.md" }).locator(".document-tab-close").click();
+  await page.locator(".document-tab", { hasText: "Untitled.md" }).locator(".document-tab-close").click();
   assert.equal(await docTabs.getByRole("tab").count(), 1, "last close leaves blank tab");
   assert.match(await docTabs.locator('[role="tab"][aria-selected="true"]').textContent(), /Untitled.md/);
   console.log("PASS tab switching, source edits, close protection and shortcuts");

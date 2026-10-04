@@ -3,6 +3,8 @@
 // hand-authored markup, injected via innerHTML on a ref (the app's pattern).
 
 export const ICONS: Record<string, string> = {
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/>',
+  sparkle: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
   file: '<path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   save: '<path d="M5 3h11l3 3v15H5zM8 3v6h8"/>',

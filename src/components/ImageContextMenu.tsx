@@ -1,3 +1,4 @@
+import { attachMenuKeyboard, keyboardMenuPoint } from "../menuKeyboard";
 import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import {
   uploadSelectedImage, openImageLocation, copyImageTo, renameMoveImage, deleteImageFile,
@@ -9,6 +10,7 @@ const [pos, setPos] = createSignal({ x: 0, y: 0 });
 
 /** Open the image context menu at a screen position. */
 export function openImageMenu(t: ImageTarget, x: number, y: number) {
+  if (x === 0 && y === 0) ({ x, y } = keyboardMenuPoint());
   setTarget(t);
   setPos({ x, y });
 }
@@ -68,40 +70,41 @@ export default function ImageContextMenu() {
         <div
           class="img-menu"
           classList={{ "im-flip": place().flip }}
-          ref={menuEl}
+          ref={(el) => { menuEl = el; onCleanup(attachMenuKeyboard(el, closeImageMenu)); }}
+          role="menu" aria-label="Image"
           style={{ left: `${place().x}px`, top: `${place().y}px` }}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <button class="im-item" onClick={run(openImageLocation)}>Open Image Location…</button>
-          <button class="im-item" onClick={run(uploadSelectedImage)}>Upload Image…</button>
-          <button class="im-item" onClick={run(copyImageTo)}>Copy Image to…</button>
-          <button class="im-item" onClick={run(renameMoveImage)}>Rename or Move Image to…</button>
-          <div class="im-sep" />
+          <button class="im-item" role="menuitem" tabIndex={-1} onClick={run(openImageLocation)}>Open Image Location…</button>
+          <button class="im-item" role="menuitem" tabIndex={-1} onClick={run(uploadSelectedImage)}>Upload Image…</button>
+          <button class="im-item" role="menuitem" tabIndex={-1} onClick={run(copyImageTo)}>Copy Image to…</button>
+          <button class="im-item" role="menuitem" tabIndex={-1} onClick={run(renameMoveImage)}>Rename or Move Image to…</button>
+          <div class="im-sep" role="separator" />
           <div class="im-sub" onMouseEnter={() => setSubmenu("zoom")} onMouseLeave={() => setSubmenu(null)}>
-            <button class="im-item im-parent">Zoom Image<span class="im-caret">›</span></button>
+            <button class="im-item im-parent" role="menuitem" aria-haspopup="menu" tabIndex={-1}>Zoom Image<span class="im-caret">›</span></button>
             <Show when={submenu() === "zoom"}>
-              <div class="img-menu im-flyout">
+              <div class="img-menu im-flyout" role="menu">
                 <For each={ZOOMS}>
-                  {(z) => <button class="im-item" onClick={run((t) => setImageZoom(t, z))}>{z}%</button>}
+                  {(z) => <button class="im-item" role="menuitem" tabIndex={-1} onClick={run((t) => setImageZoom(t, z))}>{z}%</button>}
                 </For>
               </div>
             </Show>
           </div>
           <div class="im-sub" onMouseEnter={() => setSubmenu("syntax")} onMouseLeave={() => setSubmenu(null)}>
-            <button class="im-item im-parent">Switch Image Syntax<span class="im-caret">›</span></button>
+            <button class="im-item im-parent" role="menuitem" aria-haspopup="menu" tabIndex={-1}>Switch Image Syntax<span class="im-caret">›</span></button>
             <Show when={submenu() === "syntax"}>
-              <div class="img-menu im-flyout">
-                <button class="im-item" onClick={run((t) => switchImageSyntax(t, "md"))}>
+              <div class="img-menu im-flyout" role="menu">
+                <button class="im-item" role="menuitem" tabIndex={-1} onClick={run((t) => switchImageSyntax(t, "md"))}>
                   <span class="im-check">{t().kind === "md" ? "✓" : ""}</span> Markdown ![alt](src)
                 </button>
-                <button class="im-item" onClick={run((t) => switchImageSyntax(t, "html"))}>
+                <button class="im-item" role="menuitem" tabIndex={-1} onClick={run((t) => switchImageSyntax(t, "html"))}>
                   <span class="im-check">{t().kind === "html" ? "✓" : ""}</span> HTML &lt;img src="src" /&gt;
                 </button>
               </div>
             </Show>
           </div>
-          <div class="im-sep" />
-          <button class="im-item im-danger" onClick={run(deleteImageFile)}>Delete Image File</button>
+          <div class="im-sep" role="separator" />
+          <button class="im-item im-danger" role="menuitem" tabIndex={-1} onClick={run(deleteImageFile)}>Delete Image File</button>
         </div>
       )}
     </Show>
