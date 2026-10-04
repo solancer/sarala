@@ -64,6 +64,8 @@ jobs:
             librsvg2-dev \
             libappindicator3-dev \
             libwayland-dev \
+            libasound2-dev \
+            cmake \
             patchelf
 
       - name: Install frontend dependencies
@@ -76,6 +78,11 @@ jobs:
           # Updater signing (minisign). Set these as repo secrets.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Voice typing's speech engine (ggml) would otherwise be tuned to this
+          # runner's CPU and crash on older machines. Portable baseline: x86-64
+          # with AVX2/FMA/F16C (2013+; the app checks at runtime and explains if
+          # missing). The x86 flags are ignored for Apple Silicon.
+          TRANSCRIBE_CMAKE_ARGS: "-DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_AVX512=OFF"
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Sarala ${{ github.ref_name }}
