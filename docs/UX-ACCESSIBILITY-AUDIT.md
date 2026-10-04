@@ -8,6 +8,30 @@ Reviewed the application shell, document tabs and reordering, sidebar/tree/outli
 
 The audit found significant keyboard, focus, labeling, and contrast gaps. This changeset addresses shared problems across the app. **This is not a WCAG conformance certification or a completed assistive-technology acceptance test.** Browser interaction, native Tauri behavior, VoiceOver/NVDA, composited colors, and visual layout were not validated in this pass. Previously denied browser access was not retried.
 
+## Follow-up audit, 2026-09-30 (WCAG 2.2 AA)
+
+Target: WCAG 2.2 Level AA. Method: automated axe-core scans (`tests/e2e-a11y.mjs`: 55 scans covering every major surface, in all 14 built-in themes, including the AI assistant); scripted keyboard checks (`tests/e2e-keyboard.mjs`); reflow at a simulated 200% zoom (700×450 CSS px); Windows forced-colors emulation. Both tests now run in `pnpm test:e2e`.
+
+Result: **0 automated violations** (down from 725 occurrences of 8 rules at the start of this pass), all keyboard checks passing. One documented exception: table drag handles under 2.5.8's "Equivalent" clause (the table toolbar's 24px Move row/column buttons do the same).
+
+| Area | Finding | Fix |
+| --- | --- | --- |
+| Task lists (critical, 592 occurrences) | Rendered task checkboxes had no accessible name. | The shared renderer names each checkbox after its task (attribute only; applies to exports too). |
+| Document tabs (critical) | The tab list owned close buttons, which a tab list may not. | APG "deletable tabs": Delete closes the focused tab; the ✕ is a pointer duplicate hidden from the accessibility tree. |
+| File tree / outline (critical) | Empty tree kept `role="tree"`; the outline used a tree role for a flat list of buttons. | Tree role only with items; outline is a labelled group. |
+| Menus (critical) | AI agent/chat menus contained non-menu children. | Menu-compatible roles (`none`, `separator`, `menuitem`). |
+| Contrast (serious) | Top-bar search label and Live/Source toggle (3 themes), note callout titles, AI pills and muted text. | Colours blended toward each theme's ink; verified in all 14 themes. |
+| Target size (serious) | Chat tab close, table toolbar buttons under 24px. | 24px targets; table drag handles keep a 16px visual inside a 24px hit area. |
+| Nested controls, scrollable code (serious) | AI agent cards were clickable radios containing buttons; the install command box scrolled without keyboard access. | Card's first row is its own pressed-toggle button; the command wraps. |
+| Headings, landmarks (moderate) | No level-one heading; editor popups outside landmarks. | Visually hidden `h1` with the document name; popups render inside `<main>`. |
+| Context menus (was P1) | Mouse-only: mousedown handlers, no focus, no arrows, no keyboard opener. | Shared keyboard layer (`src/menuKeyboard.ts`): Shift+F10 / Menu key opens at the caret, focus moves in, arrows/Home/End, Right/Left for submenus, Enter/Space, Escape returns focus and caret. |
+| Links (new) | Opening, copying or removing a link needed the mouse (Cmd+click, hover card). | Cmd/Ctrl+Enter opens the link at the caret; the context menu and palette offer Open / Copy / Remove Link. |
+| Large file trees (was P1) | Every row was a Tab stop; navigation stopped at the rendered slice; expanding a folder lost focus; the windowing ignored the tree's offset in its scroller; browser scroll anchoring shifted the window. | Roving tabindex (one Tab stop), navigation over the logical rows (Up/Down/Home/End/type-ahead reach unrendered rows), APG Left/Right (parent / first child), focus kept across re-rendering, offset-aware windowing, `overflow-anchor: none`. |
+| Forced colors | Settings switches vanished; selected states (Live/Source, sections, tabs, rail) were tint-only. | `@media (forced-colors: active)`: system-colour switches and a Highlight outline on every pressed/selected/current control. |
+| Selection toolbar | Floated off-screen when its selection scrolled out of view. | Hides instead. (macOS Home/End scroll the document by design; Cmd+Left/Right move the caret.) |
+
+Still not verified by this pass (needs a person with the assistive technology): VoiceOver in the macOS app and NVDA/JAWS on Windows, especially caret reporting while editing rendered blocks; native Tauri menus and file dialogs; OS-level text scaling. Automated checks cover only part of WCAG, so this is strong evidence, not a conformance certification.
+
 ## Changes made
 
 | Area | Finding and impact | Remediation | Verification |
@@ -34,8 +58,8 @@ These are still open; they are not included in the verified fixes above.
 
 | Priority | Area | Remaining issue / next action |
 | --- | --- | --- |
-| P1 | Editor and image context menus | Some actions still use mouse-down-only handlers or hover-only nested menus. Opening via Shift+F10/Context Menu, initial focus, arrow traversal, and return focus are not consistently implemented. Add a shared keyboard context-menu model, preserving the editor selection. |
-| P1 | Large file trees | Navigation scans the mounted rows. With virtualization above 300 rows, keyboard movement can stop at the rendered slice; many tree rows also remain separate Tab stops. Implement a logical-row focus model with scroll-to-mount and a single tree tab stop. |
+| Resolved 2026-09-30 | Editor and image context menus | Some actions still use mouse-down-only handlers or hover-only nested menus. Opening via Shift+F10/Context Menu, initial focus, arrow traversal, and return focus are not consistently implemented. Add a shared keyboard context-menu model, preserving the editor selection. |
+| Resolved 2026-09-30 | Large file trees | Navigation scans the mounted rows. With virtualization above 300 rows, keyboard movement can stop at the rendered slice; many tree rows also remain separate Tab stops. Implement a logical-row focus model with scroll-to-mount and a single tree tab stop. |
 | P1 | Rich editing and AT | Switching between rendered blocks and contenteditable hosts can replace focused nodes. Hidden Markdown delimiters and source-offset caret restoration need VoiceOver/NVDA testing with lists, links, underline, code, and multi-block selections. Source view is available, but should not be assumed to replace an accessible Live view. |
 | P2 | Contextual tools | Selection toolbar, slash menu, code-language picker, image tools, and table rails have uneven keyboard discoverability and active-option announcements. Validate command-palette alternatives for every operation; add explicit keyboard access where missing. |
 | P2 | Contrast beyond opaque tokens | Selected/hover/disabled states, opacity, syntax highlighting, thin boundaries, focus rings, user colors, and imported/custom themes are not covered by the 78 core-token checks. Measure actual computed/composited colors and non-text contrast before claiming AA. |
