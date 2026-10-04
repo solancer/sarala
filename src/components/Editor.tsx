@@ -7,6 +7,7 @@ import {
 import { toggleTask } from "../markdown";
 import { selectedBlockRange } from "../blockselect";
 import { openEditorMenu } from "./EditorContextMenu";
+import { parseTable } from "../tabletools";
 
 export default function Editor() {
   // Make a selection that spans blocks actionable (native selection can't,
@@ -61,9 +62,18 @@ export default function Editor() {
   return (
     <div
       class="editor" tabIndex={0} role="region" aria-label="Document editor. Press Enter to edit."
+      aria-keyshortcuts="Shift+F10 ContextMenu"
       onKeyDown={(e) => {
         if (e.target === e.currentTarget && e.key === "Enter") {
           e.preventDefault(); requestCaret(0); setActive(Math.max(0, doc.activeIndex));
+        }
+        // Keyboard access to the context menu. Browsers on macOS don't turn
+        // Shift+F10 into a contextmenu event, so open it here on every platform.
+        if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+          e.preventDefault();
+          const sel = window.getSelection();
+          const i = doc.activeIndex;
+          openEditorMenu(0, 0, sel && !sel.isCollapsed ? sel.toString() : "", i >= 0 && !!parseTable(doc.blocks[i].text));
         }
       }}
       onContextMenu={(e) => {

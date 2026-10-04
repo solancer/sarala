@@ -38,6 +38,9 @@ finish-args:
   # read/write to ~/Documents so the "reopen recent files on launch" feature works
   # there without re-prompting. Flathub flags broader --filesystem=home.
   - --filesystem=xdg-documents:rw
+  # Voice typing: the microphone (and its start/stop sounds). Recording goes
+  # through PulseAudio/PipeWire; there is no portal for audio input yet.
+  - --socket=pulseaudio
 
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin
@@ -52,6 +55,9 @@ build-options:
     XDG_CACHE_HOME: /run/build/sarala/flatpak-node/cache
     npm_config_cache: /run/build/sarala/flatpak-node/npm-cache
     npm_config_offline: 'true'
+    # Voice typing's speech engine: a portable CPU baseline rather than the
+    # build machine's (see .github/workflows/release.yml).
+    TRANSCRIBE_CMAKE_ARGS: '-DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_AVX512=OFF'
 
 modules:
   - name: sarala

@@ -1,0 +1,366 @@
+/* Voice typing: mic button, HUD, set-up dialog.
+   Kept out of app.css, which is inlined into HTML exports. */
+
+/* ---------- mic button ---------- */
+.voice-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.voice-btn .voice-mic { width: 15px; height: 15px; position: relative; z-index: 1; }
+.voice-btn:hover { color: var(--accent); background: var(--accent-soft); }
+.voice-btn::before {
+  /* Level ring: grows with the microphone level while listening. */
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: color-mix(in srgb, #d93a2b 30%, transparent);
+  transform: scale(calc(0.6 + var(--voice-level, 0) * 0.9));
+  opacity: 0;
+  transition: transform 90ms linear, opacity 150ms ease;
+}
+.voice-btn.on { color: #fff; background: #c4352a; }
+.voice-btn.on:hover { color: #fff; background: #ad2d23; }
+.voice-btn.on::before { opacity: 1; }
+.voice-btn.busy { color: var(--accent); }
+.voice-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Top bar: a topbar-toggle like Focus mode beside it; only its listening
+   state is its own. */
+.topbar-toggle.voice-top { position: relative; }
+.topbar-toggle.voice-top .voice-mic { width: 18px; height: 18px; position: relative; z-index: 1; }
+.topbar-toggle.voice-top.recording,
+.topbar-toggle.voice-top.recording:hover { color: #fff; background: #c4352a; }
+.topbar-toggle.voice-top.recording:hover { background: #ad2d23; }
+.topbar-toggle.voice-top.busy { color: var(--accent); background: var(--accent-soft); }
+.topbar-toggle.voice-top::after {
+  /* Level ring: breathes with the microphone while listening. */
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 11px;
+  border: 2px solid color-mix(in srgb, #c4352a 45%, transparent);
+  opacity: 0;
+  transform: scale(calc(0.92 + var(--voice-level, 0) * 0.16));
+  transition: transform 90ms linear, opacity 150ms ease;
+  pointer-events: none;
+}
+.topbar-toggle.voice-top.recording::after { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .topbar-toggle.voice-top::after { transition: none; transform: none; }
+}
+@media (forced-colors: active) {
+  .topbar-toggle.voice-top.recording { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .topbar-toggle.voice-top::after { display: none; }
+}
+
+/* In the AI composer bar. */
+.ai-box-bar .voice-btn { width: 28px; height: 28px; border-radius: 8px; }
+
+/* ---------- HUD ---------- */
+.voice-hud {
+  position: fixed;
+  left: 50%;
+  bottom: 44px;
+  /* Above dialogs (they top out at 320): you can dictate into a dialog's
+     field, and the listening state must not sit under its dimmed backdrop. */
+  z-index: 330;
+  width: min(560px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  padding: 8px 10px 8px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--bg-page);
+  box-shadow: var(--shadow);
+  font: var(--fw-regular) 13px/1.4 var(--font-ui);
+  color: var(--ink);
+  animation: voice-hud-in 160ms ease-out;
+}
+@keyframes voice-hud-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+.voice-hud-row { display: flex; align-items: center; gap: 10px; min-height: 28px; }
+.voice-hud-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; color: #c4352a; }
+.voice-notice .voice-hud-icon { color: var(--ink-soft); }
+.voice-notice.error .voice-hud-icon { color: #c4352a; }
+.voice-hud-icon .voice-mic { width: 18px; height: 18px; }
+.voice-hud-label { font-weight: var(--fw-semibold); white-space: nowrap; }
+.voice-notice .voice-hud-label { white-space: normal; font-weight: var(--fw-medium); }
+.voice-hud-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 2px 38px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #c4352a 10%, var(--bg-page));
+  color: var(--ink);
+}
+.voice-hud-warning span { flex: 1; }
+.voice-hud.speaking .voice-hud-icon { color: #c4352a; }
+/* Command mode: a different colour and edge, so it can't be mistaken for
+   dictating (the command sound says the same for those who can't see it). */
+.voice-hud.command { border-color: var(--accent); box-shadow: var(--shadow), inset 4px 0 0 var(--accent); }
+.voice-hud.command .voice-hud-icon, .voice-hud.command.speaking .voice-hud-icon { color: var(--accent); }
+.voice-hud.command .voice-hud-label { color: var(--accent); }
+.voice-hud:not(.speaking) .voice-bars span { opacity: 0.55; }
+.voice-shortcut { display: grid; gap: 4px; justify-items: end; }
+.voice-shortcut-row { display: flex; gap: 4px; align-items: center; }
+.voice-shortcut-row .ghost-btn { min-width: 72px; }
+.voice-shortcut-msg { color: var(--ink-soft); font-size: 11.5px; line-height: 1.45; max-width: 260px; text-align: right; }
+.voice-shortcut-msg:empty { display: none; }
+.voice-shortcut button[aria-pressed="true"] { outline: 2px solid var(--accent); }
+/* Status over hint, so the hint can wrap (long hints, large zoom) without
+   pushing Done and Cancel onto another line. */
+.voice-hud-titles { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.voice-hud-hint { color: var(--ink-soft); font-size: 12px; line-height: 1.35; }
+.voice-hud-spacer { flex: 1; }
+.voice-hud-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: var(--fw-medium) 12px var(--font-ui);
+  cursor: pointer;
+  flex: none;
+}
+.voice-hud-btn svg { width: 14px; height: 14px; }
+/* Key hints on the buttons: Done ⏎, Cancel Esc. */
+.voice-hud-btn { gap: 6px; }
+.voice-key {
+  padding: 0 5px;
+  border-radius: 4px;
+  font: var(--fw-medium) 11px/16px var(--font-ui);
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  opacity: 0.85;
+}
+.voice-hud-btn[aria-label="Dismiss"] { padding: 0; }
+.voice-hud-btn:hover { background: var(--tint); }
+.voice-hud-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg-page); }
+.voice-hud-btn.primary:hover { filter: brightness(1.06); }
+.voice-hud-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.voice-hud-text {
+  margin: 6px 2px 2px 38px;
+  max-height: 4.2em;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.voice-hud-text .tentative { color: var(--ink-soft); }
+
+.voice-bars { display: inline-flex; align-items: center; gap: 2px; height: 18px; }
+.voice-bars span {
+  width: 3px;
+  height: 18px;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: center;
+  transition: transform 80ms linear;
+}
+.voice-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: voice-spin 0.8s linear infinite;
+}
+@keyframes voice-spin { to { transform: rotate(360deg); } }
+
+/* ---------- set-up dialog ---------- */
+.voice-setup {
+  width: min(520px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+  padding: 22px 24px 18px;
+  background: var(--bg-page);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  font: var(--fw-regular) 13px/1.5 var(--font-ui);
+  color: var(--ink);
+}
+.voice-setup-head { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 16px; }
+.voice-setup-head h2 { margin: 2px 0 4px; font: var(--fw-bold) 17px var(--font-ui); }
+.voice-setup-head p { margin: 0; color: var(--ink-soft); }
+.voice-setup-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.voice-setup-badge .voice-mic { width: 22px; height: 22px; }
+.voice-setup-note { padding: 8px 10px; border-radius: 8px; background: var(--tint); }
+.voice-models { margin: 0; padding: 0; border: 0; display: grid; gap: 8px; }
+.voice-models legend { padding: 0; margin-bottom: 8px; font-weight: var(--fw-medium); }
+.voice-model {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.voice-model:hover { background: var(--tint); }
+.voice-model.on { border-color: var(--accent); background: var(--accent-soft); }
+.voice-model.on .voice-model-blurb, .voice-model.on .voice-model-size { color: var(--ink); }
+.voice-model input { accent-color: var(--accent); margin: 0; width: 16px; height: 16px; flex: none; }
+.voice-model-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.voice-model-name { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-weight: var(--fw-semibold); }
+.voice-model-blurb { color: var(--ink-soft); font-size: 12px; }
+.voice-model-size { color: var(--ink-soft); font-size: 12px; white-space: nowrap; }
+.voice-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--ink);
+  font: var(--fw-semibold) 11px var(--font-ui);
+}
+.voice-tag.ok { background: var(--tint); color: var(--ink-soft); }
+.voice-setup-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+.voice-setup-foot { margin: 14px 0 0; color: var(--ink-soft); font-size: 11.5px; }
+.voice-step-title { margin: 4px 0 4px; font-weight: var(--fw-semibold); font-size: 14px; }
+.voice-step-sub { margin: 0; color: var(--ink-soft); }
+.voice-step-sub kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  font: 12px var(--font-ui);
+  color: var(--ink);
+}
+.voice-progress-wrap { display: grid; gap: 8px; }
+.voice-progress {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--tint);
+}
+.voice-progress span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 200ms ease;
+}
+.voice-progress.indeterminate span { width: 35%; animation: voice-indet 1.2s ease-in-out infinite; }
+@keyframes voice-indet { from { left: -35%; } to { left: 100%; } }
+.voice-try { position: relative; margin-top: 12px; }
+.voice-try textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 8px 40px 8px 10px; font: 14px/1.5 var(--font-ui); }
+.voice-try .voice-try-btn { position: absolute; right: 6px; top: 6px; width: 30px; height: 30px; }
+
+.voice-check {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--tint);
+  color: var(--ink);
+}
+/* Keys read like the rest of the dialog (same as .voice-step-sub kbd); only
+   the terminal command is monospaced. */
+.voice-check kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  font: 12px var(--font-ui);
+  color: var(--ink);
+}
+.voice-setup-note code {
+  padding: 1px 5px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  font: 12px var(--font-mono, ui-monospace, monospace);
+  color: var(--ink);
+}
+.voice-model-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.voice-check-ok { color: var(--ink); font-weight: var(--fw-semibold); }
+.voice-options { margin-top: 10px; }
+
+/* ---------- settings ---------- */
+.voice-installed { display: grid; gap: 6px; justify-items: end; }
+.voice-installed-row { display: flex; align-items: center; gap: 8px; }
+.voice-installed-row span { color: var(--ink-soft); }
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-hud { animation: none; }
+  .voice-btn::before, .voice-bars span, .voice-progress span { transition: none; }
+  .voice-btn::before { transform: none; }
+  .voice-spinner { animation-duration: 2.4s; }
+  .voice-progress.indeterminate span { animation: none; left: 0; width: 100%; opacity: 0.5; }
+}
+
+@media (forced-colors: active) {
+  .voice-btn.on { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+  .voice-btn::before { display: none; }
+  .voice-hud, .voice-setup, .voice-model { border: 1px solid CanvasText; }
+  .voice-model.on { outline: 2px solid Highlight; }
+  .voice-bars span, .voice-progress span { background: Highlight; forced-color-adjust: none; }
+  .voice-progress { border: 1px solid CanvasText; }
+}
+
+/* Words being recognized, streamed into the document: still subject to
+   change. A CSS highlight, so the block's text (its Markdown source) is
+   untouched. */
+::highlight(voice-live) {
+  background-color: color-mix(in srgb, var(--accent) 14%, transparent);
+  text-decoration: underline dotted color-mix(in srgb, var(--accent) 70%, transparent);
+  text-underline-offset: 3px;
+}
+/* Just typed: a brief confirmation flash. */
+::highlight(voice-typed) {
+  background-color: color-mix(in srgb, #2f9e5b 22%, transparent);
+}
+@media (forced-colors: active) {
+  ::highlight(voice-live) { background-color: Highlight; color: HighlightText; }
+  ::highlight(voice-typed) { background-color: Mark; color: MarkText; }
+}
+
+/* ---------- voice commands sheet ---------- */
+.voice-commands { width: min(620px, 94vw); }
+.voice-cmd-section { margin-top: 16px; }
+.voice-cmd-section h3 { margin: 0 0 6px; font: var(--fw-semibold) 13px var(--font-ui); color: var(--ink); }
+.voice-cmd-section dl { margin: 0; display: grid; gap: 2px; }
+.voice-cmd-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 42%) 1fr;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rule-soft, var(--rule));
+}
+.voice-cmd-row:last-child { border-bottom: 0; }
+.voice-cmd-row dt { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 0; }
+.voice-cmd-row dd { margin: 0; color: var(--ink); }
+.voice-cmd-phrase { font-weight: var(--fw-semibold); color: var(--ink); white-space: nowrap; }
+.voice-cmd-row kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  font: 12px var(--font-ui);
+  color: var(--ink);
+}
+.voice-cmd-note { margin: 0 0 6px; color: var(--ink-soft); }
+.voice-cmd-off { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+.voice-hud-btn.ghost { border-color: transparent; color: var(--ink-soft); }
+.voice-hud-btn.ghost:hover { color: var(--accent); background: var(--accent-soft); }
+@media (max-width: 560px) { .voice-cmd-row { grid-template-columns: 1fr; gap: 2px; } }

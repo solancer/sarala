@@ -29,7 +29,7 @@ fi
 source "$VENV/bin/activate"
 pip install --quiet --upgrade pip
 # Cargo generator deps + the node generator (installed straight from the repo).
-pip install --quiet aiohttp toml \
+pip install --quiet aiohttp toml tomlkit \
   "git+https://github.com/flatpak/flatpak-builder-tools.git@${FBT_REF}#subdirectory=node"
 
 echo "==> Fetching flatpak-cargo-generator.py ($FBT_REF)"

@@ -90,6 +90,14 @@ export default function DocumentTabs() {
   const navigate = (e: KeyboardEvent, id: number) => {
     const tabs = openTabs();
     const index = tabs.findIndex((tab) => tab.id === id);
+    // Deletable tabs (WAI-ARIA APG): Delete closes the focused tab. The ✕
+    // button duplicates this for pointers, so it stays out of the tab list's
+    // accessibility tree (a tab list may only own tabs).
+    if (e.key === "Delete") {
+      e.preventDefault();
+      void closeTab(id);
+      return;
+    }
     if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
       e.preventDefault();
       moveTab(id, index + (e.key === "ArrowLeft" ? -1 : 1));
@@ -125,7 +133,7 @@ export default function DocumentTabs() {
           <div class="document-tab" classList={{ selected: tab.id === activeTabId(), dragging: tab.id === dragging() }} data-tab-id={tab.id}>
             <button
               role="tab" id={`document-tab-${tab.id}`} aria-selected={tab.id === activeTabId()}
-              aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+              aria-keyshortcuts="Delete Alt+ArrowLeft Alt+ArrowRight"
               aria-controls="document-panel" tabIndex={tab.id === activeTabId() ? 0 : -1}
               title={tab.filePath ?? "Not saved to a file yet"}
               onMouseDown={(e) => e.preventDefault()}
@@ -159,7 +167,7 @@ export default function DocumentTabs() {
               <span class="document-tab-name">{tab.name}</span>
               <span class="document-tab-dirty" classList={{ dirty: tab.dirty }} aria-label={tab.dirty ? "Unsaved changes" : undefined} />
             </button>
-            <button class="document-tab-close" tabIndex={tab.id === activeTabId() ? 0 : -1} title={`Close ${tab.name}`} aria-label={`Close ${tab.name}`}
+            <button class="document-tab-close" tabIndex={-1} aria-hidden="true" title={`Close ${tab.name} (Delete)`}
               onMouseDown={(e) => e.preventDefault()} onClick={() => void closeTab(tab.id)}>
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" /></svg>
             </button>

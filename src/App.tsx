@@ -23,6 +23,14 @@ import UpdateModal from "./components/UpdateModal";
 import ExportHtmlDialog from "./components/ExportHtmlDialog";
 import ConflictBanner from "./components/ConflictBanner";
 import MenuBar from "./components/MenuBar";
+import AiPanel from "./components/AiPanel";
+import AiRail from "./components/AiRail";
+import AiEditorMarks from "./components/AiEditorMarks";
+import VoiceHud, { VoiceButton } from "./components/VoiceHud";
+import VoiceSetup from "./components/VoiceSetup";
+import VoiceCommands from "./components/VoiceCommands";
+import { aiPanelOpen, aiRailVisible } from "./ai/config";
+import { flushChatSaves } from "./ai/session";
 import { initSettings } from "./settings";
 import { base16ToCss } from "./base16";
 import { autoCheckForUpdates } from "./updater";
@@ -66,6 +74,9 @@ export default function App() {
   // Browser fallback only: in Tauri these chords are native menu accelerators,
   // which dispatch through the "menu" event; handling both would double-fire.
   const onKey = (e: KeyboardEvent) => {
+    // Already handled (e.g. a block ran Undo for Cmd/Ctrl+Z): running it again
+    // here made every undo in the browser build go back two steps.
+    if (e.defaultPrevented) return;
     if (document.querySelector('[aria-modal="true"]')) return;
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
@@ -111,6 +122,20 @@ export default function App() {
       window.removeEventListener("beforeunload", beforeUnload);
     });
     void initSettings();
+    // Safety net: no link anywhere may navigate the webview itself (it would
+    // replace the whole app with the page). Components open links on purpose
+    // through followLink/openExternal; any click they left unhandled, including
+    // middle-clicks, stops here. Bubble phase, so their handlers run first.
+    const stopNavigation = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.("a[href]");
+      if (a && !e.defaultPrevented) e.preventDefault();
+    };
+    document.addEventListener("click", stopNavigation);
+    document.addEventListener("auxclick", stopNavigation);
+    onCleanup(() => {
+      document.removeEventListener("click", stopNavigation);
+      document.removeEventListener("auxclick", stopNavigation);
+    });
     // Command palette (Cmd/Ctrl+K). Bound globally on every platform — it isn't
     // a menu accelerator, so there's no native-menu double-fire to avoid.
     const onPaletteKey = (e: KeyboardEvent) => {
@@ -161,6 +186,7 @@ export default function App() {
       import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
         const win = getCurrentWindow();
         unclose = await win.onCloseRequested(async (event) => {
+          flushChatSaves();
           const dirty = openTabs().filter((tab) => tab.dirty);
           if (!dirty.length) return;
           event.preventDefault();
@@ -264,6 +290,7 @@ export default function App() {
   createEffect(() => setMenuChecked("view.focus_mode", focusMode()));
   createEffect(() => setMenuChecked("view.typewriter_mode", typewriterMode()));
   createEffect(() => setMenuChecked("view.status_bar", statusBarVisible()));
+  createEffect(() => setMenuChecked("ai.toggle_panel", aiPanelOpen()));
   createEffect(() => setMenuChecked("view.always_on_top", alwaysOnTop()));
 
   // Selection-dependent enabling: block-targeted items are disabled until
@@ -346,6 +373,9 @@ export default function App() {
           onJump={jumpTo}
         />
         <main class="main">
+          {/* The document's name is the page's top-level heading for screen
+              readers (the visible title lives in the tab strip). */}
+          <h1 class="sr-only">{fileName()}</h1>
           <header class="topfloat document-toolbar" aria-label="Documents and controls" data-tauri-drag-region="deep">
             {isTauri && isMac && <span class="topbar-traffic" aria-hidden="true" />}
             <button
@@ -375,6 +405,9 @@ export default function App() {
                 that act on this view. Focus mode sits with Live/Source because
                 it *is* a view mode; beside the palette it read as unrelated. */}
             <span class="topfloat-sep" aria-hidden="true" />
+            {/* Voice typing sits with the writing controls (shown once it is
+                turned on). */}
+            <VoiceButton variant="topbar" />
             <button
               class="topbar-toggle icon-btn"
               classList={{ on: focusMode() }}
@@ -404,25 +437,37 @@ export default function App() {
           <Show when={statusBarVisible()}>
             <StatusBar />
           </Show>
+          {/* Editor popups are fixed-position; they live inside <main> so
+              assistive tech finds them in the editor's landmark. */}
+          <EditorContextMenu />
+          <VoiceHud />
+          {/* Live view only — Source mode is a plain textarea with no block model. */}
+          <Show when={!sourceMode()}>
+            <SelectionToolbar />
+            <SlashMenu />
+            <EmojiMenu />
+          </Show>
         </main>
+        <AiPanel />
+        <AiEditorMarks />
+        {/* Focus mode quiets the rail (ai.css) instead of removing it:
+            removing it widened the main area and shifted the whole top bar. */}
+        <Show when={aiRailVisible()}>
+          <AiRail />
+        </Show>
       </div>
       <PaletteSwitcher />
       <QuickOpen />
       <CommandPalette />
       <TableDialog />
       <ImageContextMenu />
-      <EditorContextMenu />
-      {/* Live view only — Source mode is a plain textarea with no block model. */}
-      <Show when={!sourceMode()}>
-        <SelectionToolbar />
-        <SlashMenu />
-        <EmojiMenu />
-      </Show>
       <AboutModal />
       <SettingsModal />
       <ThemeEditor />
       <ThemePicker />
       <PandocDownloadModal />
+      <VoiceSetup />
+      <VoiceCommands />
       <UpdateModal />
       <ExportHtmlDialog />
     </div>

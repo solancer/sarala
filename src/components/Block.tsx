@@ -13,7 +13,7 @@ import {
 } from "../store";
 import { renderMermaidIn } from "../mermaid";
 import { renderD2In } from "../d2";
-import { executeCommand, registerBlockApi, unregisterBlockApi, imageInsertRef, followLink, type BlockApi } from "../commands";
+import { executeCommand, registerBlockApi, unregisterBlockApi, imageInsertRef, followLink, linkTargetAtCaret, type BlockApi } from "../commands";
 import { parseTable, cellRanges } from "../tabletools";
 import { findImages } from "../images";
 import { pasteToInsert } from "../richpaste";
@@ -355,6 +355,12 @@ export default function Block(props: Props) {
       if ((e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Backspace" || e.key === "Delete") && !e.altKey && !e.metaKey && !e.ctrlKey) return;
     }
     const mod = e.metaKey || e.ctrlKey;
+    // Cmd/Ctrl+Enter on a link opens it: the keyboard version of Cmd+click.
+    if (mod && e.key === "Enter" && !e.shiftKey && !e.altKey && linkTargetAtCaret()) {
+      e.preventDefault();
+      executeCommand("edit.open_link");
+      return;
+    }
     if (mod) {
       // Under Tauri these chords are native menu accelerators that dispatch
       // through the command bus; handling them here too would double-fire.
@@ -666,6 +672,14 @@ export default function Block(props: Props) {
   // Here we cancel the native toggle and drive state from the markdown source.
   const onRenderedCheckboxClick = (e: MouseEvent) => {
     const t = e.target as HTMLElement;
+    // A rendered link never navigates on its own: following it is handled on
+    // mousedown (Cmd/Ctrl+click) and by the hover card. Cancelling mousedown
+    // does not cancel the click's default action, and in the app's webview
+    // that default would load the link *inside the app window*.
+    if (t.closest("a")) {
+      e.preventDefault();
+      return;
+    }
     if (!(t instanceof HTMLInputElement && t.type === "checkbox")) return;
     e.preventDefault();
     const host = e.currentTarget as HTMLElement;

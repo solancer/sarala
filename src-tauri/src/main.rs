@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod ai;
 mod menu;
+mod voice;
 
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -1096,6 +1098,9 @@ fn main() {
                 },
             )
             .ok();
+            app.manage(ai::AgentRuns::default());
+            app.manage(voice::VoiceState::default());
+            ai::prune_workspaces(app.handle());
             app.manage(FileWatcher {
                 debouncer: Mutex::new(debouncer),
                 watched: Mutex::new(HashSet::new()),
@@ -1138,6 +1143,30 @@ fn main() {
             pandoc_export,
             export_pdf,
             run_command,
+            ai::ai_agent_status,
+            ai::ai_agent_run,
+            ai::ai_agent_login,
+            ai::ai_agent_cancel,
+            ai::ai_agent_forget,
+            ai::ai_chats_load,
+            ai::ai_chats_save,
+            ai::ai_chats_delete,
+            voice::voice_supported,
+            voice::voice_platform,
+            voice::voice_commit,
+            voice::voice_models,
+            voice::voice_download,
+            voice::voice_cancel_download,
+            voice::voice_delete_model,
+            voice::voice_permission,
+            voice::voice_request_permission,
+            voice::voice_devices,
+            voice::voice_prepare,
+            voice::voice_start,
+            voice::voice_stop,
+            voice::voice_cancel,
+            voice::voice_unload,
+            voice::voice_set_idle,
             menu::set_menu_checked,
             menu::set_menu_enabled,
             menu::update_recent_menu,

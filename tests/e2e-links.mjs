@@ -9,7 +9,7 @@
  * block's markdown correctly.
  */
 import { spawn } from "node:child_process";
-import { chromium } from "playwright";
+import { chromium, webkit } from "playwright";
 
 const PORT = 1457;
 const server = spawn("npx", ["vite", "--port", String(PORT)], { stdio: "pipe" });
@@ -168,6 +168,39 @@ check(await tools.isVisible(), "resting on it does");
 // The helper offers the four actions.
 const titles = await page.locator(".lht-btn").evaluateAll((els) => els.map((e) => e.title));
 check(titles.length === 4, `four actions (${JSON.stringify(titles)})`);
+
+// Clicking a link must never navigate the app's own webview. WebKit (the
+// macOS app's engine) runs a Cmd+click's default action, which loaded the page
+// into the app window. Checked there with window.open stubbed, as in the app,
+// where links open through the OS instead.
+{
+  const wk = await webkit.launch();
+  const wpage = await wk.newPage({ viewport: { width: 1150, height: 760 } });
+  await wpage.addInitScript(() => {
+    window.__opened = [];
+    window.open = (u) => { window.__opened.push(String(u)); return null; };
+  });
+  const home = `http://localhost:${PORT}/`;
+  await wpage.goto(home);
+  await wpage.waitForSelector(".block");
+  await wpage.locator(".block").first().click();
+  await wpage.keyboard.type("See [the site](https://example.com) here.");
+  await wpage.keyboard.press("Enter");
+  await wpage.keyboard.type("End.");
+  await wpage.waitForTimeout(300);
+  const link = () => wpage.locator('.editor .page > .block a[href="https://example.com"]').first();
+  await link().click({ modifiers: ["Meta"] });
+  await wpage.waitForTimeout(400);
+  check(wpage.url() === home, `Cmd+click leaves the app in place (${wpage.url()})`);
+  check((await wpage.evaluate(() => window.__opened)).includes("https://example.com"), "and opens the link outside the app");
+  await link().click({ button: "middle" });
+  await wpage.waitForTimeout(300);
+  check(wpage.url() === home, "a middle-click doesn't navigate the app either");
+  await link().click();
+  await wpage.waitForTimeout(300);
+  check(wpage.url() === home, "a plain click edits instead of navigating");
+  await wk.close();
+}
 
 await browser.close();
 kill();

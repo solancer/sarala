@@ -29,6 +29,15 @@ confinement: strict
 # webkit2gtk dlopen()s some of its own modules by absolute path; bind the staged
 # copy back over the expected location so it resolves inside the confined snap.
 layout:
+  # Voice typing records through ALSA (cpal). Inside the snap there is no raw
+  # ALSA device access; route ALSA's default device to PulseAudio/PipeWire via
+  # the staged pulse plugin, which the audio-record interface allows.
+  /usr/lib/$SNAPCRAFT_ARCH_TRIPLET/alsa-lib:
+    bind: $SNAP/usr/lib/$SNAPCRAFT_ARCH_TRIPLET/alsa-lib
+  /usr/share/alsa:
+    bind: $SNAP/usr/share/alsa
+  /etc/asound.conf:
+    bind-file: $SNAP/etc/asound.conf
   /usr/lib/$SNAPCRAFT_ARCH_TRIPLET/webkit2gtk-4.1:
     bind: $SNAP/usr/lib/$SNAPCRAFT_ARCH_TRIPLET/webkit2gtk-4.1
 
@@ -43,6 +52,10 @@ apps:
       - home # open/save Markdown files in the user's home via the native dialog
       - removable-media # ...and on mounted USB drives / external disks
       - network # auto-updater check + remote images in previews
+      - audio-playback # voice typing's start/stop sounds
+      # Voice typing. Not auto-connected: `snap connect sarala:audio-record`
+      # (the setup screen says so when running as a snap).
+      - audio-record
 
 parts:
   sarala:
@@ -66,9 +79,15 @@ parts:
       # rfd's xdg-portal backend pulls wayland-backend with the client_system
       # feature, which links libwayland-client at build time (see src-tauri/Cargo.toml).
       - libwayland-dev
+      # Voice typing: microphone (ALSA, via PulseAudio/PipeWire's ALSA plugin)
+      # and the speech engine's C++ build.
+      - libasound2-dev
+      - cmake
       - dpkg
     stage-packages:
       - libwebkit2gtk-4.1-0
+      - libasound2
+      - libasound2-plugins
       - libayatana-appindicator3-1
     # Graphics are provided by the `gnome` extension's platform snap (Mesa via the
     # opengl/content interfaces), so drop the GPU userspace stack that webkit2gtk's
@@ -88,6 +107,9 @@ parts:
       - -usr/lib/*/libdrm_*.so*
     override-build: |
       set -eu
+
+      # Portable speech engine build (see the release workflow for why).
+      export TRANSCRIBE_CMAKE_ARGS="-DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_AVX512=OFF"
 
       # Keep the snap version in lockstep with package.json (bumped by `pnpm release`).
       craftctl set version="$(node -p "require('$CRAFT_PART_SRC/package.json').version")"
@@ -126,3 +148,9 @@ parts:
 
       # Merge the app payload into the snap alongside the stage-packages.
       cp -rT "$pkgroot/usr" "$CRAFT_PART_INSTALL/usr"
+
+      # Voice typing: ALSA's default device goes to PulseAudio/PipeWire (the
+      # only audio path a strictly confined snap has). Bound to /etc/asound.conf
+      # by the layout above.
+      mkdir -p "$CRAFT_PART_INSTALL/etc"
+      printf 'pcm.!default { type pulse }\nctl.!default { type pulse }\n' > "$CRAFT_PART_INSTALL/etc/asound.conf"

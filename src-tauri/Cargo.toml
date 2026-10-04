@@ -22,6 +22,17 @@ encoding_rs = "0.8"
 chardetng = "1"
 font-kit = "0.14"
 base64 = "0.23"
+sha2 = "0.10"
+
+# Voice typing (src/voice/): microphone capture, resampling, voice activity
+# detection and an on-device speech engine. Behind the `voice` feature (on by
+# default) because transcribe-cpp compiles ggml from C++ and needs CMake; build
+# with `--no-default-features` to leave it out.
+cpal = { version = "0.16", optional = true }
+rtrb = { version = "0.4", optional = true }
+rubato = { version = "0.16", optional = true }
+earshot = { version = "1.2", optional = true }
+transcribe-cpp = { version = "0.2.4", default-features = false, optional = true }
 
 # File dialogs. On Linux, use rfd's xdg-desktop-portal backend instead of the
 # default GTK one: the portal draws the picker *outside* the snap sandbox and
@@ -29,6 +40,15 @@ base64 = "0.23"
 # files (incl. USB / removable media) work without the removable-media interface.
 # The portal deps (ashpd/pollster) are Linux-gated inside rfd, so macOS/Windows
 # keep their native AppKit/win32 pickers regardless — hence the target split.
+# Metal on macOS; other platforms use the CPU backend (Vulkan needs its SDK at
+# build time).
+[target.'cfg(target_os = "macos")'.dependencies]
+transcribe-cpp = { version = "0.2.4", default-features = false, features = ["metal"], optional = true }
+# Microphone permission (AVCaptureDevice). Already in the tree via Tauri.
+objc2 = "0.6"
+objc2-foundation = "0.3"
+block2 = "0.6"
+
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 tauri-plugin-dialog = "2"
 
@@ -39,6 +59,10 @@ tauri-plugin-dialog = { version = "2", default-features = false, features = ["xd
 # mobile target, but the cfg gate keeps that true if one is ever added.
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
+
+[features]
+default = ["voice"]
+voice = ["dep:cpal", "dep:rtrb", "dep:rubato", "dep:earshot", "dep:transcribe-cpp"]
 
 [profile.release]
 panic = "abort"

@@ -15,6 +15,7 @@ import {
   emojiEnabled, highlightEnabled, subSupEnabled, autolinkEnabled,
   targetBlockIndex, doc,
 } from "./store";
+import { aiPanelOpen } from "./ai/config";
 
 export interface MenuLeaf {
   /** Command id routed through executeCommand(); omitted for exec/submenu-only nodes. */
@@ -176,6 +177,21 @@ export const MENUS: TopMenu[] = [
       { id: "edit.find", label: "Find…", accel: "Ctrl+F" },
       { id: "edit.find_next", label: "Find Next", accel: "Ctrl+G" },
       { id: "edit.replace", label: "Replace…", accel: "Alt+Ctrl+F" },
+      { sep: true },
+      {
+        id: "voice",
+        label: "Voice Typing",
+        items: [
+          { id: "voice.toggle", label: "Start or Stop Voice Typing" },
+          { sep: true },
+          { id: "voice.scratch", label: "Remove Last Dictation" },
+          { id: "voice.select_last", label: "Select Last Dictation" },
+          { sep: true },
+          { id: "voice.commands", label: "Voice Commands…" },
+          { sep: true },
+          { id: "voice.settings", label: "Voice Typing Settings…" },
+        ],
+      },
       { sep: true },
       {
         label: "Substitutions",
@@ -382,6 +398,10 @@ export const MENUS: TopMenu[] = [
       { id: "view.file_tree", label: "File Tree", accel: "Ctrl+Alt+3" },
       { sep: true },
       { id: "view.search", label: "Search", accel: "Shift+Ctrl+F" },
+      { sep: true },
+      { id: "ai.toggle_panel", label: "AI Assistant", type: "check", checked: () => aiPanelOpen() },
+      { id: "ai.ask_selection", label: "Ask AI About Selection", accel: "Shift+Ctrl+I" },
+      { id: "ai.review_document", label: "Review Document with AI" },
       { sep: true },
       { id: "view.zoom_actual", label: "Actual Size", accel: "Shift+Ctrl+0" },
       { id: "view.zoom_in", label: "Zoom In", accel: "Shift+Ctrl+Equal" },

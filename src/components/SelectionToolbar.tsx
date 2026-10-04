@@ -18,6 +18,9 @@ import { getActiveBlockApi, setBlockKind, toggleInlineMark } from "../commands";
 import { activeMarks, type MarkKind } from "../inlineformat";
 import { blockKind, type BlockKind } from "../blocktype";
 import { selectedBlockRange } from "../blockselect";
+import { aiEnabled } from "../ai/config";
+import { askAboutSelection, runQuickAction } from "../ai/session";
+import { QUICK_ACTIONS } from "../ai/prompts";
 
 const ICONS: Record<string, string> = {
   paragraph: '<path d="M13 4v16M17 4v16M19 4H9.5a4.5 4.5 0 0 0 0 9H13"/>',
@@ -40,6 +43,7 @@ const ICONS: Record<string, string> = {
   sup: '<path d="m4 19 8-8M4 11l8 8M21 9h-4c0-1.5.4-2 1.5-2.5S21 5.5 21 4.5c0-.9-.7-1.5-1.5-1.5S18 3.6 18 4.5"/>',
   sub: '<path d="m4 5 8 8M12 5l-8 8M20 19h-4c0-1.5.4-2 1.5-2.5S20 15.5 20 14.5c0-.9-.7-1.5-1.5-1.5S17 13.6 17 14.5"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
+  sparkle: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
 };
 
 function Icon(props: { name: string; class?: string }) {
@@ -106,6 +110,7 @@ export default function SelectionToolbar() {
   const [rect, setRect] = createSignal<DOMRect | null>(null);
   const [range, setRange] = createSignal<{ start: number; end: number } | null>(null);
   const [menuOpen, setMenuOpen] = createSignal(false);
+  const [aiOpen, setAiOpen] = createSignal(false);
 
   const blockText = () => {
     const i = targetBlockIndex();
@@ -125,6 +130,7 @@ export default function SelectionToolbar() {
     setRect(null);
     setRange(null);
     setMenuOpen(false);
+    setAiOpen(false);
   };
 
   const update = () => {
@@ -147,6 +153,9 @@ export default function SelectionToolbar() {
     if (!text.slice(offsets.start, offsets.end).trim()) return hide();
     const r = sel.getRangeAt(0).getBoundingClientRect();
     if (!r.width && !r.height) return hide();
+    // Scrolled out of view (e.g. macOS Home/End scroll without moving the
+    // caret): hide rather than float the bar off-screen.
+    if (r.bottom < topLimit() || r.top > window.innerHeight) return hide();
     setRange({ start: offsets.start, end: offsets.end });
     setRect(r);
   };
@@ -193,7 +202,7 @@ export default function SelectionToolbar() {
       requestAnimationFrame(update);
     };
     const onSelectionChange = () => {
-      if (dragging || menuOpen()) return;
+      if (dragging || menuOpen() || aiOpen()) return;
       update();
     };
     const onScroll = () => {
@@ -232,12 +241,43 @@ export default function SelectionToolbar() {
           e.stopPropagation();
         }}
       >
+        <Show when={aiEnabled()}>
+          <div class="sel-type sel-ai">
+            <button
+              class="sel-type-btn"
+              classList={{ on: aiOpen() }}
+              title="Ask AI"
+              aria-haspopup="menu"
+              aria-expanded={aiOpen()}
+              onClick={() => { setMenuOpen(false); setAiOpen(!aiOpen()); }}
+            >
+              <Icon name="sparkle" />
+              <span class="sel-type-label">Ask AI</span>
+              <Icon name="chevron" class="sel-ic sel-caret" />
+            </button>
+            <Show when={aiOpen()}>
+              <div class="sel-menu" role="menu">
+                <button class="sel-menu-item" role="menuitem" onClick={() => { hide(); askAboutSelection(); }}>
+                  <Icon name="sparkle" /><span>Ask about selection…</span>
+                </button>
+                <For each={QUICK_ACTIONS}>
+                  {(a) => (
+                    <button class="sel-menu-item" role="menuitem" onClick={() => { hide(); runQuickAction(a.id); }}>
+                      <span class="sel-menu-pad" /><span>{a.label}</span>
+                    </button>
+                  )}
+                </For>
+              </div>
+            </Show>
+          </div>
+          <span class="sel-sep" />
+        </Show>
         <div class="sel-type">
           <button
             class="sel-type-btn"
             classList={{ on: menuOpen() }}
             title="Block type"
-            onClick={() => setMenuOpen(!menuOpen())}
+            onClick={() => { setAiOpen(false); setMenuOpen(!menuOpen()); }}
           >
             <Icon name={current().icon} />
             <span class="sel-type-label">{current().label}</span>

@@ -98,6 +98,16 @@ sudo snap install sarala
 - Open Quickly (`Shift+Cmd/Ctrl+P`), find & replace, and a command palette (`Cmd/Ctrl+K`)
 - Focus and Typewriter modes, plus Source mode as an escape hatch to the raw document
 
+**Voice typing** (opt-in)
+
+- Speak and Sarala types it. Speech becomes text on your computer: no cloud, no account, no keys. One speech model is downloaded when you turn it on
+- Hold the shortcut to talk, or press once to start and again to stop; or let it type at each pause, hands-free
+- Text streams into the document as you speak; Return keeps it, Esc discards it (Cmd/Ctrl+Z brings it back)
+- One-key control: tap Right Option (Mac) / Right Ctrl to start or stop, hold it to say a command, which is never typed
+- Commands for Markdown: "new bullet …", "new heading …", "new task …", "make that bold", "make that a heading", "scratch that"; say "what can I say" for all of them
+- Built for people who can't easily type or see the screen: read-back through the screen reader, distinct sounds for every state, spoken punctuation, any shortcut you can reach
+- Settings > Voice, or Edit > Voice Typing
+
 **Making it yours**
 
 - 13 built-in themes, plus a **custom theme** built from any [base16](https://github.com/tinted-theming/schemes) scheme: paste one in or edit the sixteen swatches
@@ -128,12 +138,13 @@ The menus show every accelerator inline. The ones worth learning:
 | `F8` / `F9` | Focus / Typewriter mode |
 | `Cmd/Ctrl+1…6`, `0` | Heading level / paragraph |
 | `Esc` | Render the current block |
+| `Cmd+Shift+D` (Mac), `Ctrl+Alt+Space` | Voice typing, once turned on (changeable) |
 
 ---
 
 ## Build from source
 
-Node 18+, Rust stable, and [Tauri's platform prerequisites](https://tauri.app/start/prerequisites/) (on Linux, `webkit2gtk-4.1` and friends).
+Node 18+, Rust stable, [Tauri's platform prerequisites](https://tauri.app/start/prerequisites/) (on Linux, `webkit2gtk-4.1` and friends), and CMake plus a C++ compiler for voice typing's speech engine (on Linux also `libasound2-dev`). To build without voice typing, pass `--no-default-features` to Cargo.
 
 ```bash
 pnpm install

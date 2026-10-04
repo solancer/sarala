@@ -193,6 +193,8 @@ export default function Sidebar(props: Props) {
   const [filter, setFilter] = createSignal("");
   const [recentOpen, setRecentOpen] = createSignal(getSetting("recentOpen", true));
   const [scrollTop, setScrollTop] = createSignal(0);
+  /** The tree's top within its scroller (Recent/Pinned sit above it). */
+  const [treeOffset, setTreeOffset] = createSignal(0);
   const [viewH, setViewH] = createSignal(600);
   let filterEl: HTMLInputElement | undefined;
   let treeEl: HTMLDivElement | undefined;
@@ -205,14 +207,28 @@ export default function Sidebar(props: Props) {
 
   const windowed = createMemo(() => rows().length > WINDOW_MIN);
   const firstIdx = createMemo(() =>
-    windowed() ? Math.max(0, Math.floor(scrollTop() / ROW_H) - OVERSCAN) : 0,
+    windowed() ? Math.max(0, Math.floor((scrollTop() - treeOffset()) / ROW_H) - OVERSCAN) : 0,
   );
   const lastIdx = createMemo(() =>
     windowed()
-      ? Math.min(rows().length, Math.ceil((scrollTop() + viewH()) / ROW_H) + OVERSCAN)
+      ? Math.min(rows().length, Math.ceil((scrollTop() - treeOffset() + viewH()) / ROW_H) + OVERSCAN)
       : rows().length,
   );
+  /** scrollTop that centres row `i` in the scroller. */
+  const scrollTopFor = (i: number, scroller: HTMLElement) =>
+    Math.max(0, treeOffset() + i * ROW_H + ROW_H / 2 - scroller.clientHeight / 2);
   const visibleRows = createMemo(() => rows().slice(firstIdx(), lastIdx()));
+  /**
+   * Keyboard focus in the tree, by path: one Tab stop for the whole tree
+   * (roving tabindex), and navigation over the logical rows, so it reaches
+   * rows the windowing hasn't rendered yet.
+   */
+  const [focusPath, setFocusPath] = createSignal<string | null>(null);
+  const tabStop = createMemo(() => {
+    const vis = visibleRows();
+    const want = focusPath() ?? doc.filePath;
+    return vis.some((r) => r.node.path === want) ? want : vis[0]?.node.path ?? null;
+  });
   const padTop = () => firstIdx() * ROW_H;
   const padBottom = () => Math.max(0, (rows().length - lastIdx()) * ROW_H);
   const headings = () => outline();
@@ -252,8 +268,24 @@ export default function Sidebar(props: Props) {
   onMount(() => {
     const scroller = treeEl?.closest<HTMLElement>(".side-tab-body");
     if (!scroller) return;
-    const onScroll = () => setScrollTop(scroller.scrollTop);
-    const ro = new ResizeObserver(() => setViewH(scroller.clientHeight || 600));
+    const measure = () => {
+      if (treeEl) setTreeOffset(treeEl.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop);
+    };
+    // Re-measured on scroll too: collapsing Recent above the tree moves it.
+    const onScroll = () => {
+      measure();
+      // Re-windowing can move the focused row's element and drop focus; put
+      // it straight back so keys pressed right after still reach the tree.
+      const hadFocus = !!treeEl?.contains(document.activeElement);
+      setScrollTop(scroller.scrollTop);
+      if (hadFocus && !treeEl?.contains(document.activeElement)) {
+        const p = focusPath();
+        if (p) treeEl?.querySelector<HTMLElement>(`[data-path="${CSS.escape(p)}"]`)?.focus({ preventScroll: true });
+      }
+    };
+    const ro = new ResizeObserver(() => { setViewH(scroller.clientHeight || 600); measure(); });
+    if (treeEl) ro.observe(treeEl);
+    measure();
     ro.observe(scroller);
     scroller.addEventListener("scroll", onScroll, { passive: true });
     setViewH(scroller.clientHeight || 600);
@@ -281,7 +313,7 @@ export default function Sidebar(props: Props) {
           const row = treeEl?.querySelector<HTMLElement>(`[data-path="${CSS.escape(path)}"]`);
           if (row) row.scrollIntoView({ block: "nearest" });
           // A windowed row may not be rendered yet; drive the scroller directly.
-          else if (scroller) scroller.scrollTop = Math.max(0, idx * ROW_H - scroller.clientHeight / 2);
+          else if (scroller) scroller.scrollTop = scrollTopFor(idx, scroller);
         });
       },
       { defer: true },
@@ -333,19 +365,61 @@ export default function Sidebar(props: Props) {
    */
   let typeahead = "";
   let typeaheadAt = 0;
-  const onTreeKey = (e: KeyboardEvent) => {
-    const el = e.currentTarget as HTMLElement;
-    const items = [...el.querySelectorAll<HTMLElement>('[role="treeitem"]')];
-    const focused = document.activeElement as HTMLElement;
-    const i = items.indexOf(focused);
-
-    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-      const path = focused?.dataset.path;
-      if (!path || focused.getAttribute("aria-expanded") === null) return;
-      const open = focused.getAttribute("aria-expanded") === "true";
-      if (e.key === "ArrowRight" && !open) { e.preventDefault(); toggleFolder(path); void saveOpenFolders(); }
-      if (e.key === "ArrowLeft" && open) { e.preventDefault(); toggleFolder(path); void saveOpenFolders(); }
+  /** Focus the row at a logical index, scrolling it into existence if windowed. */
+  const focusRow = (idx: number) => {
+    const list = rows();
+    if (!list.length) return;
+    const i = Math.max(0, Math.min(idx, list.length - 1));
+    const path = list[i].node.path;
+    setFocusPath(path);
+    const find = () => treeEl?.querySelector<HTMLElement>(`[data-path="${CSS.escape(path)}"]`);
+    const el = find();
+    if (el) {
+      el.focus();
+      el.scrollIntoView({ block: "nearest" });
       return;
+    }
+    const scroller = treeEl?.closest<HTMLElement>(".side-tab-body");
+    if (scroller) {
+      scroller.scrollTop = scrollTopFor(i, scroller);
+      // Updating the signal renders the new window synchronously, so the row
+      // exists now: focus it before the next key arrives.
+      setScrollTop(scroller.scrollTop);
+    }
+    const now = find();
+    if (now) now.focus({ preventScroll: true });
+    else requestAnimationFrame(() => find()?.focus());
+  };
+
+  const onTreeKey = (e: KeyboardEvent) => {
+    const list = rows();
+    // Position comes from the tracked path, not whichever element has focus
+    // (a row can be re-rendered by the windowing mid-navigation).
+    const path = (document.activeElement as HTMLElement | null)?.dataset.path ?? focusPath();
+    const i = path ? list.findIndex((r) => r.node.path === path) : -1;
+    const row = list[i];
+
+    switch (e.key) {
+      case "ArrowDown": e.preventDefault(); return focusRow(i + 1);
+      case "ArrowUp": e.preventDefault(); return focusRow(Math.max(0, i - 1));
+      case "Home": e.preventDefault(); return focusRow(0);
+      case "End": e.preventDefault(); return focusRow(list.length - 1);
+      case "ArrowRight":
+        if (!row?.node.is_dir) return;
+        e.preventDefault();
+        // Closed folder: open it. Open folder: move to its first child.
+        // (Expanding rebuilds the rows, so focus is put back on this one.)
+        if (!isFolderOpen(row.node.path)) { toggleFolder(row.node.path); void saveOpenFolders(); focusRow(i); }
+        else if (list[i + 1]?.depth === row.depth + 1) focusRow(i + 1);
+        return;
+      case "ArrowLeft": {
+        if (!row) return;
+        e.preventDefault();
+        // Open folder: close it. Anything else: move to its parent folder.
+        if (row.node.is_dir && isFolderOpen(row.node.path)) { toggleFolder(row.node.path); void saveOpenFolders(); focusRow(i); return; }
+        for (let k = i - 1; k >= 0; k--) if (list[k].depth === row.depth - 1) return focusRow(k);
+        return;
+      }
     }
     if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
       const now = Date.now();
@@ -353,14 +427,12 @@ export default function Sidebar(props: Props) {
       typeaheadAt = now;
       const q = typeahead.toLowerCase();
       const from = i >= 0 ? i : 0;
-      const order = [...items.slice(from + 1), ...items.slice(0, from + 1)];
-      const found = order.find((it) =>
-        (it.querySelector(".tree-nm")?.textContent ?? "").toLowerCase().startsWith(q),
-      );
-      if (found) { e.preventDefault(); found.focus(); found.scrollIntoView({ block: "nearest" }); }
-      return;
+      // A longer prefix may still match the current row: stay on it.
+      for (let step = typeahead.length > 1 ? 0 : 1; step <= list.length; step++) {
+        const k = (from + step) % list.length;
+        if (list[k].node.name.toLowerCase().startsWith(q)) { e.preventDefault(); return focusRow(k); }
+      }
     }
-    onNav(e);
   };
 
   const onNav = (e: KeyboardEvent) => {
@@ -596,9 +668,21 @@ export default function Sidebar(props: Props) {
 
           <div
             class="side-tree"
-            role="tree"
-            aria-label="Files"
+            role={props.tree.length > 0 ? "tree" : undefined}
+            aria-label={props.tree.length > 0 ? "Files" : undefined}
             onKeyDown={onTreeKey}
+            onFocusOut={(e) => {
+              // Focus dropping to nothing means the focused row's element was
+              // removed or moved by the windowing, not that the user left:
+              // put it back on the same row so keyboard navigation carries on.
+              if (e.relatedTarget) return;
+              requestAnimationFrame(() => {
+                const p = focusPath();
+                if (p && document.activeElement === document.body) {
+                  treeEl?.querySelector<HTMLElement>(`[data-path="${CSS.escape(p)}"]`)?.focus({ preventScroll: true });
+                }
+              });
+            }}
             ref={treeEl}
           >
             <Show
@@ -629,6 +713,8 @@ export default function Sidebar(props: Props) {
                         current: !row.node.is_dir && doc.filePath === row.node.path,
                       }}
                       role="treeitem"
+                      tabIndex={row.node.path === tabStop() ? 0 : -1}
+                      onFocus={() => setFocusPath(row.node.path)}
                       title={row.node.path}
                       data-path={row.node.path}
                       aria-level={row.depth + 1}
@@ -638,8 +724,13 @@ export default function Sidebar(props: Props) {
                       aria-expanded={row.node.is_dir ? isFolderOpen(row.node.path) : undefined}
                       style={{ "padding-left": `${8 + row.depth * 16}px` }}
                       onClick={() => {
-                        if (row.node.is_dir) { toggleFolder(row.node.path); void saveOpenFolders(); }
-                        else props.onOpenFile(row.node.path);
+                        if (row.node.is_dir) {
+                          toggleFolder(row.node.path);
+                          void saveOpenFolders();
+                          // Expanding rebuilds the rows; keep focus on this folder.
+                          const at = rows().findIndex((r) => r.node.path === row.node.path);
+                          if (at >= 0) focusRow(at);
+                        } else props.onOpenFile(row.node.path);
                       }}
                       onContextMenu={(e) => openPinMenu(e, row.node.path, row.node.is_dir)}
                     >
@@ -668,7 +759,7 @@ export default function Sidebar(props: Props) {
           <Show when={headings().length}>
             <div class="side-list-head">Outline</div>
           </Show>
-          <div class="side-outline" role="tree" aria-label="Outline" onKeyDown={onNav}>
+          <div class="side-outline" role="group" aria-label="Outline" onKeyDown={onNav}>
             <Show when={headings().length} fallback={<div class="sidebar-empty"><p>No headings yet.</p></div>}>
               <For each={headings()}>
                 {(h, i) => (

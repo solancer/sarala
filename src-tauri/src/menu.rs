@@ -435,6 +435,21 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             Some("Alt+CmdOrCtrl+F"),
         )?)
         .separator()
+        // No accelerators: the shortcut can be held to talk, which a menu
+        // accelerator can't express, so the webview handles it (src/voice/).
+        .item(
+            &SubmenuBuilder::with_id(app, "voice", "Voice Typing")
+                .item(&mi(app, "voice.toggle", "Start or Stop Voice Typing", None)?)
+                .separator()
+                .item(&mi(app, "voice.scratch", "Remove Last Dictation", None)?)
+                .item(&mi(app, "voice.select_last", "Select Last Dictation", None)?)
+                .separator()
+                .item(&mi(app, "voice.commands", "Voice Commands…", None)?)
+                .separator()
+                .item(&mi(app, "voice.settings", "Voice Typing Settings…", None)?)
+                .build()?,
+        )
+        .separator()
         .item(&substitutions)
         .item(&ci(
             app,
@@ -809,6 +824,20 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             "view.search",
             "Search",
             Some("Shift+CmdOrCtrl+F"),
+        )?)
+        .separator()
+        .item(&ci(app, "ai.toggle_panel", "AI Assistant", false, None)?)
+        .item(&mi(
+            app,
+            "ai.ask_selection",
+            "Ask AI About Selection",
+            Some("Shift+CmdOrCtrl+I"),
+        )?)
+        .item(&mi(
+            app,
+            "ai.review_document",
+            "Review Document with AI",
+            None,
         )?)
         .separator()
         .item(&mi(

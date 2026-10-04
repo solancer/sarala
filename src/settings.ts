@@ -18,6 +18,8 @@ import {
 import { setLiveHighlight, setLiveSubSup } from "./livesource";
 import type { ExportPreset, PdfOptions } from "./export";
 import type { Base16Scheme } from "./base16";
+import { hydrateAiSettings } from "./ai/config";
+import { hydrateVoiceSettings } from "./voice/config";
 
 export interface ExportMemo {
   /** Menu id of the export command, e.g. "file.export.docx". */
@@ -167,6 +169,8 @@ function hydrateStore() {
   const mono = getSetting<string | null>("monoFont", null);
   setMonoFont(mono);
   applyMonoFont(mono);
+  hydrateAiSettings();
+  hydrateVoiceSettings();
   bumpRenderEpoch();
 }
 

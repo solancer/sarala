@@ -272,7 +272,9 @@ body { font-family: var(--font-ui); }
 }
 .topbar-search:hover { border-color: var(--accent); color: var(--ink); }
 .topbar-search svg { width: 14px; height: 14px; flex: none; }
-.topbar-search-label { flex: 1; text-align: left; white-space: nowrap; }
+/* Soft ink sits on the chip/track colour here, not the page: nudge it toward
+   full ink so it keeps 4.5:1 in every theme. */
+.topbar-search-label { flex: 1; text-align: left; white-space: nowrap; color: color-mix(in srgb, var(--ink-soft) 75%, var(--ink)); }
 .kbd {
   display: inline-flex;
   align-items: center;
@@ -325,7 +327,7 @@ body { font-family: var(--font-ui); }
 .view-toggle button {
   border: 0;
   background: transparent;
-  color: var(--ink-soft);
+  color: color-mix(in srgb, var(--ink-soft) 75%, var(--ink));
   font: var(--fw-semibold) 12.5px/1 var(--font-ui);
   padding: 5px 14px;
   border-radius: 6px;
@@ -546,7 +548,11 @@ body { font-family: var(--font-ui); }
 @media (prefers-reduced-motion: reduce) { .side-icon-btn, .side-tab { transition: none; } }
 
 /* ---------- tab body ---------- */
-.side-tab-body { flex: 1; min-height: 0; padding: 4px 8px 10px; }
+.side-tab-body { flex: 1; min-height: 0; padding: 4px 8px 10px;
+  /* The file tree is windowed: browser scroll anchoring would shift the
+     scroll position whenever rows above the viewport are swapped, moving
+     keyboard focus out of the rendered window. */
+  overflow-anchor: none; }
 .side-list-head {
   /* Sticky: with Recent + All files in one scroll container, a plain header
      scrolls away and you lose track of which section you are in. */
@@ -1746,7 +1752,7 @@ ul.toc li.toc-l6 { padding-left: 92px; }
   align-items: center;
   justify-content: center;
   width: 24px;
-  height: 22px;
+  height: 24px;
   border: none;
   border-radius: 4px;
   background: transparent;
@@ -2202,6 +2208,7 @@ body.tables-full .rendered table { width: 100%; }
 .ctx-item:disabled { color: var(--ink-soft); opacity: 0.5; cursor: default; }
 .ctx-ic { width: 16px; height: 16px; flex: none; }
 .ctx-label { flex: 1; }
+.ctx-kbd { margin-left: 16px; font-size: 11.5px; color: color-mix(in srgb, var(--ink-soft) 75%, var(--ink)); }
 .ctx-sep { height: 1px; margin: 5px 4px; background: var(--rule); }
 .ctx-sub { position: relative; }
 .ctx-caret { color: var(--ink-soft); margin-left: 12px; }
@@ -3162,7 +3169,8 @@ body.tables-full .rendered table { width: 100%; }
 .pandoc-btn.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  /* Page colour, not white: dark themes have a light accent (2.2:1 with white). */
+  color: var(--bg-page);
 }
 .pandoc-btn.primary:hover { filter: brightness(1.06); }
 
@@ -3270,7 +3278,8 @@ body.tables-full .rendered table { width: 100%; }
 .md-alert > p { margin: 0.25em 0; }
 .md-alert-title {
   font-weight: var(--fw-bold);
-  color: var(--alert-color, var(--accent));
+  /* Blended toward the text colour so the tint keeps 4.5:1 in every theme. */
+  color: color-mix(in srgb, var(--alert-color, var(--accent)) 55%, var(--ink));
   display: flex;
   align-items: center;
   gap: 6px;
@@ -3283,7 +3292,7 @@ body.tables-full .rendered table { width: 100%; }
 .md-alert-caution { --alert-color: #e5534b; }
 
 /* Live block: tag the [!NOTE] marker in the source line with its kind color. */
-.md-alert-tag { font-weight: var(--fw-bold); color: var(--alert-color, var(--accent)); }
+.md-alert-tag { font-weight: var(--fw-bold); color: color-mix(in srgb, var(--alert-color, var(--accent)) 55%, var(--ink)); }
 .md-alert-tag.md-alert-note { --alert-color: #539bf5; }
 .md-alert-tag.md-alert-tip { --alert-color: #57ab5a; }
 .md-alert-tag.md-alert-important { --alert-color: #986ee2; }
@@ -3629,7 +3638,9 @@ input::placeholder, textarea::placeholder { color: var(--ink-soft); opacity: 1; 
 .emoji-menu .slash-item { gap: 10px; }
 
 .table-reorder { position: absolute; inset: 0; pointer-events: none; }
-.table-drag-handle { position: absolute; pointer-events: auto; touch-action: none; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 3px; background: var(--paper); color: var(--ink-soft); cursor: grab; line-height: 16px; z-index: 2; }
+/* 16px visual, 24px target (WCAG 2.5.8): the padding is part of the hit area
+   and the negative margin keeps the visual where it was positioned. */
+.table-drag-handle { position: absolute; pointer-events: auto; touch-action: none; width: 24px; height: 24px; margin: -4px; padding: 4px; border: 0; border-radius: 3px; background: var(--paper); background-clip: content-box; color: var(--ink-soft); cursor: grab; line-height: 16px; z-index: 2; }
 .table-drag-handle:hover, .table-drag-handle.drop-target { color: var(--accent); background: var(--code-bg); }
 .table-drag-handle.drop-target { outline: 2px solid var(--accent); }
 
@@ -3682,3 +3693,23 @@ input::placeholder, textarea::placeholder { color: var(--ink-soft); opacity: 1; 
    instead of collapsing to a placeholder. */
 .mermaid-block.diagram-pending > svg, .d2-block.diagram-pending > svg { opacity: 0.5; transition: opacity 120ms ease; }
 @media (prefers-reduced-motion: reduce) { .mermaid-block.diagram-pending > svg, .d2-block.diagram-pending > svg { transition: none; } }
+
+/* ---------- forced colors (Windows High Contrast) ----------
+   Backgrounds and box-shadows are replaced by system colours there, so any
+   state shown only as a tint disappears. Selected/pressed/current controls
+   get a Highlight outline (keyed off their ARIA state, so it covers the whole
+   app), and switches draw with system colours. */
+@media (forced-colors: active) {
+  [aria-pressed="true"], [aria-selected="true"], [aria-current="page"], [aria-current="true"],
+  [role="menuitemradio"][aria-checked="true"], [role="radio"][aria-checked="true"],
+  .view-toggle button.on, .set-rail-item.on, .topbar-toggle.on {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .set-switch { border: 1px solid ButtonText; background: ButtonFace; }
+  .set-switch.on { background: Highlight; border-color: Highlight; }
+  .set-knob { background: ButtonText; box-shadow: none; forced-color-adjust: none; }
+  .set-switch.on .set-knob { background: HighlightText; }
+  :focus-visible { outline: 2px solid Highlight !important; outline-offset: 2px; }
+  .block.active { outline: 1px solid CanvasText; }
+}
