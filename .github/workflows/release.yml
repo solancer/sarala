@@ -83,6 +83,11 @@ jobs:
           # with AVX2/FMA/F16C (2013+; the app checks at runtime and explains if
           # missing). The x86 flags are ignored for Apple Silicon.
           TRANSCRIBE_CMAKE_ARGS: "-DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_AVX512=OFF"
+          # ggml's macOS backend code uses std::filesystem, unavailable before
+          # 10.15 — without this, Clang assumes an older default minimum and
+          # the universal (Intel + Apple Silicon) build fails to compile.
+          # cmake-rs and Clang both read this; harmless on Linux/Windows.
+          MACOSX_DEPLOYMENT_TARGET: "10.15"
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Sarala ${{ github.ref_name }}
