@@ -82,12 +82,14 @@ jobs:
           # runner's CPU and crash on older machines. Portable baseline: x86-64
           # with AVX2/FMA/F16C (2013+; the app checks at runtime and explains if
           # missing). The x86 flags are ignored for Apple Silicon.
-          TRANSCRIBE_CMAKE_ARGS: "-DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_AVX512=OFF"
-          # ggml's macOS backend code uses std::filesystem, unavailable before
-          # 10.15 — without this, Clang assumes an older default minimum and
-          # the universal (Intel + Apple Silicon) build fails to compile.
-          # cmake-rs and Clang both read this; harmless on Linux/Windows.
-          MACOSX_DEPLOYMENT_TARGET: "10.15"
+          # CMAKE_OSX_DEPLOYMENT_TARGET: ggml's macOS backend code uses
+          # std::filesystem, unavailable before 10.15 — without it, Clang
+          # assumes an older default minimum and the universal (Intel + Apple
+          # Silicon) build fails to compile. transcribe-cpp-sys's build.rs
+          # reads TRANSCRIBE_CMAKE_ARGS directly (confirmed locally: a bare
+          # MACOSX_DEPLOYMENT_TARGET env var does NOT reach its cmake::Config);
+          # ignored by CMake on non-Apple platforms, so harmless on Linux/Windows.
+          TRANSCRIBE_CMAKE_ARGS: "-DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_AVX512=OFF -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15"
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Sarala ${{ github.ref_name }}
