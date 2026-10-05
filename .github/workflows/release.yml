@@ -71,6 +71,15 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Link clang's runtime for ggml's Metal @available checks (macOS only)
+        if: matrix.platform == 'macos-latest'
+        # rustc links with -nodefaultlibs, so libclang_rt.osx.a (which provides
+        # ___isPlatformVersionAtLeast, the helper @available(macOS 15.0, ...)
+        # checks in ggml-metal-device.m compile down to) isn't linked by
+        # default, unlike a normal Xcode-driven build. Confirmed locally: a
+        # release build fails to link without this, succeeds with it.
+        run: echo "RUSTFLAGS=-C link-arg=$(clang -print-file-name=libclang_rt.osx.a)" >> "$GITHUB_ENV"
+
       - name: Build, sign, and create the GitHub Release
         uses: tauri-apps/tauri-action@v0
         env:
