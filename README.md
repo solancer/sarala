@@ -56,6 +56,8 @@ brew install --cask --yes sarala
 
 > The universal build is ad-hoc signed (native on Apple Silicon and Intel) but not Apple-notarized. The cask clears the quarantine attribute on install, so Gatekeeper won't block the first launch.
 
+Sarala registers as an editor for `.md`, `.markdown`, and `.mdown` files on macOS. In Finder, choose **Open With → Sarala** to open a document in a tab, including when Sarala is already running. To make it the default, use **Get Info → Open with → Sarala → Change All…** after installing the updated app.
+
 **Linux** via the [Snap Store](https://snapcraft.io/sarala):
 
 ```bash

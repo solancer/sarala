@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod ai;
+mod file_open;
 mod menu;
 mod voice;
 
@@ -1035,6 +1036,7 @@ fn font_faces_b64(family: String) -> Result<Vec<FontFace>, String> {
 
 fn main() {
     tauri::Builder::default()
+        .manage(file_open::FileOpenRequests::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -1114,6 +1116,7 @@ fn main() {
             let _ = app.emit("menu", event.id().as_ref().to_string());
         })
         .invoke_handler(tauri::generate_handler![
+            file_open::take_open_files,
             list_dir,
             read_file,
             path_exists,
@@ -1172,8 +1175,16 @@ fn main() {
             menu::update_recent_menu,
             menu::update_export_menu
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Sarala");
+        .build(tauri::generate_context!())
+        .expect("error while building Sarala")
+        .run(|_app, _event| {
+            #[cfg(target_os = "macos")]
+            match _event {
+                tauri::RunEvent::Opened { urls } => file_open::opened(_app, urls),
+                tauri::RunEvent::Ready => file_open::ready(_app),
+                _ => {}
+            }
+        });
 }
 
 #[cfg(test)]

@@ -1,0 +1,17 @@
+{
+  "bundle": {
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown", "mdown"],
+        "name": "Markdown document",
+        "contentTypes": ["net.daringfireball.markdown"],
+        "mimeType": "text/markdown",
+        "role": "Editor",
+        "rank": "Alternate"
+      }
+    ],
+    "macOS": {
+      "infoPlist": "Info.plist"
+    }
+  }
+}
