@@ -94,6 +94,39 @@ for (const theme of THEMES.slice(0, themeCount)) {
   await page.close();
 }
 
+// ---- the Files sidebar with a real-looking folder: nested folders, Recent,
+// Pinned, a missing file, an unsaved one, the context menu (light and dark) ----
+for (const theme of ["sarala", "night"]) {
+  const root = "/Users/me/Documents";
+  const page = await newPage({ settings: {
+    theme,
+    recentFiles: [`${root}/notes/plan.md`, `${root}/gone.md`, `${root}/fixtures/kafka-guide.md`],
+    pinnedFiles: [`${root}/notes/plan.md`],
+    openFolders: [`${root}/notes`],
+  } });
+  await page.evaluate(async (root) => {
+    const s = await import("/src/store.ts");
+    const f = (name, dir = root) => ({ name, path: `${dir}/${name}`, is_dir: false });
+    s.setFolderPath(root); s.setFolderName("Documents");
+    s.setFileTree([
+      { name: "notes", path: `${root}/notes`, is_dir: true, children: [f("plan.md", `${root}/notes`), f("a very long file name that will certainly be truncated in the sidebar.md", `${root}/notes`)] },
+      { name: "archive", path: `${root}/archive`, is_dir: true, children: [f("old.md", `${root}/archive`)] },
+      f("README.md"), f("why.md"),
+    ]);
+    s.setMissingFiles(new Set([`${root}/gone.md`]));
+    s.openDocument("# Plan\n\nDraft.", `${root}/notes/plan.md`);
+    s.updateBlock?.(1, "Draft, edited.");
+  }, root);
+  await cmd(page, "view.file_tree");
+  await scan(page, `${theme}/files sidebar (tree, recent, pinned, missing)`);
+  await page.locator(".side-tree [role=treeitem]").first().click({ button: "right" });
+  await scan(page, `${theme}/files context menu`);
+  await escape(page);
+  await page.locator(".side-filter-input").fill("plan");
+  await scan(page, `${theme}/files filtered`);
+  await page.close();
+}
+
 // ---- every surface, default theme ----
 {
   const page = await newPage({ settings: { aiEnabled: true, aiAgent: "mock" } });
@@ -154,9 +187,14 @@ for (const theme of THEMES.slice(0, themeCount)) {
 // in a light and a dark theme (it has its own recording red).
 for (const theme of ["sarala", "night"]) {
   const page = await newPage({ settings: { theme } });
-  await cmd(page, "voice.setup"); await page.waitForSelector(".voice-setup"); await scan(page, `${theme}/voice setup`);
+  await cmd(page, "voice.setup"); await page.waitForSelector(".voice-setup .voice-pick"); await scan(page, `${theme}/voice setup`);
+  await page.locator(".voice-more").click(); await scan(page, `${theme}/voice setup models`);
   await page.locator(".voice-setup .pandoc-btn.primary").click();
-  await page.waitForSelector("text=Voice typing is on", { timeout: 5000 }); await scan(page, `${theme}/voice setup ready`);
+  await page.waitForSelector(".voice-meter"); await page.waitForTimeout(300); await scan(page, `${theme}/voice setup microphone`);
+  await page.locator(".voice-setup .pandoc-btn.primary").click();
+  await page.waitForSelector("text=Pick a shortcut"); await scan(page, `${theme}/voice setup shortcut`);
+  await page.locator(".voice-setup .pandoc-btn.primary").click();
+  await page.waitForSelector("text=Voice typing is on", { timeout: 8000 }); await scan(page, `${theme}/voice setup ready`);
   await escape(page);
   await page.evaluate(() => { window.__saralaVoiceDelay = 400; });
   await page.locator(".editor .page > .block").first().click();

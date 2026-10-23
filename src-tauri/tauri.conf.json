@@ -43,7 +43,8 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "entitlements": "Entitlements.plist"
+      "entitlements": "Entitlements.plist",
+      "signingIdentity": "-"
     },
     "linux": {
       "deb": {

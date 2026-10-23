@@ -5,7 +5,16 @@ const focusable = (root: HTMLElement) => [...root.querySelectorAll<HTMLElement>(
   'button, a[href], input, select, textarea, [tabindex], [contenteditable="true"]',
 )].filter((el) => el.tabIndex >= 0 && !el.matches(':disabled') &&
   !el.closest('[hidden], [inert], [aria-hidden="true"]') &&
-  getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden');
+  getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden' &&
+  isRadioStop(el, root));
+/** A radio group is one Tab stop (its checked option, else its first); arrow
+ *  keys move within it. Same as the browser's own tab order. */
+function isRadioStop(el: HTMLElement, root: HTMLElement): boolean {
+  const input = el as HTMLInputElement;
+  if (el.tagName !== 'INPUT' || input.type !== 'radio' || !input.name) return true;
+  const group = [...root.querySelectorAll<HTMLInputElement>('input[type="radio"]')].filter((r) => r.name === input.name);
+  return el === (group.find((r) => r.checked) ?? group[0]);
+}
 function isolateTop() {
   for (const [el, inert] of inertBefore) el.inert = inert;
   inertBefore.clear();
@@ -32,14 +41,18 @@ export function containModalFocus(el: HTMLElement, close: () => void): () => voi
     if (stack.at(-1) !== el) return;
     if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); close(); return; }
     if (e.key !== 'Tab') return;
+    // Move focus ourselves on every Tab, wrapping at both ends. Waiting for
+    // focus to reach the last control isn't enough in WebKit (the macOS app):
+    // by default its Tab skips buttons and links, so from the last text field
+    // it jumps straight past the dialog's buttons and out to <body>.
     const items = focusable(el);
-    const first = items[0] ?? el;
-    const last = items.at(-1) ?? el;
-    if (e.shiftKey && (document.activeElement === first || document.activeElement === el)) {
-      e.preventDefault(); last.focus();
-    } else if (!e.shiftKey && (document.activeElement === last || document.activeElement === el)) {
-      e.preventDefault(); first.focus();
-    }
+    if (!items.length) { e.preventDefault(); el.focus(); return; }
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const next = at < 0
+      ? (e.shiftKey ? items.length - 1 : 0)
+      : (at + (e.shiftKey ? -1 : 1) + items.length) % items.length;
+    e.preventDefault();
+    items[next].focus();
   };
   // Clicking the inert page behind a modal drops focus to <body>, where the
   // modal's own listener never hears Escape; still close the topmost modal.

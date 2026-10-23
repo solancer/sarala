@@ -78,13 +78,30 @@ export const openVoiceSetup = () => {
 };
 
 let noticeTimer: number | undefined;
-export function setNotice(n: Notice | null, ms = n?.tone === "error" ? 12_000 : 5_000) {
+let noticeMs = 0;
+/**
+ * Show a notice after (or instead of) a dictation. Errors and notices with an
+ * action ("Restore", "Set up", "Open Privacy Settings") stay until dismissed
+ * or the next dictation starts: a timer must not take away a way out before
+ * someone has had time to read it and reach the button (WCAG 2.2.1). Plain
+ * information fades after `ms`, and waits while it is hovered or focused.
+ */
+export function setNotice(n: Notice | null, ms = 5_000) {
   clearTimeout(noticeTimer);
   setNoticeSig(n);
+  noticeMs = n && n.tone !== "error" && !n.action ? ms : 0;
   if (n) {
     say(n.text);
-    noticeTimer = window.setTimeout(() => setNoticeSig(null), ms);
+    resumeNotice();
   }
+}
+/** Hovered or focused: hold the notice where it is. */
+export function pauseNotice() {
+  clearTimeout(noticeTimer);
+}
+export function resumeNotice() {
+  clearTimeout(noticeTimer);
+  if (noticeMs) noticeTimer = window.setTimeout(() => setNoticeSig(null), noticeMs);
 }
 
 /** Announce, even if the text is the same as last time (a live region only
@@ -279,7 +296,7 @@ export async function cancelDictation(): Promise<void> {
   reset();
   playEarcon("cancel");
   if (words) {
-    setNotice({ text: "Discarded what you said.", tone: "info", action: { label: "Restore", run: restoreDiscarded } }, 15_000);
+    setNotice({ text: "Discarded what you said.", tone: "info", action: { label: "Restore", run: restoreDiscarded } });
     say(`Discarded. Press ${isMac ? "Command" : "Control"} Z to bring it back.`);
   } else {
     say("Voice typing cancelled");
@@ -1232,6 +1249,14 @@ const HOLD_MS = 400;
 let holdStart = 0;
 
 function onKeyDown(e: KeyboardEvent) {
+  // The set-up asks for the shortcut before voice typing is on: note that it
+  // reached Sarala (the set-up shows a check) without starting anything.
+  if (!voiceEnabled() && setupOpen() && !recordingShortcut() && !e.isComposing && matchesShortcut(e, voiceShortcut())) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.repeat) setShortcutSeenAt(Date.now());
+    return;
+  }
   if (!voiceEnabled() || voiceSupported() === false || recordingShortcut() || e.isComposing || composing) return;
   if (commandKeyDown(e)) return;
   if (isActive() && e.key === "Escape") {

@@ -13,6 +13,7 @@
  *   __saralaVoiceDelay    ms per word (default 120)
  *   __saralaVoiceOpenDelay   ms the microphone takes to open (default 0)
  *   __saralaVoiceMicOpen  (read) whether the mock microphone is running
+ *   __saralaVoiceMicTest  (read) the device the set-up's mic check has open, or null
  */
 import type { Backend, DownloadEvent, VoiceEvent, VoiceModel } from "./transport";
 
@@ -30,6 +31,7 @@ type W = Window & {
   __saralaVoiceDelay?: number;
   __saralaVoiceOpenDelay?: number;
   __saralaVoiceMicOpen?: boolean;
+  __saralaVoiceMicTest?: string | null;
   __saralaVoicePauseTicks?: number;
   __saralaVoiceDeadMic?: boolean;
   __saralaVoiceSandbox?: "snap" | "flatpak";
@@ -44,6 +46,9 @@ export function mockBackend(): Backend {
   const save = () => localStorage.setItem("sarala.voiceMockInstalled", JSON.stringify([...installed]));
   const events = new Set<(e: VoiceEvent) => void>();
   const downloads = new Set<(e: DownloadEvent) => void>();
+  const micTests = new Set<(level: number) => void>();
+  let micTimer: number | undefined;
+  const stopMicTest = () => { clearInterval(micTimer); micTimer = undefined; w.__saralaVoiceMicTest = null; };
   const emit = (e: VoiceEvent) => events.forEach((cb) => cb(e));
   let loaded = "";
   let timer: number | undefined;
@@ -99,6 +104,16 @@ export function mockBackend(): Backend {
     permission: async () => w.__saralaVoicePermission ?? "granted",
     requestPermission: async () => w.__saralaVoicePermission ?? "granted",
     devices: async () => ["MacBook Pro Microphone", "USB Microphone"],
+    micTestStart: async (device) => {
+      stopMicTest();
+      w.__saralaVoiceMicTest = device ?? "";
+      // Room noise with an occasional word, unless the microphone is dead.
+      micTimer = window.setInterval(() => {
+        const lvl = w.__saralaVoiceDeadMic ? 0 : Math.random() < 0.3 ? 0.4 + Math.random() * 0.4 : 0.04;
+        micTests.forEach((cb) => cb(lvl));
+      }, 60);
+    },
+    micTestStop: async () => stopMicTest(),
     prepare: async (model) => {
       if (loaded !== model) { loaded = model; emit({ kind: "loaded", model, ms: 5, backend: "mock" }); }
     },
@@ -107,6 +122,7 @@ export function mockBackend(): Backend {
       const perm = w.__saralaVoicePermission ?? "granted";
       if (perm === "denied" || perm === "restricted") throw new Error("permission-denied");
       stopTimer();
+      stopMicTest();
       if (w.__saralaVoiceOpenDelay) await new Promise((r) => setTimeout(r, w.__saralaVoiceOpenDelay));
       w.__saralaVoiceMicOpen = true;
       if (loaded !== model) {
@@ -159,5 +175,6 @@ export function mockBackend(): Backend {
     setIdle: async () => {},
     onEvent: async (cb) => { events.add(cb); return () => events.delete(cb); },
     onDownload: async (cb) => { downloads.add(cb); return () => downloads.delete(cb); },
+    onMicTest: async (cb) => { micTests.add(cb); return () => micTests.delete(cb); },
   };
 }

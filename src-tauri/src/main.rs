@@ -62,12 +62,7 @@ fn walk(dir: &Path, depth: usize) -> Vec<FileNode> {
                 children: Some(children),
             });
         } else {
-            let is_md = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| MARKDOWN_EXTS.contains(&e.to_lowercase().as_str()))
-                .unwrap_or(false);
-            if is_md {
+            if is_markdown(&path) {
                 files.push(FileNode {
                     name,
                     path: path.to_string_lossy().to_string(),
@@ -85,13 +80,145 @@ fn walk(dir: &Path, depth: usize) -> Vec<FileNode> {
     dirs
 }
 
+fn is_markdown(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| MARKDOWN_EXTS.contains(&e.to_lowercase().as_str()))
+        .unwrap_or(false)
+}
+
+fn is_skipped_name(name: &str) -> bool {
+    name.starts_with('.') || name == "node_modules" || name == "target"
+}
+
+/// Live sidebar tree for one window's open folder. A recursive watch on the
+/// root feeds a debouncer whose callback runs on its own thread: it re-walks
+/// only when an event could change the tree's *shape* (a markdown file or
+/// folder appearing, or a listed path vanishing), and emits only when the
+/// re-walked tree actually differs. Plain saves to an already-listed file,
+/// .git churn, temp files etc. cost one `HashSet` lookup and nothing more.
+/// Dropping the `TreeWatch` drops its debouncer, which stops the OS watch.
+struct TreeWatch {
+    root: PathBuf,
+    state: Arc<Mutex<TreeState>>,
+    _debouncer: Option<Debouncer<RecommendedWatcher>>,
+}
+
+#[derive(Default)]
+struct TreeState {
+    /// Every path currently shown in the tree (files and folders).
+    known: HashSet<PathBuf>,
+    /// Hash of the last tree sent to the frontend, to suppress no-op emits.
+    sig: u64,
+}
+
+/// One `TreeWatch` per window label: each window can open its own folder.
+#[derive(Default)]
+struct TreeWatchers(Mutex<HashMap<String, TreeWatch>>);
+
+fn collect_paths(nodes: &[FileNode], out: &mut HashSet<PathBuf>) {
+    for n in nodes {
+        out.insert(PathBuf::from(&n.path));
+        if let Some(children) = &n.children {
+            collect_paths(children, out);
+        }
+    }
+}
+
+/// Walk `root`, refresh `state`, and report whether the tree changed.
+fn snapshot(root: &Path, state: &mut TreeState) -> (Vec<FileNode>, bool) {
+    let tree = walk(root, 0);
+    let sig = hash_bytes(&serde_json::to_vec(&tree).unwrap_or_default());
+    let changed = sig != state.sig;
+    state.sig = sig;
+    state.known.clear();
+    collect_paths(&tree, &mut state.known);
+    (tree, changed)
+}
+
+/// Could an event on `path` change what the sidebar shows?
+fn affects_tree(root: &Path, known: &HashSet<PathBuf>, path: &Path) -> bool {
+    let Ok(rel) = path.strip_prefix(root) else {
+        return false;
+    };
+    if rel
+        .components()
+        .any(|c| is_skipped_name(&c.as_os_str().to_string_lossy()))
+    {
+        return false;
+    }
+    match fs::metadata(path) {
+        // An existing folder: may be a new one, or an OS "rescan this dir" hint.
+        Ok(m) if m.is_dir() => true,
+        // An existing file: only a markdown file we don't list yet matters;
+        // a known one was merely modified (e.g. our own atomic save).
+        Ok(_) => is_markdown(path) && !known.contains(path),
+        // Gone: matters only if we were showing it (delete / rename-away).
+        Err(_) => known.contains(path),
+    }
+}
+
 #[tauri::command]
-fn list_dir(path: String) -> Result<Vec<FileNode>, String> {
-    let p = Path::new(&path);
-    if !p.is_dir() {
+fn watch_tree(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    watchers: tauri::State<TreeWatchers>,
+    path: String,
+) -> Result<Vec<FileNode>, String> {
+    let root = PathBuf::from(&path);
+    if !root.is_dir() {
         return Err(format!("Not a directory: {path}"));
     }
-    Ok(walk(p, 0))
+    let label = window.label().to_string();
+    let mut map = watchers.0.lock().unwrap();
+
+    // Same folder already watched: this is a manual refresh, just re-walk.
+    if let Some(w) = map.get(&label).filter(|w| w.root == root) {
+        return Ok(snapshot(&root, &mut w.state.lock().unwrap()).0);
+    }
+
+    let state = Arc::new(Mutex::new(TreeState::default()));
+    let (cb_root, cb_state, cb_label) = (root.clone(), state.clone(), label.clone());
+    let debouncer = new_debouncer(
+        Duration::from_millis(250),
+        move |res: DebounceEventResult| {
+            let Ok(events) = res else { return };
+            let mut st = cb_state.lock().unwrap();
+            if !events
+                .iter()
+                .any(|ev| affects_tree(&cb_root, &st.known, &ev.path))
+            {
+                return;
+            }
+            let (tree, changed) = snapshot(&cb_root, &mut st);
+            drop(st);
+            if changed {
+                let _ = app.emit_to(
+                    cb_label.as_str(),
+                    "tree-changed",
+                    serde_json::json!({ "root": cb_root.to_string_lossy(), "tree": tree }),
+                );
+            }
+        },
+    )
+    .ok()
+    .and_then(|mut d| {
+        // A failed watch (e.g. inotify limit) degrades to a static tree.
+        d.watcher().watch(&root, RecursiveMode::Recursive).ok()?;
+        Some(d)
+    });
+
+    let tree = snapshot(&root, &mut state.lock().unwrap()).0;
+    // Replacing an old entry drops its debouncer and stops that watch.
+    map.insert(
+        label,
+        TreeWatch {
+            root,
+            state,
+            _debouncer: debouncer,
+        },
+    );
+    Ok(tree)
 }
 
 #[tauri::command]
@@ -1100,6 +1227,7 @@ fn main() {
                 },
             )
             .ok();
+            app.manage(TreeWatchers::default());
             app.manage(ai::AgentRuns::default());
             app.manage(voice::VoiceState::default());
             ai::prune_workspaces(app.handle());
@@ -1115,9 +1243,17 @@ fn main() {
             // command bus; no editing logic lives on the Rust side.
             let _ = app.emit("menu", event.id().as_ref().to_string());
         })
+        .on_window_event(|window, event| {
+            // A closed window no longer needs its folder watched.
+            if let tauri::WindowEvent::Destroyed = event {
+                if let Some(w) = window.try_state::<TreeWatchers>() {
+                    w.0.lock().unwrap().remove(window.label());
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             file_open::take_open_files,
-            list_dir,
+            watch_tree,
             read_file,
             path_exists,
             read_file_encoded,
@@ -1164,6 +1300,8 @@ fn main() {
             voice::voice_permission,
             voice::voice_request_permission,
             voice::voice_devices,
+            voice::voice_mic_test_start,
+            voice::voice_mic_test_stop,
             voice::voice_prepare,
             voice::voice_start,
             voice::voice_stop,
@@ -1190,8 +1328,48 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_bytes, encode_contents, enumerate_system_fonts, font_faces_b64, search_in_folder,
+        affects_tree, decode_bytes, encode_contents, enumerate_system_fonts, font_faces_b64,
+        search_in_folder, snapshot, TreeState,
     };
+
+    #[test]
+    fn tree_watch_reacts_only_to_shape_changes() {
+        use std::fs;
+        let dir = std::env::temp_dir().join(format!("sarala-tree-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("sub")).unwrap();
+        fs::create_dir_all(dir.join(".git")).unwrap();
+        fs::write(dir.join("a.md"), "a").unwrap();
+        fs::write(dir.join("sub/b.md"), "b").unwrap();
+
+        let mut st = TreeState::default();
+        let (_, changed) = snapshot(&dir, &mut st);
+        assert!(changed);
+        let hit = |st: &TreeState, rel: &str| affects_tree(&dir, &st.known, &dir.join(rel));
+
+        // Modifying a listed file, non-markdown files and hidden dirs: no re-walk.
+        assert!(!hit(&st, "a.md"));
+        fs::write(dir.join("notes.png"), "x").unwrap();
+        assert!(!hit(&st, "notes.png"));
+        fs::write(dir.join(".git/new.md"), "x").unwrap();
+        assert!(!hit(&st, ".git/new.md"));
+        assert!(!hit(&st, "a.md.sarala.tmp"));
+
+        // New markdown, new folder, removed listed file: re-walk.
+        fs::write(dir.join("c.md"), "c").unwrap();
+        assert!(hit(&st, "c.md"));
+        fs::create_dir_all(dir.join("fresh")).unwrap();
+        assert!(hit(&st, "fresh"));
+        fs::remove_file(dir.join("sub/b.md")).unwrap();
+        assert!(hit(&st, "sub/b.md"));
+
+        // An unchanged re-walk is not reported as a change.
+        let (_, changed) = snapshot(&dir, &mut st);
+        assert!(changed);
+        let (_, changed) = snapshot(&dir, &mut st);
+        assert!(!changed);
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn system_fonts_enumerate_and_embed() {

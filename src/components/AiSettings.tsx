@@ -6,7 +6,7 @@
  * it only shows the command's output (device codes, links) while it runs.
  */
 import { For, Show, createResource, createSignal, onCleanup } from "solid-js";
-import { agentInfo, aiAgent, aiAgentPath, bumpStatus, statusEpoch } from "../ai/config";
+import { agentInfo, aiAgent, aiAgentPath, bumpStatus, installMethods, statusEpoch } from "../ai/config";
 import { agentLogin, agentStatus, type RunHandle } from "../ai/transport";
 import { isTauri, openExternal } from "../platform";
 import type { AgentId } from "../ai/types";
@@ -96,8 +96,8 @@ export function AiAgentStatus() {
   return (
     <div class="ai-set-key">
       <span class="ai-set-status" classList={{ ok: status()?.signedIn === true }}>{summary()}</span>
-      <Show when={status() && !status()!.installed && agentInfo(aiAgent()).install}>
-        <code class="ai-set-install">{agentInfo(aiAgent()).install}</code>
+      <Show when={status() && !status()!.installed && installMethods(agentInfo(aiAgent()))[0]}>
+        {(m) => <code class="ai-set-install">{m().command}</code>}
       </Show>
       <Show when={status()?.path}>
         <span class="ai-set-path" title={status()!.path!}>{status()!.path}</span>

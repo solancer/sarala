@@ -167,9 +167,22 @@ export async function listShadows(): Promise<ShadowSession[]> {
   return await invoke<ShadowSession[]>("list_shadows").catch(() => []);
 }
 
-export async function listDirectory(path: string): Promise<FileNode[]> {
+/** List a folder's markdown tree and keep it watched; calling again with the
+ *  same folder just re-lists, a different one replaces this window's watch. */
+export async function watchTree(path: string): Promise<FileNode[]> {
   const { invoke } = await tauriCore();
-  return await invoke<FileNode[]>("list_dir", { path });
+  return await invoke<FileNode[]>("watch_tree", { path });
+}
+
+/** Listen for the watched folder's tree changing on disk. */
+export async function onTreeChange(
+  fn: (root: string, tree: FileNode[]) => void,
+): Promise<() => void> {
+  if (!isTauri) return () => {};
+  const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+  return await getCurrentWebviewWindow().listen<{ root: string; tree: FileNode[] }>(
+    "tree-changed", (e) => fn(e.payload.root, e.payload.tree),
+  );
 }
 
 export interface FolderSearchHit {

@@ -5,7 +5,7 @@
  * onboarding screen and by the screen shown when no agent is installed.
  */
 import { For, Show, createSignal } from "solid-js";
-import { AGENTS, aiAgent, setAiAgent, type AgentInfo } from "../ai/config";
+import { AGENTS, aiAgent, setAiAgent, type AgentInfo, installMethods } from "../ai/config";
 import { agentStatuses, agentsChecked, canRun, checkingAgents, refreshAgents } from "../ai/availability";
 import { clipboardWriteText, openExternal } from "../platform";
 import type { AgentStatus } from "../ai/transport";
@@ -48,6 +48,9 @@ function AgentCard(props: { a: AgentInfo; selectable: boolean }) {
   const login = createLogin(() => props.a.id);
   const selected = () => props.selectable && !!s()?.installed && aiAgent() === props.a.id;
   const pick = () => { if (props.selectable && s()?.installed) void setAiAgent(props.a.id); };
+  const methods = () => installMethods(props.a);
+  const [picked, setPicked] = createSignal(0);
+  const method = () => methods()[picked()] ?? methods()[0];
 
   const row = () => (
     <>
@@ -73,13 +76,27 @@ function AgentCard(props: { a: AgentInfo; selectable: boolean }) {
           {row()}
         </button>
       </Show>
-      <Show when={agentsChecked() && s() !== undefined && !s()?.installed && props.a.install}>
+      <Show when={agentsChecked() && s() !== undefined && !s()?.installed && methods().length}>
         <div class="ai-agent-howto">
-          <CopyCommand command={props.a.install} />
+          <Show when={methods().length > 1}>
+            <div class="ai-install-tabs" role="tablist" aria-label={`Ways to install ${props.a.label}`}>
+              <For each={methods()}>
+                {(m, i) => (
+                  <button
+                    role="tab" class="ai-install-tab" aria-selected={method() === m}
+                    onClick={() => setPicked(i())}
+                  >
+                    {m.label}
+                  </button>
+                )}
+              </For>
+            </div>
+          </Show>
+          <CopyCommand command={method().command} />
           <span class="ai-agent-note">
-            Needs Node.js.{" "}
+            {method().note ? `${method().note} ` : ""}
             <Show when={props.a.url}>
-              <a href={props.a.url} onClick={(e) => { e.preventDefault(); void openExternal(props.a.url); }}>Other ways to install</a>
+              <a href={props.a.url} onClick={(e) => { e.preventDefault(); void openExternal(props.a.url); }}>Install guide</a>
             </Show>
           </span>
         </div>

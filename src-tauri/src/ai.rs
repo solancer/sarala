@@ -132,9 +132,72 @@ impl Agent {
     }
 }
 
-/// Directories searched for the CLIs. A GUI app on macOS doesn't inherit the
-/// login shell's PATH, so the usual install locations are added explicitly.
-/// The same list becomes the child's PATH, so npm-installed CLIs find `node`.
+/// The user's login-shell PATH, asked for once per launch. A GUI app on macOS
+/// (and some Linux launchers) starts with a bare PATH, so anything the user's
+/// shell profile adds (nvm, fnm, asdf, a custom npm prefix…) would be missed.
+/// The shell is given 3 s; a slow or broken profile just yields nothing.
+#[cfg(unix)]
+fn login_shell_path() -> &'static [PathBuf] {
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<Vec<PathBuf>> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
+        // A marker separates PATH from anything the profile prints itself.
+        const MARK: &str = "__SARALA_PATH__";
+        let Ok(mut child) = Command::new(shell)
+            .args(["-ilc", &format!("printf '{MARK}%s' \"$PATH\"")])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+        else {
+            return Vec::new();
+        };
+        let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        while matches!(child.try_wait(), Ok(None)) {
+            if std::time::Instant::now() > deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Vec::new();
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let mut out = String::new();
+        if let Some(mut so) = child.stdout.take() {
+            let _ = so.read_to_string(&mut out);
+        }
+        out.rsplit_once(MARK)
+            .map(|(_, p)| std::env::split_paths(p.trim()).collect())
+            .unwrap_or_default()
+    })
+}
+
+/// `bin` dirs of every Node installed by nvm (`~/.nvm/versions/node/*/bin`),
+/// newest version first, for a global npm install under nvm.
+fn nvm_bins(home: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = fs::read_dir(home.join(".nvm/versions/node")) else {
+        return Vec::new();
+    };
+    let mut bins: Vec<(Vec<u64>, PathBuf)> = entries
+        .flatten()
+        .map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let ver = name
+                .trim_start_matches('v')
+                .split('.')
+                .map(|n| n.parse().unwrap_or(0))
+                .collect();
+            (ver, e.path().join("bin"))
+        })
+        .collect();
+    bins.sort_by(|a, b| b.0.cmp(&a.0));
+    bins.into_iter().map(|(_, p)| p).collect()
+}
+
+/// Directories searched for the CLIs: this process's PATH, the login shell's
+/// PATH, then the places each vendor installer, Homebrew, WinGet and the common
+/// Node version managers put binaries. The same list becomes the child's PATH,
+/// so npm-installed CLIs find `node`.
 fn search_dirs() -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = std::env::var_os("PATH")
         .map(|p| std::env::split_paths(&p).collect())
@@ -143,21 +206,34 @@ fn search_dirs() -> Vec<PathBuf> {
         .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from);
     let mut extra: Vec<PathBuf> = Vec::new();
+    #[cfg(unix)]
+    extra.extend(login_shell_path().iter().cloned());
     if let Some(h) = &home {
         for rel in [
+            // Claude Code, Codex and Copilot native installers (all OSes).
             ".local/bin",
             ".npm-global/bin",
             ".bun/bin",
             ".volta/bin",
             ".cargo/bin",
+            // fnm's default alias, pnpm's global bin, asdf and mise shims.
+            ".local/share/fnm/aliases/default/bin",
+            "Library/Application Support/fnm/aliases/default/bin",
+            ".fnm/aliases/default/bin",
+            "Library/pnpm",
+            ".local/share/pnpm",
+            ".asdf/shims",
+            ".local/share/mise/shims",
             "bin",
         ] {
             extra.push(h.join(rel));
         }
+        extra.extend(nvm_bins(h));
     }
     for abs in [
         "/opt/homebrew/bin",
         "/usr/local/bin",
+        "/home/linuxbrew/.linuxbrew/bin",
         "/usr/bin",
         "/snap/bin",
     ] {
@@ -168,7 +244,11 @@ fn search_dirs() -> Vec<PathBuf> {
             extra.push(PathBuf::from(appdata).join("npm"));
         }
         if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-            extra.push(PathBuf::from(local).join("Programs"));
+            let local = PathBuf::from(local);
+            // Codex's PowerShell installer, and WinGet's command shims.
+            extra.push(local.join("Programs\\OpenAI\\Codex\\bin"));
+            extra.push(local.join("Microsoft\\WinGet\\Links"));
+            extra.push(local.join("Programs"));
         }
     }
     for d in extra {

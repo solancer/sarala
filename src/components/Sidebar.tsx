@@ -12,9 +12,10 @@ import {
 } from "../settings";
 import {
   executeCommand, renamePath, deletePath, revealPath, copyPath, newFileNear,
-  validateRecentPaths,
+  validateRecentPaths, refreshTree,
 } from "../commands";
 import SearchPanel from "./SearchPanel";
+import { attachMenuKeyboard, keyboardMenuPoint } from "../menuKeyboard";
 
 interface Props {
   tree: FileNode[];
@@ -110,12 +111,28 @@ const FileGlyph = (props: { name: string }) => (
 
 // Right-click file menu (module-level so any row can open it).
 const [pinMenu, setPinMenu] = createSignal<
-  { x: number; y: number; path: string; isDir: boolean; recent: boolean } | null
+  /** `above`: where the menu's bottom goes if it must flip above its row. */
+  { x: number; y: number; above: number; path: string; isDir: boolean; recent: boolean } | null
 >(null);
 const openPinMenu = (e: MouseEvent, path: string, isDir = false, recent = false) => {
   e.preventDefault();
   e.stopPropagation();
-  setPinMenu({ x: e.clientX, y: e.clientY, path, isDir, recent });
+  // Opened with the Menu key or Shift+F10: no pointer, so put it by the row.
+  let { clientX: x, clientY: y } = e;
+  if (x === 0 && y === 0) ({ x, y } = keyboardMenuPoint());
+  setPinMenu({ x, y, above: y, path, isDir, recent });
+};
+
+/** The Menu key or Shift+F10 on a row: the browser only turns these into a
+ *  context-menu event on some systems (not macOS), so handle them here. */
+const isMenuKey = (e: KeyboardEvent) => e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey);
+const openPinMenuByKey = (e: KeyboardEvent, path: string, isDir = false, recent = false) => {
+  if (!isMenuKey(e)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  // Just under the row, so the menu doesn't cover the file it acts on.
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  setPinMenu({ x: r.left + 24, y: r.bottom + 2, above: r.top - 2, path, isDir, recent });
 };
 
 const baseName = (p: string) => p.replace(/\\/g, "/").split("/").pop() ?? p;
@@ -192,6 +209,17 @@ export default function Sidebar(props: Props) {
   const [activeHeading, setActiveHeading] = createSignal(-1);
   const [filter, setFilter] = createSignal("");
   const [recentOpen, setRecentOpen] = createSignal(getSetting("recentOpen", true));
+  // Keep the spin visible briefly so a fast re-list still reads as "done".
+  const [refreshing, setRefreshing] = createSignal(false);
+  const refresh = async () => {
+    if (refreshing()) return;
+    setRefreshing(true);
+    try {
+      await Promise.all([refreshTree(), new Promise((r) => setTimeout(r, 400))]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const [scrollTop, setScrollTop] = createSignal(0);
   /** The tree's top within its scroller (Recent/Pinned sit above it). */
   const [treeOffset, setTreeOffset] = createSignal(0);
@@ -551,12 +579,12 @@ export default function Sidebar(props: Props) {
         <Show when={sidebarTab() === "files"}>
           <Show when={pinnedFiles().length}>
             <div class="side-list-head side-list-head-row">
-              <span>Pinned</span>
+              <span role="heading" aria-level={2}>Pinned</span>
               <button class="side-clear-btn" title="Clear pinned files" aria-label="Clear pinned files" onClick={() => void clearPinned()}>
                 <TrashIcon />
               </button>
             </div>
-            <div class="side-recent" role="group" aria-label="Recent or pinned files">
+            <div class="side-recent" role="group" aria-label="Pinned files">
               <For each={pinnedFiles()}>
                 {(path) => (
                   <button
@@ -564,6 +592,7 @@ export default function Sidebar(props: Props) {
                     classList={{ current: doc.filePath === path, missing: isMissing(path) }}
                     onClick={() => props.onOpenFile(path)}
                     onContextMenu={(e) => openPinMenu(e, path)}
+                    onKeyDown={(e) => openPinMenuByKey(e, path)}
                     title={isMissing(path) ? `Missing — ${path}` : path}
                   >
                     <Show when={isMissing(path)} fallback={<PinIcon />}><MissingIcon /></Show>
@@ -571,6 +600,7 @@ export default function Sidebar(props: Props) {
                     <Show when={parentName(path)}>
                       <span class="tree-parent">{parentName(path)}</span>
                     </Show>
+                    <Show when={isMissing(path)}><span class="sr-only">, missing</span></Show>
                   </button>
                 )}
               </For>
@@ -580,6 +610,8 @@ export default function Sidebar(props: Props) {
 
           <Show when={recentFiles().length}>
             <div class="side-list-head side-list-head-row">
+              {/* Accordion pattern: the heading holds the show/hide button. */}
+              <span role="heading" aria-level={2}>
               <button
                 class="side-sec-toggle"
                 aria-expanded={recentOpen()}
@@ -588,12 +620,13 @@ export default function Sidebar(props: Props) {
                 <Chevron open={recentOpen()} />
                 <span>Recent</span>
               </button>
+              </span>
               <button class="side-clear-btn" title="Clear recent files" aria-label="Clear recent files" onClick={() => void clearRecentFiles()}>
                 <TrashIcon />
               </button>
             </div>
             <Show when={recentOpen()}>
-            <div class="side-recent" role="group" aria-label="Recent or pinned files">
+            <div class="side-recent" role="group" aria-label="Recent files">
               <For each={recentFiles().slice(0, 6)}>
                 {(path) => (
                   <button
@@ -601,6 +634,7 @@ export default function Sidebar(props: Props) {
                     classList={{ current: doc.filePath === path, missing: isMissing(path) }}
                     onClick={() => props.onOpenFile(path)}
                     onContextMenu={(e) => openPinMenu(e, path, false, true)}
+                    onKeyDown={(e) => openPinMenuByKey(e, path, false, true)}
                     title={isMissing(path) ? `Missing — ${path}` : path}
                   >
                     <Show when={isMissing(path)} fallback={<FileGlyph name={baseName(path)} />}>
@@ -610,7 +644,8 @@ export default function Sidebar(props: Props) {
                     <Show when={parentName(path)}>
                       <span class="tree-parent">{parentName(path)}</span>
                     </Show>
-                    <Show when={isPinned(path)}><PinIcon /></Show>
+                    <Show when={isPinned(path)}><PinIcon /><span class="sr-only">, pinned</span></Show>
+                    <Show when={isMissing(path)}><span class="sr-only">, missing</span></Show>
                   </button>
                 )}
               </For>
@@ -620,7 +655,23 @@ export default function Sidebar(props: Props) {
           </Show>
 
           <div class="side-list-head side-list-head-row">
-            <span>All files</span>
+            <span role="heading" aria-level={2}>All files</span>
+            {/* The tree updates itself via the Rust watcher; this is the fallback
+                for where OS watching is unavailable (e.g. inotify limits). */}
+            <Show when={isTauri && folderPath()}>
+              <button
+                class="side-clear-btn"
+                classList={{ spinning: refreshing() }}
+                title="Refresh files"
+                aria-label="Refresh files"
+                aria-busy={refreshing()}
+                onClick={() => void refresh()}
+              >
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.5h-2.5" />
+                </svg>
+              </button>
+            </Show>
             <Show when={props.tree.length > 0}>
               <button
                 class="side-clear-btn"
@@ -651,12 +702,15 @@ export default function Sidebar(props: Props) {
                 placeholder="Filter files…"
                 value={filter()}
                 onInput={(e) => setFilter(e.currentTarget.value)}
+                aria-controls="sidebar-files-tree"
                 onKeyDown={(e) => {
                   if (e.key === "Escape") { e.preventDefault(); setFilter(""); e.currentTarget.blur(); }
+                  // Down from the filter goes into the results, like a search field.
+                  if (e.key === "ArrowDown" && rows().length) { e.preventDefault(); focusRow(0); }
                 }}
               />
               <Show when={filter()}>
-                <button class="side-filter-clear" title="Clear filter" onClick={() => { setFilter(""); filterEl?.focus(); }}>
+                <button class="side-filter-clear" title="Clear filter" aria-label="Clear filter" onClick={() => { setFilter(""); filterEl?.focus(); }}>
                   <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor"
                     stroke-width="2" stroke-linecap="round" aria-hidden="true">
                     <path d="M6 6l12 12M18 6 6 18" />
@@ -666,7 +720,12 @@ export default function Sidebar(props: Props) {
             </div>
           </Show>
 
+          {/* How many files match, for screen readers (WCAG 4.1.3). */}
+          <div class="sr-only" role="status">
+            {filter() ? (() => { const n = rows().filter((r) => !r.node.is_dir).length; return n ? `${n} ${n === 1 ? "file matches" : "files match"}` : "No files match"; })() : ""}
+          </div>
           <div
+            id="sidebar-files-tree"
             class="side-tree"
             role={props.tree.length > 0 ? "tree" : undefined}
             aria-label={props.tree.length > 0 ? "Files" : undefined}
@@ -733,6 +792,7 @@ export default function Sidebar(props: Props) {
                         } else props.onOpenFile(row.node.path);
                       }}
                       onContextMenu={(e) => openPinMenu(e, row.node.path, row.node.is_dir)}
+                      onKeyDown={(e) => openPinMenuByKey(e, row.node.path, row.node.is_dir)}
                     >
                       <Show when={row.node.is_dir} fallback={<span class="tree-indent" aria-hidden="true" />}>
                         <Chevron open={isFolderOpen(row.node.path)} />
@@ -741,9 +801,10 @@ export default function Sidebar(props: Props) {
                         <FileGlyph name={row.node.name} />
                       </Show>
                       <span class="tree-nm">{row.node.name}</span>
-                      <Show when={isPinned(row.node.path)}><PinIcon /></Show>
+                      <Show when={isPinned(row.node.path)}><PinIcon /><span class="sr-only">, pinned</span></Show>
                       <Show when={doc.filePath === row.node.path && doc.dirty}>
-                        <span class="tree-dot" aria-label="Unsaved changes" />
+                        {/* A label on a plain span isn't read: say it in text. */}
+                        <span class="tree-dot" aria-hidden="true" /><span class="sr-only">, unsaved changes</span>
                       </Show>
                     </button>
                   )}
@@ -757,16 +818,22 @@ export default function Sidebar(props: Props) {
         {/* --- Outline --- */}
         <Show when={sidebarTab() === "outline"}>
           <Show when={headings().length}>
-            <div class="side-list-head">Outline</div>
+            <div class="side-list-head" role="heading" aria-level={2}>Outline</div>
           </Show>
-          <div class="side-outline" role="group" aria-label="Outline" onKeyDown={onNav}>
+          {/* A tree (the ARIA pattern for a heading outline): each row says its
+              level, arrows move between headings, and the list is one Tab stop,
+              on the section in view. */}
+          <div class="side-outline" role={headings().length ? "tree" : undefined} aria-label="Document outline" onKeyDown={onNav}>
             <Show when={headings().length} fallback={<div class="sidebar-empty"><p>No headings yet.</p></div>}>
               <For each={headings()}>
                 {(h, i) => (
                   <button
                     class="out-row"
                     classList={{ active: i() === activeHeading(), top: h.level <= baseLevel() }}
-                    aria-current={i() === activeHeading() ? "true" : undefined}
+                    role="treeitem"
+                    aria-level={Math.min(Math.max(h.level - baseLevel(), 0), 5) + 1}
+                    aria-selected={i() === activeHeading()}
+                    tabIndex={i() === Math.max(activeHeading(), 0) ? 0 : -1}
                     // Depth drives indent in CSS so the step stays in one place.
                     style={{ "--depth": Math.min(Math.max(h.level - baseLevel(), 0), 5) }}
                     onClick={() => props.onJump(h.blockIndex)}
@@ -790,16 +857,33 @@ export default function Sidebar(props: Props) {
       {/* ===== pin/unpin context menu ===== */}
       <Show when={pinMenu()}>
         {(m) => (
-          <div class="ctx-menu" style={{ left: `${m().x}px`, top: `${m().y}px` }} onContextMenu={(e) => e.preventDefault()}>
+          <div
+            class="ctx-menu" role="menu" aria-label={`${baseName(m().path)} actions`}
+            // WAI-ARIA menu: first item focused, arrows move, Enter/Space run
+            // it, Escape/Tab close and put focus back on the row.
+            ref={(el) => {
+              onCleanup(attachMenuKeyboard(el, () => setPinMenu(null)));
+              // Keep it inside the window (a row near the bottom edge would
+              // push Delete out of reach): flip above, or slide in.
+              requestAnimationFrame(() => {
+                const r = el.getBoundingClientRect();
+                const pad = 8;
+                const above = (pinMenu()?.above ?? r.top) - r.height;
+                if (r.bottom > innerHeight - pad) el.style.top = `${above >= pad ? above : Math.max(pad, innerHeight - r.height - pad)}px`;
+                if (r.right > innerWidth - pad) el.style.left = `${Math.max(pad, innerWidth - r.width - pad)}px`;
+              });
+            }}
+            style={{ left: `${m().x}px`, top: `${m().y}px` }} onContextMenu={(e) => e.preventDefault()}
+          >
             <button
-              class="ctx-item"
+              class="ctx-item" role="menuitem" tabIndex={-1}
               onMouseDown={(e) => { e.preventDefault(); void newFileNear(m().path, m().isDir); setPinMenu(null); }}
             >
               <span class="ctx-label">New file here…</span>
             </button>
             <Show when={!m().isDir}>
               <button
-                class="ctx-item"
+                class="ctx-item" role="menuitem" tabIndex={-1}
                 onMouseDown={(e) => { e.preventDefault(); void togglePin(m().path); setPinMenu(null); }}
               >
                 <PinIcon />
@@ -808,35 +892,35 @@ export default function Sidebar(props: Props) {
             </Show>
             <Show when={m().recent}>
               <button
-                class="ctx-item"
+                class="ctx-item" role="menuitem" tabIndex={-1}
                 onMouseDown={(e) => { e.preventDefault(); void removeRecentFile(m().path); setPinMenu(null); }}
               >
                 <span class="ctx-label">Remove from Recent</span>
               </button>
             </Show>
-            <div class="ctx-sep" />
+            <div class="ctx-sep" role="separator" />
             <button
-              class="ctx-item"
+              class="ctx-item" role="menuitem" tabIndex={-1}
               onMouseDown={(e) => { e.preventDefault(); void renamePath(m().path); setPinMenu(null); }}
             >
               <span class="ctx-label">Rename…</span>
             </button>
             <button
-              class="ctx-item"
+              class="ctx-item" role="menuitem" tabIndex={-1}
               onMouseDown={(e) => { e.preventDefault(); void copyPath(m().path); setPinMenu(null); }}
             >
               <span class="ctx-label">Copy path</span>
             </button>
             <button
-              class="ctx-item"
+              class="ctx-item" role="menuitem" tabIndex={-1}
               onMouseDown={(e) => { e.preventDefault(); void revealPath(m().path); setPinMenu(null); }}
             >
               <span class="ctx-label">Reveal in file manager</span>
             </button>
             <Show when={!m().isDir}>
-              <div class="ctx-sep" />
+              <div class="ctx-sep" role="separator" />
               <button
-                class="ctx-item"
+                class="ctx-item" role="menuitem" tabIndex={-1}
                 onMouseDown={(e) => { e.preventDefault(); void deletePath(m().path); setPinMenu(null); }}
               >
                 <TrashIcon />
