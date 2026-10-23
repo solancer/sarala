@@ -81,6 +81,9 @@ pub struct VoiceState {
     engine: Mutex<Option<engine::Engine>>,
     #[cfg(feature = "voice")]
     recording: Mutex<Option<audio::Recording>>,
+    /// The set-up's microphone check: audio is discarded, only the level is sent.
+    #[cfg(feature = "voice")]
+    mic_test: Mutex<Option<audio::Recording>>,
     download: Arc<Mutex<Option<Child>>>,
 }
 
@@ -453,6 +456,52 @@ pub async fn voice_devices() -> Result<Vec<String>, String> {
     Err(NOT_BUILT.into())
 }
 
+/// Open the microphone for the set-up's check: no model needed. The audio is
+/// dropped as it arrives; only the level goes out, on `voice-mic-test`, so it
+/// never mixes with a dictation's events. Starting again (another device)
+/// replaces the running check.
+#[tauri::command]
+pub async fn voice_mic_test_start(
+    app: AppHandle,
+    state: State<'_, VoiceState>,
+    device: Option<String>,
+) -> Result<(), String> {
+    #[cfg(feature = "voice")]
+    {
+        if let Some(old) = state.mic_test.lock().unwrap().take() {
+            old.cancel();
+        }
+        let recording = tauri::async_runtime::spawn_blocking(move || {
+            audio::start(
+                device.filter(|d| !d.is_empty()),
+                Box::new(|_pcm| {}),
+                Box::new(move |level| {
+                    let _ = app.emit("voice-mic-test", level);
+                }),
+            )
+        })
+        .await
+        .map_err(|e| e.to_string())??;
+        *state.mic_test.lock().unwrap() = Some(recording);
+        Ok(())
+    }
+    #[cfg(not(feature = "voice"))]
+    {
+        let _ = (app, state, device);
+        Err(NOT_BUILT.into())
+    }
+}
+
+#[tauri::command]
+pub fn voice_mic_test_stop(state: State<'_, VoiceState>) {
+    #[cfg(feature = "voice")]
+    if let Some(r) = state.mic_test.lock().unwrap().take() {
+        r.cancel();
+    }
+    #[cfg(not(feature = "voice"))]
+    let _ = state;
+}
+
 /* ---------- dictation ---------- */
 
 #[cfg(feature = "voice")]
@@ -520,6 +569,10 @@ pub async fn voice_start(
     #[cfg(feature = "voice")]
     {
         let load = load_cmd(&app, &model)?;
+        // A dictation takes over the microphone from the set-up's check.
+        if let Some(t) = state.mic_test.lock().unwrap().take() {
+            t.cancel();
+        }
         let status = tauri::async_runtime::spawn_blocking(permission::request)
             .await
             .map_err(|e| e.to_string())?;

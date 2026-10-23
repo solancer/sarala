@@ -34,12 +34,12 @@ import {
   setAiModel, setAiRailVisible,
 } from "../ai/config";
 import type { AgentId } from "../ai/types";
-import { VoiceDeviceRow, VoiceInstalledRow, VoiceModelRow, VoiceShortcutRow } from "./VoiceSettings";
+import { VoiceDeviceRow, VoiceInstalledRow, VoiceModelRow, VoiceShortcutRow, VoiceTriggerRow } from "./VoiceSettings";
 import {
-  COMMAND_KEYS, IDLE_OPTIONS, LANGUAGES, setVoiceCommandKey, voiceCommandKey, PAUSE_OPTIONS, PAUSE_SECONDS, TRIGGER_OPTIONS, setVoiceCommands, setVoiceEnabled,
-  setVoiceIdleMinutes, setVoiceLanguage, setVoicePause, setVoicePauseSeconds, setVoicePunctuation, setVoiceReadBack,
-  setVoiceSounds, setVoiceTrigger, voiceCommands, voiceEnabled, voiceIdleMinutes, voiceLanguage, voiceModel, voicePause,
-  voicePauseSeconds, voicePunctuation, voiceReadBack, voiceSounds, voiceTrigger, type PauseMode, type TriggerMode,
+  COMMAND_KEYS, IDLE_OPTIONS, LANGUAGES, setVoiceCommandKey, voiceCommandKey, PAUSE_OPTIONS, PAUSE_SECONDS, setVoiceCommands,
+  setVoiceEnabled, setVoiceIdleMinutes, setVoiceLanguage, setVoicePause, setVoicePauseSeconds, setVoicePunctuation, setVoiceReadBack,
+  setVoiceShowButton, setVoiceSounds, voiceCommands, voiceEnabled, voiceIdleMinutes, voiceLanguage, voiceModel, voicePause,
+  voiceShowButton, voicePauseSeconds, voicePunctuation, voiceReadBack, voiceSounds, type PauseMode,
 } from "../voice/config";
 import { cancelDictation, openVoiceSetup } from "../voice/session";
 import { voiceBackend } from "../voice/transport";
@@ -79,7 +79,8 @@ const [section, setSection] = createSignal("appearance");
 
 /* ---------- row model ---------- */
 
-type Row =
+/** `group` starts a titled group of rows (hidden while searching). */
+type Row = { group?: string } & (
   | { kind: "toggle"; id: string; label: string; desc?: string; get: () => boolean; run: () => void }
   | {
       kind: "select"; id: string; label: string; desc?: string;
@@ -87,7 +88,8 @@ type Row =
     }
   | { kind: "text"; id: string; label: string; desc?: string; get: () => string; run: (v: string) => void }
   | { kind: "action"; id: string; label: string; desc?: string; button: string; run: () => void }
-  | { kind: "node"; id: string; label: string; desc?: string; node: () => JSX.Element };
+  | { kind: "node"; id: string; label: string; desc?: string; node: () => JSX.Element }
+);
 
 interface Section {
   id: string;
@@ -330,7 +332,7 @@ const SECTIONS = (): Section[] => [
     label: "Voice",
     rows: [
       {
-        kind: "toggle", id: "voice_enabled", label: "Voice typing",
+        group: "General", kind: "toggle", id: "voice_enabled", label: "Voice typing",
         desc: "Speak and Sarala types it. Speech is turned into text on this computer: nothing is uploaded, and there is no account or key.",
         get: voiceEnabled,
         run: () => {
@@ -346,28 +348,39 @@ const SECTIONS = (): Section[] => [
           }
         },
       },
-      { kind: "node", id: "voice_model", label: "Speech model", desc: "Downloaded once, then works offline.", node: () => <VoiceModelRow /> },
-      { kind: "node", id: "voice_device", label: "Microphone", node: () => <VoiceDeviceRow /> },
       {
-        kind: "select", id: "voice_language", label: "Language",
-        desc: "For multilingual models. English-only models ignore it.",
-        get: voiceLanguage, options: LANGUAGES, run: (v) => void setVoiceLanguage(v),
+        kind: "toggle", id: "voice_show_button", label: "Mic button",
+        desc: "Beside Focus mode, top right. Before voice typing is set up, it opens the set-up.",
+        get: voiceShowButton, run: () => void setVoiceShowButton(!voiceShowButton()),
       },
       {
         kind: "node", id: "voice_shortcut", label: "Shortcut",
         desc: "Works while Sarala is in front. Record any key you can press comfortably; letters and numbers need Ctrl, Alt (Option) or Cmd.",
         node: () => <VoiceShortcutRow />,
       },
+      { kind: "node", id: "voice_trigger", label: "Shortcut behaviour", node: () => <VoiceTriggerRow /> },
       {
         kind: "select", id: "voice_command_key", label: "Command key",
         desc: "Press it on its own: tap to start or stop dictating, hold to say a command (what you said so far is typed first; the command never is).",
         get: voiceCommandKey, options: COMMAND_KEYS.map((k) => ({ value: k.id, label: k.label })),
         run: (v) => void setVoiceCommandKey(v),
       },
+      { group: "Microphone & sound", kind: "node", id: "voice_device", label: "Microphone", node: () => <VoiceDeviceRow /> },
       {
-        kind: "select", id: "voice_trigger", label: "Shortcut behaviour",
-        desc: "Hold to talk, or tap to start and tap to stop. Press to toggle suits anyone for whom holding keys is hard; hold only avoids starting by accident.",
-        get: voiceTrigger, options: TRIGGER_OPTIONS, run: (v) => void setVoiceTrigger(v as TriggerMode),
+        kind: "toggle", id: "voice_sounds", label: "Sounds",
+        desc: "Short tones when listening starts, stops or text is typed, so you know without looking.",
+        get: voiceSounds, run: () => void setVoiceSounds(!voiceSounds()),
+      },
+      {
+        kind: "toggle", id: "voice_read_back", label: "Read back what was typed",
+        desc: "Screen readers announce the typed words, so you can check them without moving the cursor.",
+        get: voiceReadBack, run: () => void setVoiceReadBack(!voiceReadBack()),
+      },
+      { group: "Speech", kind: "node", id: "voice_model", label: "Speech model", desc: "Downloaded once, then works offline.", node: () => <VoiceModelRow /> },
+      {
+        kind: "select", id: "voice_language", label: "Language",
+        desc: "For multilingual models. English-only models ignore it.",
+        get: voiceLanguage, options: LANGUAGES, run: (v) => void setVoiceLanguage(v),
       },
       {
         kind: "select", id: "voice_pause", label: "When you pause",
@@ -380,16 +393,6 @@ const SECTIONS = (): Section[] => [
         get: () => String(voicePauseSeconds()), options: PAUSE_SECONDS, run: (v) => void setVoicePauseSeconds(Number(v)),
       },
       {
-        kind: "toggle", id: "voice_sounds", label: "Sounds",
-        desc: "Short tones when listening starts, stops or text is typed, so you know without looking.",
-        get: voiceSounds, run: () => void setVoiceSounds(!voiceSounds()),
-      },
-      {
-        kind: "toggle", id: "voice_read_back", label: "Read back what was typed",
-        desc: "Screen readers announce the typed words, so you can check them without moving the cursor.",
-        get: voiceReadBack, run: () => void setVoiceReadBack(!voiceReadBack()),
-      },
-      {
         kind: "toggle", id: "voice_commands", label: "Voice commands",
         desc: "“New paragraph”, “new bullet …”, “scratch that”, “bold that”, “stop listening” and more. Say “what can I say” for the full list (also Edit > Voice Typing > Voice Commands).",
         get: voiceCommands, run: () => void setVoiceCommands(!voiceCommands()),
@@ -400,7 +403,7 @@ const SECTIONS = (): Section[] => [
         get: voicePunctuation, run: () => void setVoicePunctuation(!voicePunctuation()),
       },
       {
-        kind: "select", id: "voice_idle", label: "Free the model's memory",
+        group: "Storage", kind: "select", id: "voice_idle", label: "Free the model's memory",
         desc: "Keeping it loaded makes the next start instant but holds a few hundred MB.",
         get: () => String(voiceIdleMinutes()), options: IDLE_OPTIONS,
         run: (v) => void setVoiceIdleMinutes(Number(v)),
@@ -635,7 +638,14 @@ export default function SettingsModal() {
                         <Show when={searching()}>
                           <div class="side-list-head set-group">{s.label}</div>
                         </Show>
-                        <For each={s.rows}>{(row) => <RowView row={row} />}</For>
+                        <For each={s.rows}>
+                          {(row) => (
+                            <>
+                              <Show when={!searching() && row.group}><h2 class="set-subhead">{row.group}</h2></Show>
+                              <RowView row={row} />
+                            </>
+                          )}
+                        </For>
                       </>
                     )}
                   </For>

@@ -58,6 +58,11 @@ export interface Backend {
   permission(): Promise<Permission>;
   requestPermission(): Promise<Permission>;
   devices(): Promise<string[]>;
+  /** Open the microphone for the set-up's check (no model): levels arrive
+   *  through onMicTest until micTestStop. */
+  micTestStart(device: string | null): Promise<void>;
+  micTestStop(): Promise<void>;
+  onMicTest(cb: (level: number) => void): Promise<() => void>;
   prepare(model: string): Promise<void>;
   start(model: string, device: string | null, language: string | null): Promise<void>;
   stop(): Promise<string>;
@@ -87,6 +92,8 @@ function tauriBackend(): Backend {
     permission: () => call("voice_permission"),
     requestPermission: () => call("voice_request_permission"),
     devices: () => call("voice_devices"),
+    micTestStart: (device) => call("voice_mic_test_start", { device }),
+    micTestStop: () => call("voice_mic_test_stop"),
     prepare: (model) => call("voice_prepare", { model }),
     start: (model, device, language) => call("voice_start", { model, device, language }),
     stop: () => call("voice_stop"),
@@ -96,6 +103,7 @@ function tauriBackend(): Backend {
     setIdle: (minutes) => call("voice_set_idle", { minutes: minutes !== null && minutes < 0 ? null : minutes }),
     onEvent: (cb) => listen("voice", cb),
     onDownload: (cb) => listen("voice-download", cb),
+    onMicTest: (cb) => listen("voice-mic-test", cb),
   };
 }
 
@@ -109,6 +117,9 @@ const unsupported: Backend = {
   permission: async () => "unknown",
   requestPermission: async () => "unknown",
   devices: async () => [],
+  micTestStart: async () => { throw new Error("Voice typing needs the desktop app."); },
+  micTestStop: async () => {},
+  onMicTest: async () => () => {},
   prepare: async () => {},
   start: async () => { throw new Error("Voice typing needs the desktop app."); },
   stop: async () => "",

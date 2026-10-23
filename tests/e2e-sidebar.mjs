@@ -261,15 +261,11 @@ check(
   await missingRow.locator(".tree-nm").evaluate((el) => getComputedStyle(el).textDecorationLine) === "line-through",
   "missing row strikes through the filename",
 );
-const liveOpacity = await page
-  .locator(".side-recent .tree-item:not(.missing)")
-  .first()
-  .evaluate((el) => getComputedStyle(el).opacity);
+// Marked by the strike-through and glyph, not by fading: it's still a live
+// row, so its text keeps readable contrast (WCAG 1.4.3), and it says so.
 const deadOpacity = await missingRow.evaluate((el) => getComputedStyle(el).opacity);
-check(
-  Number(deadOpacity) < Number(liveOpacity),
-  `missing row is dimmer than a live one (${deadOpacity} vs ${liveOpacity})`,
-);
+check(Number(deadOpacity) === 1, `missing row isn't faded below readable contrast (opacity ${deadOpacity})`);
+check(await missingRow.locator(".sr-only", { hasText: "missing" }).count() === 1, "and screen readers hear that it's missing");
 
 // --- Remove from Recent ---
 await missingRow.click({ button: "right" });
@@ -282,6 +278,80 @@ check(
   await page.locator('.side-recent .tree-item.missing').count() === 0,
   "Remove from Recent drops the dead entry",
 );
+
+// --- standards: keyboard menu, outline tree, filter, headings, states ---
+await seedTree([
+  dir("aws", "/v/aws", [file("README.md", "/v/aws/README.md")]),
+  file("alpha.md", "/v/alpha.md"),
+  file("beta.md", "/v/beta.md"),
+]);
+await page.evaluate(async () => (await import("/src/commands.ts")).executeCommand("view.file_tree"));
+await page.waitForTimeout(200);
+check(await page.locator('.sidebar [role="heading"][aria-level="2"]', { hasText: "All files" }).count() === 1, "section titles are headings, without their buttons in the name");
+
+// Context menu from the keyboard (WAI-ARIA menu pattern, WCAG 2.1.1).
+const alpha = page.locator('.side-tree [role="treeitem"]', { hasText: "alpha.md" });
+await alpha.focus();
+await page.keyboard.press("Shift+F10");
+await page.waitForSelector('.ctx-menu[role="menu"]');
+await page.waitForTimeout(100);
+const focusedItem = () => page.evaluate(() => document.activeElement?.getAttribute("role") + ":" + document.activeElement?.textContent.trim());
+check((await focusedItem()).startsWith("menuitem:New file"), `Shift+F10 opens the file menu with its first item focused (${await focusedItem()})`);
+await page.keyboard.press("ArrowDown");
+check(/^menuitem:(Pin to top|Unpin)/.test(await focusedItem()), "Down moves to the next item");
+await page.keyboard.press("Enter");
+await page.waitForTimeout(250);
+check(await page.locator(".ctx-menu").count() === 0 && await page.locator('.side-tree [role="treeitem"]', { hasText: "alpha.md" }).locator(".sr-only", { hasText: "pinned" }).count() === 1,
+  "Enter runs it (pinned), and the row now says it is pinned");
+await alpha.focus();
+await page.keyboard.press("Shift+F10");
+await page.waitForSelector('.ctx-menu[role="menu"]');
+await page.keyboard.press("Escape");
+await page.waitForTimeout(150);
+check(await page.locator(".ctx-menu").count() === 0 && await page.evaluate(() => document.activeElement?.textContent.includes("alpha.md")), "Escape closes it and focus returns to the row");
+await page.evaluate(async () => (await import("/src/settings.ts")).clearPinned());
+
+// Near the bottom edge the menu stays inside the window and off its row.
+await page.setViewportSize({ width: 1200, height: 520 });
+await page.waitForTimeout(150);
+const lastRow = page.locator('.side-tree [role="treeitem"]').last();
+await lastRow.focus();
+await page.keyboard.press("Shift+F10");
+await page.waitForSelector('.ctx-menu[role="menu"]');
+await page.waitForTimeout(120);
+const fit = await page.evaluate(() => {
+  const m = document.querySelector(".ctx-menu").getBoundingClientRect();
+  const row = document.activeElement.closest(".ctx-menu") ? null : document.activeElement.getBoundingClientRect();
+  return { top: m.top, bottom: m.bottom, vh: innerHeight, row };
+});
+const rowBox = await lastRow.boundingBox();
+check(fit.top >= 0 && fit.bottom <= fit.vh, `the menu stays inside the window (${Math.round(fit.top)}-${Math.round(fit.bottom)} of ${fit.vh})`);
+check(rowBox.y + rowBox.height <= fit.top + 1 || rowBox.y >= fit.bottom - 1, "and doesn't cover the row it acts on");
+await page.keyboard.press("Escape");
+await page.setViewportSize({ width: 1200, height: 800 });
+
+// Filter: the match count is announced; Down goes into the results.
+await page.locator(".side-filter-input").fill("beta");
+await page.waitForTimeout(150);
+check(await page.locator('.sidebar [role="status"]').textContent() === "1 file matches", "the number of matches is announced");
+await page.keyboard.press("ArrowDown");
+check(await page.evaluate(() => document.activeElement?.getAttribute("role") === "treeitem" && document.activeElement.textContent.includes("beta.md")), "Down from the filter moves into the results");
+const clear = page.locator('.side-filter-clear[aria-label="Clear filter"]');
+const box = await clear.boundingBox();
+check(box && box.width >= 24 && box.height >= 24, `the clear button is a 24px target (${box?.width}x${box?.height})`);
+await clear.click();
+
+// Outline: a tree with levels; arrows move.
+await page.evaluate(async () => (await import("/src/store.ts")).openDocument("# One\n\ntext\n\n## Two\n\ntext\n\n## Three", "/v/outline.md"));
+await page.evaluate(async () => (await import("/src/commands.ts")).executeCommand("view.outline"));
+await page.waitForTimeout(250);
+const outline = page.locator('.side-outline[role="tree"]');
+check(await outline.locator('[role="treeitem"][aria-level="2"]').count() === 2, "outline rows carry their heading level");
+await outline.locator('[role="treeitem"]').first().focus();
+await page.keyboard.press("ArrowDown");
+check(await page.evaluate(() => document.activeElement?.textContent.trim()) === "Two", "Down moves through the outline");
+await page.keyboard.press("End");
+check(await page.evaluate(() => document.activeElement?.textContent.trim()) === "Three", "End goes to the last heading");
 
 await browser.close();
 kill();

@@ -28,6 +28,7 @@ pub fn request() -> &'static str {
 
 #[cfg(target_os = "macos")]
 mod imp {
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc;
     use std::time::Duration;
 
@@ -58,8 +59,15 @@ mod imp {
         }
     }
 
+    /// Set once the prompt has been shown this launch.
+    static ASKED: AtomicBool = AtomicBool::new(false);
+
     pub fn request() -> &'static str {
-        if status() != "undetermined" {
+        // Prompt at most once per launch. If macOS still says "undetermined"
+        // after the user answered, the grant didn't persist (an app whose
+        // code signature doesn't match its bundle, e.g. linker-signed only),
+        // and asking again would just loop the prompt on every dictation.
+        if status() != "undetermined" || ASKED.swap(true, Ordering::SeqCst) {
             return status();
         }
         let (tx, rx) = mpsc::channel::<bool>();

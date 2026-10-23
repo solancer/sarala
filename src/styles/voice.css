@@ -56,122 +56,176 @@
   pointer-events: none;
 }
 .topbar-toggle.voice-top.recording::after { opacity: 1; }
+/* Not set up yet: the button is the way in, with the same setup-needed dot
+   as the assistant's rail button. */
+.voice-setup-dot {
+  position: absolute; top: 3px; right: 3px; z-index: 2; width: 7px; height: 7px; border-radius: 50%;
+  /* Amber pulled towards the theme's ink: darker on light themes, lighter on
+     dark ones, so it keeps 3:1 against the toolbar everywhere (WCAG 1.4.11). */
+  background: color-mix(in srgb, #e8a33d 62%, var(--ink));
+  box-shadow: 0 0 0 2px var(--bg-panel, var(--bg-page));
+}
 @media (prefers-reduced-motion: reduce) {
   .topbar-toggle.voice-top::after { transition: none; transform: none; }
 }
 @media (forced-colors: active) {
   .topbar-toggle.voice-top.recording { forced-color-adjust: none; background: Highlight; color: HighlightText; }
   .topbar-toggle.voice-top::after { display: none; }
+  .voice-setup-dot { forced-color-adjust: none; background: Highlight; }
 }
 
 /* In the AI composer bar. */
 .ai-box-bar .voice-btn { width: 28px; height: 28px; border-radius: 8px; }
 
-/* ---------- HUD ---------- */
+/* ---------- HUD: the recording pill ---------- */
+/* A column pinned bottom-centre: live text and warnings (only when needed)
+   stack above a small pill; first-run hints sit under it. The column itself
+   is invisible and lets clicks through; only its cards take them. */
 .voice-hud {
   position: fixed;
   left: 50%;
-  bottom: 44px;
+  bottom: 40px;
   /* Above dialogs (they top out at 320): you can dictate into a dialog's
      field, and the listening state must not sit under its dimmed backdrop. */
   z-index: 330;
-  width: min(560px, calc(100vw - 32px));
+  width: min(460px, calc(100vw - 32px));
   transform: translateX(-50%);
-  padding: 8px 10px 8px 12px;
-  border: 1px solid var(--rule);
-  border-radius: 14px;
-  background: var(--bg-page);
-  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
   font: var(--fw-regular) 13px/1.4 var(--font-ui);
   color: var(--ink);
   animation: voice-hud-in 160ms ease-out;
 }
+.voice-hud > * { pointer-events: auto; }
 @keyframes voice-hud-in { from { opacity: 0; transform: translate(-50%, 8px); } }
-.voice-hud-row { display: flex; align-items: center; gap: 10px; min-height: 28px; }
-.voice-hud-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; color: #c4352a; }
-.voice-notice .voice-hud-icon { color: var(--ink-soft); }
-.voice-notice.error .voice-hud-icon { color: #c4352a; }
-.voice-hud-icon .voice-mic { width: 18px; height: 18px; }
+
+.voice-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 6px 0 16px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--bg-page);
+  box-shadow: var(--shadow);
+}
+.voice-dot {
+  width: 9px; height: 9px; flex: none; border-radius: 50%;
+  background: #c4352a;
+  box-shadow: 0 0 0 0 color-mix(in srgb, #c4352a 45%, transparent);
+  animation: voice-dot 1.6s ease-out infinite;
+}
+@keyframes voice-dot { 70% { box-shadow: 0 0 0 7px transparent; } }
+/* Not speaking right now: the dot rests and the wave greys out. */
+.voice-hud:not(.speaking) .voice-dot { animation: none; }
+.voice-wave { display: inline-flex; align-items: center; gap: 3px; height: 22px; }
+.voice-wave span {
+  width: 3px; height: 22px; border-radius: 2px;
+  background: var(--ink);
+  transform-origin: center;
+  transition: transform 90ms linear, opacity 150ms ease;
+}
+.voice-hud:not(.speaking) .voice-wave span { opacity: 0.35; }
+.voice-time { min-width: 34px; color: var(--ink-soft); font-size: 12px; font-variant-numeric: tabular-nums; }
 .voice-hud-label { font-weight: var(--fw-semibold); white-space: nowrap; }
-.voice-notice .voice-hud-label { white-space: normal; font-weight: var(--fw-medium); }
+.voice-cmd-mark { color: var(--accent); font-size: 15px; font-weight: var(--fw-bold); }
+/* Round icon buttons: finish (filled) and discard. 32px targets. */
+.voice-pill-btn {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 32px; height: 32px; padding: 0;
+  border: 0; border-radius: 50%;
+  background: var(--tint, color-mix(in srgb, var(--ink) 7%, var(--bg-page)));
+  color: var(--ink);
+  cursor: pointer;
+}
+.voice-pill-btn svg { width: 15px; height: 15px; }
+.voice-pill-btn:hover { background: color-mix(in srgb, var(--ink) 14%, var(--bg-page)); }
+.voice-pill-btn.finish { background: var(--accent); color: var(--bg-page); }
+.voice-pill-btn.finish:hover { filter: brightness(1.08); }
+.voice-pill-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.voice-pill-btn:first-of-type { margin-left: 4px; }
+/* Command mode: accent edge and mark, so it can't be mistaken for dictating
+   (the command sound says the same for those who can't see it). */
+.voice-hud.command .voice-pill { border-color: var(--accent); box-shadow: var(--shadow), 0 0 0 1px var(--accent); }
+.voice-hud.command .voice-hud-label { color: var(--accent); }
+.voice-hud.working .voice-hud-label, .voice-pill .voice-spinner + .voice-hud-label { font-weight: var(--fw-medium); color: var(--ink-soft); }
+
+.voice-hud-hint {
+  margin: 0;
+  max-width: 100%;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-page) 92%, transparent);
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  text-align: center;
+}
 .voice-hud-warning {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 8px 0 2px 38px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: color-mix(in srgb, #c4352a 10%, var(--bg-page));
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px 9px 12px;
+  border: 1px solid color-mix(in srgb, #c4352a 35%, var(--rule));
+  border-radius: 12px;
+  background: color-mix(in srgb, #c4352a 8%, var(--bg-page));
+  box-shadow: var(--shadow);
   color: var(--ink);
 }
 .voice-hud-warning span { flex: 1; }
-.voice-hud.speaking .voice-hud-icon { color: #c4352a; }
-/* Command mode: a different colour and edge, so it can't be mistaken for
-   dictating (the command sound says the same for those who can't see it). */
-.voice-hud.command { border-color: var(--accent); box-shadow: var(--shadow), inset 4px 0 0 var(--accent); }
-.voice-hud.command .voice-hud-icon, .voice-hud.command.speaking .voice-hud-icon { color: var(--accent); }
-.voice-hud.command .voice-hud-label { color: var(--accent); }
-.voice-hud:not(.speaking) .voice-bars span { opacity: 0.55; }
+.voice-hud-text {
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+  max-height: 4.6em;
+  overflow: hidden;
+  padding: 10px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--bg-page);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  line-height: 1.4;
+}
+.voice-hud-text .tentative { color: var(--ink-soft); }
+
+/* Notices (after a dictation: nothing heard, a fix to try): the same pill. */
+.voice-notice-pill { padding: 0 6px 0 12px; max-width: 100%; }
+.voice-notice .voice-hud-label { white-space: normal; font-weight: var(--fw-medium); padding: 8px 0; }
+.voice-hud-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; flex: none; color: var(--ink-soft); }
+.voice-notice.error .voice-hud-icon { color: #c4352a; }
+.voice-hud-icon .voice-mic { width: 17px; height: 17px; }
 .voice-shortcut { display: grid; gap: 4px; justify-items: end; }
 .voice-shortcut-row { display: flex; gap: 4px; align-items: center; }
-.voice-shortcut-row .ghost-btn { min-width: 72px; }
+.voice-shortcut-row .ghost-btn { min-width: 72px; min-height: 30px; }
 .voice-shortcut-msg { color: var(--ink-soft); font-size: 11.5px; line-height: 1.45; max-width: 260px; text-align: right; }
 .voice-shortcut-msg:empty { display: none; }
 .voice-shortcut button[aria-pressed="true"] { outline: 2px solid var(--accent); }
-/* Status over hint, so the hint can wrap (long hints, large zoom) without
-   pushing Done and Cancel onto another line. */
-.voice-hud-titles { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
-.voice-hud-hint { color: var(--ink-soft); font-size: 12px; line-height: 1.35; }
-.voice-hud-spacer { flex: 1; }
 .voice-hud-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  min-height: 28px;
+  gap: 6px;
+  min-height: 30px;
   padding: 0 12px;
   border: 1px solid var(--rule);
-  border-radius: 8px;
+  border-radius: 999px;
   background: transparent;
   color: var(--ink);
   font: var(--fw-medium) 12px var(--font-ui);
   cursor: pointer;
   flex: none;
 }
-.voice-hud-btn svg { width: 14px; height: 14px; }
-/* Key hints on the buttons: Done ⏎, Cancel Esc. */
-.voice-hud-btn { gap: 6px; }
-.voice-key {
-  padding: 0 5px;
-  border-radius: 4px;
-  font: var(--fw-medium) 11px/16px var(--font-ui);
-  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
-  opacity: 0.85;
-}
-.voice-hud-btn[aria-label="Dismiss"] { padding: 0; }
 .voice-hud-btn:hover { background: var(--tint); }
 .voice-hud-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg-page); }
 .voice-hud-btn.primary:hover { filter: brightness(1.06); }
 .voice-hud-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.voice-hud-text {
-  margin: 6px 2px 2px 38px;
-  max-height: 4.2em;
-  overflow: hidden;
-  color: var(--ink);
-  font-size: 14px;
-  line-height: 1.4;
-}
-.voice-hud-text .tentative { color: var(--ink-soft); }
 
-.voice-bars { display: inline-flex; align-items: center; gap: 2px; height: 18px; }
-.voice-bars span {
-  width: 3px;
-  height: 18px;
-  border-radius: 2px;
-  background: currentColor;
-  transform-origin: center;
-  transition: transform 80ms linear;
-}
 .voice-spinner {
   width: 16px;
   height: 16px;
@@ -224,7 +278,9 @@
 }
 .voice-model:hover { background: var(--tint); }
 .voice-model.on { border-color: var(--accent); background: var(--accent-soft); }
-.voice-model.on .voice-model-blurb, .voice-model.on .voice-model-size { color: var(--ink); }
+/* Soft ink is too faint on the tinted backgrounds (dark themes). */
+.voice-model.on .voice-model-blurb, .voice-model.on .voice-model-size,
+.voice-model:hover .voice-model-blurb, .voice-model:hover .voice-model-size { color: var(--ink); }
 .voice-model input { accent-color: var(--accent); margin: 0; width: 16px; height: 16px; flex: none; }
 .voice-model-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .voice-model-name { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-weight: var(--fw-semibold); }
@@ -297,6 +353,64 @@
 .voice-check-ok { color: var(--ink); font-weight: var(--fw-semibold); }
 .voice-options { margin-top: 10px; }
 
+/* Steps: where you are, and how much is left. */
+.voice-steps {
+  display: flex; gap: 6px; margin: 0 0 16px; padding: 0; list-style: none; counter-reset: none;
+}
+.voice-steps li {
+  flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0;
+  padding-top: 8px; border-top: 3px solid var(--tint); color: var(--ink-soft); font-size: 12px;
+}
+.voice-steps li.done { border-top-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.voice-steps li.current { border-top-color: var(--accent); color: var(--ink); font-weight: var(--fw-semibold); }
+.voice-steps-dot {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 18px; height: 18px; border-radius: 50%; background: var(--tint); font-size: 11px; font-weight: var(--fw-semibold);
+}
+.voice-steps li.current .voice-steps-dot, .voice-steps li.done .voice-steps-dot { background: var(--accent); color: var(--bg-page); }
+.voice-steps-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Focus moves to each step's heading so screen readers announce the step;
+   it isn't a control, so no focus ring. */
+.voice-step-title:focus { outline: none; }
+
+.voice-field { margin: 8px 0 12px; }
+.voice-field .ip-select { width: 100%; }
+/* The suggested model, on its own; "Other models" opens the full list. */
+.voice-pick {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-soft);
+}
+.voice-pick .voice-model-blurb, .voice-pick .voice-model-size { color: var(--ink); }
+.voice-more {
+  /* 24px tall: a standalone control, not a link inside a sentence (WCAG 2.5.8). */
+  min-height: 24px; margin: 6px 0 8px; padding: 0; border: 0; background: none; cursor: pointer;
+  color: var(--link, var(--accent)); font: inherit; text-decoration: underline; text-underline-offset: 2px;
+}
+.voice-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+/* Microphone check: a level bar and what it means. */
+.voice-meter { position: relative; height: 10px; border-radius: 999px; background: var(--tint); overflow: hidden; }
+.voice-meter span {
+  position: absolute; inset: 0; border-radius: inherit; background: var(--accent);
+  transform-origin: left center; transition: transform 80ms linear;
+}
+.voice-mic-status { margin: 8px 0 0; min-height: 20px; color: var(--ink-soft); }
+.voice-mic-status code {
+  padding: 1px 5px; border: 1px solid var(--rule); border-radius: 4px;
+  font: 12px var(--font-mono, ui-monospace, monospace); color: var(--ink);
+}
+
+/* The model download, running behind the steps. */
+.voice-dl {
+  display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 16px; padding: 10px 12px;
+  border-radius: 8px; background: var(--tint); color: var(--ink); font-size: 12px;
+}
+.voice-dl.error { grid-template-columns: 1fr auto; align-items: center; }
+.voice-progress.small { height: 5px; }
+
+.voice-tips { margin: 12px 0 0; padding-left: 18px; display: grid; gap: 4px; color: var(--ink-soft); }
+.voice-tips kbd { padding: 1px 5px; border: 1px solid var(--rule); border-radius: 4px; font: 12px var(--font-ui); color: var(--ink); }
+
 /* ---------- settings ---------- */
 .voice-installed { display: grid; gap: 6px; justify-items: end; }
 .voice-installed-row { display: flex; align-items: center; gap: 8px; }
@@ -304,7 +418,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .voice-hud { animation: none; }
-  .voice-btn::before, .voice-bars span, .voice-progress span { transition: none; }
+  .voice-btn::before, .voice-progress span, .voice-meter span, .voice-wave span { transition: none; }
+  .voice-dot { animation: none; }
   .voice-btn::before { transform: none; }
   .voice-spinner { animation-duration: 2.4s; }
   .voice-progress.indeterminate span { animation: none; left: 0; width: 100%; opacity: 0.5; }
@@ -313,9 +428,13 @@
 @media (forced-colors: active) {
   .voice-btn.on { forced-color-adjust: none; background: Highlight; color: HighlightText; }
   .voice-btn::before { display: none; }
-  .voice-hud, .voice-setup, .voice-model { border: 1px solid CanvasText; }
+  .voice-setup, .voice-model { border: 1px solid CanvasText; }
   .voice-model.on { outline: 2px solid Highlight; }
-  .voice-bars span, .voice-progress span { background: Highlight; forced-color-adjust: none; }
+  .voice-progress span, .voice-meter span, .voice-wave span, .voice-dot { background: Highlight; forced-color-adjust: none; }
+  .voice-pill, .voice-hud-text, .voice-hud-warning { border: 1px solid CanvasText; }
+  .voice-pill-btn { border: 1px solid ButtonText; }
+  .voice-pick, .voice-meter, .voice-steps-dot { border: 1px solid CanvasText; }
+  .voice-steps li.current { border-top-color: Highlight; }
   .voice-progress { border: 1px solid CanvasText; }
 }
 
@@ -364,3 +483,30 @@
 .voice-hud-btn.ghost { border-color: transparent; color: var(--ink-soft); }
 .voice-hud-btn.ghost:hover { color: var(--accent); background: var(--accent-soft); }
 @media (max-width: 560px) { .voice-cmd-row { grid-template-columns: 1fr; gap: 2px; } }
+
+/* Settings: push to talk as a segmented switch, the microphone list with a
+   refresh button. */
+.voice-trigger { display: grid; gap: 6px; justify-items: end; }
+.voice-seg {
+  display: inline-flex; padding: 2px; gap: 2px;
+  border: 1px solid var(--rule); border-radius: 9px;
+  background: color-mix(in srgb, var(--ink) 5%, var(--bg-page));
+}
+.voice-seg-btn {
+  border: 0; border-radius: 7px; padding: 5px 10px; background: none; cursor: pointer;
+  color: var(--ink-soft); font: var(--fw-medium) 12px var(--font-ui); white-space: nowrap;
+}
+.voice-seg-btn:hover { color: var(--ink); }
+.voice-seg-btn[aria-checked="true"] { background: var(--bg-page); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+.voice-seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.voice-trigger-desc { color: var(--ink-soft); font-size: 11.5px; line-height: 1.45; max-width: 300px; text-align: right; }
+.voice-trigger-block { display: grid; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.voice-trigger-block .voice-trigger { justify-items: start; }
+.voice-trigger-block .voice-trigger-desc { text-align: left; max-width: none; }
+.voice-device-row { display: flex; align-items: center; gap: 4px; }
+.voice-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; }
+.voice-icon-btn svg { width: 15px; height: 15px; }
+.voice-field .voice-device-row .ip-select { flex: 1; width: auto; }
+@media (forced-colors: active) {
+  .voice-seg-btn[aria-checked="true"] { outline: 2px solid Highlight; }
+}

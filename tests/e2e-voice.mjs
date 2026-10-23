@@ -74,31 +74,64 @@ const caretAtEnd = async (page, text) => {
     return SHORTCUTS.filter((s) => taken.has(s.id)).map((s) => `${s.id} = ${taken.get(s.id)}`);
   });
   check(clashes.length === 0, `no suggested shortcut clashes with Sarala's own (${clashes.join(", ") || "none"})`);
-  check(!(await page.locator(".topbar-toggle.voice-top").count()), "voice typing is off by default: no mic button");
+  const micBtn = page.locator(".topbar-toggle.voice-top");
+  check(await micBtn.count() === 1 && await micBtn.getAttribute("aria-label") === "Set up voice typing", "before set-up, the mic button is shown as the way in");
+  check(await page.locator(".voice-top .voice-setup-dot").count() === 1, "with a setup-needed dot");
+  check(!(await page.locator(".ai-box-bar .voice-btn").count()), "text boxes get no mic button before set-up");
   await tap(page);
   await page.waitForTimeout(200);
   check(!(await page.locator(".voice-setup").count()), "the shortcut does nothing before opting in");
 
-  await page.evaluate(async () => (await import("/src/commands.ts")).executeCommand("app.settings"));
-  await page.locator(".set-rail-item", { hasText: "Voice" }).click();
-  await page.locator('[role="switch"][aria-label="Voice typing"]').click();
-  await page.waitForSelector(".voice-setup");
-  check(await page.locator(".voice-model").count() === 4, "set-up offers four models");
-  check(await page.locator(".voice-model.on", { hasText: "Parakeet" }).count() === 1, "Parakeet is preselected for an English locale");
-  check(await page.locator(".voice-model", { hasText: "Recommended" }).count() === 1, "one model is marked Recommended");
-  const cta = page.locator(".voice-setup .pandoc-btn.primary");
-  check(/Download 477 MB/.test(await cta.textContent()), "the button names the download size");
-  await page.locator(".voice-model", { hasText: "Moonshine" }).click();
-  check(/Download 77 MB/.test(await cta.textContent()), "choosing another model updates the size");
-  await page.locator(".voice-model", { hasText: "Parakeet" }).click();
-  await cta.click();
-  await page.waitForSelector(".voice-progress");
-  check(await page.locator('.voice-progress[role="progressbar"]').count() === 1, "download shows a progress bar");
-  await page.waitForSelector("text=Voice typing is on", { timeout: 5000 });
-  check(true, "download, microphone and model preparation lead to the ready step");
+  // 1 · Language: the language picks the model; the full list is one click away.
+  await page.evaluate(() => { window.__saralaVoicePermission = "undetermined"; });
+  await micBtn.click();
+  await page.waitForSelector(".voice-setup .voice-pick");
+  check(await page.locator(".voice-steps li").count() === 4 && await page.locator('.voice-steps li[aria-current="step"]', { hasText: "Language" }).count() === 1, "set-up shows four steps, starting at Language");
+  check(/Parakeet/.test(await page.locator(".voice-pick").textContent()), "Parakeet is suggested for an English locale");
+  await page.locator('select[aria-labelledby="voice-setup-lang"]').selectOption("es");
+  check(/Whisper Small/.test(await page.locator(".voice-pick").textContent()), "Spanish suggests a multilingual model");
+  await page.locator(".voice-more").click();
+  check(await page.locator(".voice-model", { hasText: "(English)" }).count() === 0, "English-only models aren't offered for Spanish");
+  await page.locator('select[aria-labelledby="voice-setup-lang"]').selectOption("en");
+  check(await page.locator(".voice-model").count() === 4, "all four models are offered for English");
+  check(await page.locator(".voice-model.on", { hasText: "Parakeet" }).count() === 1, "and English switches back to Parakeet");
+  check(/477 MB/.test(await page.locator(".voice-setup .voice-step-sub").textContent()), "the download size is stated before continuing");
+  await page.locator(".voice-setup .pandoc-btn.primary", { hasText: "Continue" }).click();
+
+  // 2 · Microphone: the system prompt is explained first; the download runs behind.
+  await page.waitForSelector("text=Sarala needs to hear you");
+  check(await page.locator('.voice-progress[role="progressbar"]').count() === 1, "the model downloads in the background while the microphone is set up");
+  check(await page.locator(".voice-setup .pandoc-btn.primary", { hasText: "Allow" }).count() === 0, "the button before the system prompt isn't labelled Allow (Apple HIG)");
+  await page.evaluate(() => { window.__saralaVoicePermission = "granted"; });
+  await page.locator(".voice-setup .pandoc-btn.primary", { hasText: "Continue" }).click();
+  await page.waitForSelector(".voice-meter");
+  check(await page.evaluate(() => window.__saralaVoiceMicTest) === "", "the microphone check opens the default microphone, with no model needed");
+  await page.waitForSelector("text=Sarala can hear you", { timeout: 4000 });
+  check(true, "a live level confirms Sarala can hear the microphone");
+  await page.locator('select[aria-label="Microphone"]').selectOption("USB Microphone");
+  await page.waitForTimeout(100);
+  check(await page.evaluate(() => window.__saralaVoiceMicTest) === "USB Microphone", "picking another microphone re-runs the check on it");
+  await page.locator(".voice-setup .pandoc-btn.primary", { hasText: "Continue" }).click();
+
+  // 3 · Shortcut: checked live, before voice typing is on.
+  await page.waitForSelector("text=Pick a shortcut");
+  check(await page.evaluate(() => window.__saralaVoiceMicTest) == null, "leaving the step closes the microphone");
+  await tap(page);
+  await page.waitForTimeout(100);
+  check(/✓ The shortcut works/.test(await page.locator(".voice-check").textContent()), "the set-up confirms the shortcut reaches Sarala");
+  check(!(await page.locator(".voice-hud").count()), "and pressing it there starts nothing");
+  await page.locator('select[aria-label="When you pause"]').selectOption("type");
+  await page.locator(".voice-setup .pandoc-btn.primary", { hasText: "Continue" }).click();
+
+  // 4 · Try it.
+  await page.waitForSelector("text=Voice typing is on", { timeout: 8000 });
+  check(true, "download, microphone, shortcut and model preparation lead to the ready step");
   await page.waitForTimeout(400); // settings writes are debounced
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("sarala.settings")));
-  check(saved.voiceEnabled === true && saved.voiceModel === "parakeet-en", "turning on is saved with the chosen model");
+  check(saved.voiceEnabled === true && saved.voiceModel === "parakeet-en" && saved.voiceDevice === "USB Microphone" && saved.voicePause === "type" && saved.voiceLanguage === "en",
+    `turning on is saved with the chosen model, microphone, pause mode and language (${JSON.stringify({ m: saved.voiceModel, d: saved.voiceDevice, p: saved.voicePause, l: saved.voiceLanguage })})`);
+  // Back to the default, so the try-it below is one hold, one result.
+  await page.evaluate(async () => (await import("/src/voice/config.ts")).setVoicePause("keep"));
 
   // Try it in the set-up's own field.
   await page.locator(".voice-try textarea").click();
@@ -106,9 +139,12 @@ const caretAtEnd = async (page, text) => {
   await page.waitForTimeout(200);
   const tried = await page.locator(".voice-try textarea").inputValue();
   check(tried === "The quick brown fox jumps over the lazy dog.", `hold-to-talk types into the try-it field (${JSON.stringify(tried)})`);
-  check(/✓ The shortcut works/.test(await page.locator(".voice-check").textContent()), "the set-up confirms the shortcut reaches Sarala");
   await page.locator(".voice-setup .pandoc-btn.primary", { hasText: "Done" }).click();
-  check(await page.locator(".topbar-toggle.voice-top").count() === 1, "the mic button appears beside Focus mode");
+  check(await micBtn.getAttribute("aria-label") === "Voice typing" && !(await page.locator(".voice-top .voice-setup-dot").count()), "the mic button becomes the voice typing toggle");
+
+  // The mic button can be hidden.
+  await page.evaluate(async () => (await import("/src/voice/config.ts")).setVoiceShowButton(false));
+  check(await micBtn.count() === 0, "the mic button can be hidden in Settings");
   await page.close();
 }
 
@@ -123,7 +159,8 @@ const on = { settings: { voiceEnabled: true, voiceModel: "parakeet-en", aiEnable
   await page.evaluate(() => { window.__saralaVoiceScript = "Market on Sunday morning with my sister."; window.__saralaVoiceDelay = 150; });
   await tap(page);
   await page.waitForSelector(".voice-hud");
-  check(await page.locator(".voice-hud-hint").textContent().then((t) => /Text appears as you speak/.test(t) && /for a command/.test(t)), "a tap latches listening on, and the hint says how it works");
+  check(await page.locator(".voice-pill .voice-wave").count() === 1 && await page.locator(".voice-hud-hint").textContent().then((t) => /finishes/.test(t) && /Esc discards/.test(t) && /for a command/.test(t)),
+    "a tap latches listening on: a pill with a waveform, and (for the first few times) a hint on finishing and discarding");
   check(await page.locator(".topbar-toggle.voice-top[aria-pressed=true]").count() === 1, "the mic button shows it is listening");
   await page.waitForTimeout(250);
   const streaming = (await blocks(page))[1];
@@ -173,12 +210,13 @@ const on = { settings: { voiceEnabled: true, voiceModel: "parakeet-en", aiEnable
   await page.waitForTimeout(350);
   check((await blocks(page)).join("|") === "Start here. Keep these words." && !(await page.locator(".voice-hud:not(.voice-notice)").count()),
     `Return finishes and keeps the text, without a line break (${JSON.stringify(await blocks(page))})`);
-  check(await page.locator('.voice-hud-btn[aria-keyshortcuts="Enter"]').count() === 0, "the panel is gone once finished");
+  check(await page.locator('.voice-pill-btn[aria-keyshortcuts="Enter"]').count() === 0, "the pill is gone once finished");
   await page.evaluate(() => { window.__saralaVoiceScript = "Words I will discard."; });
   await tap(page);
   await page.waitForTimeout(600);
-  check(await page.locator('.voice-hud-btn[aria-keyshortcuts="Enter"]', { hasText: "Done" }).count() === 1
-    && await page.locator('.voice-hud-btn[aria-keyshortcuts="Escape"]', { hasText: "Cancel" }).count() === 1, "Done and Cancel show their keys");
+  check(await page.locator('.voice-pill-btn.finish[aria-keyshortcuts="Enter"][aria-label="Finish and keep the text"]').count() === 1
+    && await page.locator('.voice-pill-btn.discard[aria-keyshortcuts="Escape"][aria-label="Discard what you said"]').count() === 1, "the pill's finish and discard buttons are named and carry their keys");
+  check(/^\d:\d\d$/.test(await page.locator(".voice-time").textContent()), "the pill shows how long it has been listening");
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
   check((await blocks(page)).join("|") === "Start here. Keep these words.", "Escape discards what was being said");
@@ -348,9 +386,9 @@ const on = { settings: { voiceEnabled: true, voiceModel: "parakeet-en", aiEnable
   check(!(await page.locator(".voice-commands").count()), "Escape closes the sheet");
   await tap(page);
   await page.waitForTimeout(300);
-  await page.locator(".voice-hud-btn", { hasText: "Commands" }).click();
+  await page.evaluate(async () => (await import("/src/commands.ts")).executeCommand("voice.commands"));
   await page.waitForTimeout(250);
-  check(await page.locator(".voice-commands").isVisible(), "the panel's Commands button opens it too");
+  check(await page.locator(".voice-commands").isVisible(), "Edit > Voice Typing > Voice Commands opens it while listening");
   await page.keyboard.press("Escape");
   await page.evaluate(async () => { await (await import("/src/voice/config.ts")).setVoiceCommands(false); });
   await page.evaluate(async () => (await import("/src/commands.ts")).executeCommand("voice.commands"));
@@ -667,6 +705,100 @@ const on = { settings: { voiceEnabled: true, voiceModel: "parakeet-en", aiEnable
   await page.keyboard.press("Enter");
   await page.waitForTimeout(300);
   check((await blocks(page))[0] === "Only block. Pressed by name.", `pressing the focused mic button types at the remembered caret (${JSON.stringify(await blocks(page))})`);
+  await page.close();
+}
+
+// ---- The recording pill: push to talk, first-run hints, settings ----
+{
+  const page = await newPage(on);
+  await store(page, (s) => s.openDocument("Pill.", "/bench/pill.md"));
+  await page.waitForTimeout(300);
+  await caretAtEnd(page, "Pill.");
+  await page.evaluate(() => { window.__saralaVoiceDelay = 200; window.__saralaVoiceScript = "Held words go here."; });
+  await down(page);
+  await page.waitForSelector(".voice-pill");
+  await page.waitForTimeout(500);
+  check(await page.locator(".voice-hud.holding").count() === 1 && await page.locator(".voice-pill-btn.finish").count() === 0, "while holding, there is no finish button: letting go finishes");
+  check(/^Release .* to finish/.test(await page.locator(".voice-hud-hint").textContent()), "and the hint says so");
+  await up(page);
+  await page.waitForTimeout(400);
+  check(!(await page.locator(".voice-hud:not(.voice-notice)").count()), "letting go finishes");
+
+  // Hints are for the first few dictations only.
+  for (let i = 0; i < 3; i++) {
+    await tap(page); await page.waitForTimeout(150);
+    await page.keyboard.press("Escape"); await page.waitForTimeout(150);
+  }
+  await tap(page);
+  await page.waitForSelector(".voice-pill");
+  await page.waitForTimeout(200);
+  check(await page.locator(".voice-hud-hint").count() === 0, "after a few dictations the pill stays quiet: no hint");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+
+  // Settings: push to talk as a segmented radio group.
+  await page.evaluate(async () => (await import("/src/commands.ts")).executeCommand("app.settings"));
+  await page.locator(".set-rail-item", { hasText: "Voice" }).click();
+  check(await page.locator(".set-subhead").allTextContents().then((t) => t.join("|") === "General|Microphone & sound|Speech|Storage"), "Settings > Voice is grouped");
+  const seg = page.locator('[role="radiogroup"][aria-label="Shortcut behaviour"]');
+  check(await seg.locator('[role="radio"][aria-checked="true"]').textContent() === "Hold or tap", "push to talk defaults to hold or tap");
+  await seg.locator('[role="radio"]', { hasText: "Hold to talk" }).click();
+  await page.keyboard.press("ArrowRight");
+  await page.waitForTimeout(400);
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("sarala.settings")).voiceTrigger);
+  check(saved === "toggle" && /No holding/.test(await page.locator(".voice-trigger-desc").textContent()), `arrow keys move the choice, it is saved, and its line explains it (${saved})`);
+  await page.close();
+}
+
+// ---- Standards: focus stays in dialogs, notices wait, the caret stays visible ----
+{
+  const page = await newPage(on);
+  // WCAG 2.4.3 / dialog pattern: Tab cycles inside the set-up and never reaches the page behind.
+  await page.evaluate(async () => (await import("/src/commands.ts")).executeCommand("voice.setup"));
+  await page.waitForSelector(".voice-setup .voice-pick");
+  const escaped = [];
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press("Tab");
+    if (!(await page.evaluate(() => !!document.activeElement?.closest(".voice-setup")))) escaped.push(i);
+  }
+  check(escaped.length === 0, `Tab stays inside the set-up dialog (escaped at ${JSON.stringify(escaped)})`);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(200);
+
+  // WCAG 2.2.1: a notice with a way out (Restore) doesn't time out.
+  await store(page, (s) => s.openDocument("Notice.", "/bench/notice.md"));
+  await page.waitForTimeout(300);
+  await caretAtEnd(page, "Notice.");
+  await tap(page); await page.waitForTimeout(500);
+  await page.keyboard.press("Escape");
+  await page.waitForSelector(".voice-notice");
+  await page.waitForTimeout(6000);
+  check(await page.locator(".voice-notice button", { hasText: "Restore" }).count() === 1, "the Restore notice is still there after 6 seconds");
+
+  // WCAG 2.4.11: dictating at the bottom of the window, the caret isn't under the pill.
+  await store(page, (s) => s.openDocument(Array.from({ length: 60 }, (_, i) => `Line ${i + 1} of a long note.`).join("\n\n"), "/bench/long.md"));
+  await page.waitForTimeout(300);
+  const target = page.locator(".editor .page > .block").nth(30);
+  await target.click(); await page.keyboard.press("End");
+  // Bring the caret to just above the window's bottom edge, where the pill will
+  // sit. The editor settles after a scroll, so measure again until it holds.
+  const caretBottom = () => page.evaluate(() => getSelection().getRangeAt(0).getBoundingClientRect().bottom);
+  for (let i = 0; i < 6; i++) {
+    const b = await caretBottom();
+    const vh = await page.evaluate(() => window.innerHeight);
+    if (b > vh - 90 && b < vh - 30) break;
+    await target.evaluate((el, d) => { let sc = el.parentElement; while (sc && sc.scrollHeight <= sc.clientHeight + 1) sc = sc.parentElement; (sc || document.scrollingElement).scrollTop += d; }, b - (vh - 55));
+    await page.waitForTimeout(200);
+  }
+  const before = await caretBottom();
+  await page.waitForTimeout(150);
+  await tap(page);
+  await page.waitForSelector(".voice-pill");
+  await page.waitForTimeout(700);
+  const pos = await page.evaluate(() => ({ pill: document.querySelector(".voice-hud").getBoundingClientRect().top, caret: getSelection().getRangeAt(0).getBoundingClientRect().bottom }));
+  check(before > pos.pill && pos.caret > 0 && pos.caret <= pos.pill,
+    `the line being dictated into scrolls clear of the pill and stays on screen (caret ${Math.round(before)} -> ${Math.round(pos.caret)}, pill top ${Math.round(pos.pill)})`);
+  await page.keyboard.press("Escape");
   await page.close();
 }
 

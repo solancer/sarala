@@ -688,6 +688,14 @@
 .ai-agent-howto .ai-secondary { align-self: flex-start; }
 .ai-agent-note { font-size: 11.5px; color: var(--ink-soft); }
 .ai-agent-note a { color: var(--link); }
+.ai-install-tabs { display: flex; gap: 2px; padding: 2px; border-radius: 7px; background: var(--tint); align-self: flex-start; }
+.ai-install-tab {
+  border: 0; border-radius: 5px; padding: 2px 8px; background: none; cursor: pointer;
+  font: var(--fw-medium) 11px/1.5 var(--font-ui); color: var(--ink-soft);
+}
+.ai-install-tab:hover { color: var(--ink); }
+.ai-install-tab[aria-selected="true"] { background: var(--bg-page); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+.ai-install-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .ai-cmd {
   display: flex; align-items: center; gap: 6px;
   padding: 4px 4px 4px 9px; border-radius: 7px; background: var(--code-bg);
@@ -726,7 +734,9 @@
 /* Rail: the assistant is on but no agent can run. */
 .ai-rail-setup {
   position: absolute; top: 2px; right: 1px; width: 9px; height: 9px; border-radius: 50%;
-  background: #e8a33d; box-shadow: 0 0 0 2px var(--bg-panel);
+  /* Same amber as the mic button's setup dot: pulled towards the theme's ink
+     so it keeps 3:1 against the rail in light and dark themes (WCAG 1.4.11). */
+  background: color-mix(in srgb, #e8a33d 62%, var(--ink)); box-shadow: 0 0 0 2px var(--bg-panel);
   animation: dot-pop var(--dur-2) var(--ease-out);
 }
 

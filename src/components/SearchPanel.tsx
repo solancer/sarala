@@ -123,12 +123,17 @@ export default function SearchPanel(props: Props) {
         <button class="find-toggle mono" classList={{ on: regex() }}
           title="Use regular expression" aria-label="Use regular expression" aria-pressed={regex()} onClick={() => setRegex(!regex())}>.*</button>
         <Show when={query().trim() && !searching()}>
-          <span class="search-summary" role="status">{totalMatches()} in {results().length}</span>
+          {/* Says what the numbers are, for everyone and for screen readers. */}
+          <span class="search-summary" role="status">
+            {totalMatches()
+              ? `${totalMatches()} ${totalMatches() === 1 ? "match" : "matches"} in ${results().length} ${results().length === 1 ? "file" : "files"}`
+              : "No matches"}
+          </span>
         </Show>
       </div>
 
       <Show when={query().trim() && !searching() && results().length === 0}>
-        <div class="search-empty">No matches</div>
+        <div class="search-empty" aria-hidden="true">No matches</div>
       </Show>
 
       <For each={results()}>
@@ -143,7 +148,7 @@ export default function SearchPanel(props: Props) {
             <For each={file.matches}>
               {(m) => (
                 <button class="search-hit" onClick={() => openHit(file.path)}>
-                  <span class="search-hit-line">{m.line}</span>
+                  <span class="search-hit-line"><span class="sr-only">Line </span>{m.line}<span class="sr-only">:</span></span>
                   <span class="search-hit-text">{m.text}</span>
                 </button>
               )}

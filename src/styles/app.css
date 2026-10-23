@@ -597,9 +597,11 @@ body { font-family: var(--font-ui); }
 }
 .side-filter-input:focus { outline: none; }
 .side-filter-clear {
-  flex: none; display: inline-flex;
+  /* 24px target (WCAG 2.5.8): it sits right beside the text field. */
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; margin-right: -4px;
   border: 0; background: transparent; color: var(--ink-soft);
-  padding: 2px; border-radius: 4px; cursor: pointer;
+  padding: 0; border-radius: 4px; cursor: pointer;
 }
 .side-filter-clear:hover { color: var(--accent); }
 .side-list-head-row { display: flex; align-items: center; }
@@ -614,9 +616,15 @@ body { font-family: var(--font-ui); }
   padding: 4px; border-radius: 4px; cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
 }
+/* Several actions in one header (Refresh + Collapse all) sit together on the
+   right: only the first pushes right, or the free space is split between
+   them and one lands in the middle. */
+.side-clear-btn + .side-clear-btn { margin-left: 2px; }
 .side-clear-btn:hover { background: var(--tint); color: var(--ink); }
 .side-clear-btn:focus-visible, .side-sec-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .side-clear-btn svg { flex: none; }
+.side-clear-btn.spinning svg { animation: settings-spin 600ms linear infinite; }
+@media (prefers-reduced-motion: reduce) { .side-clear-btn.spinning svg { animation: none; } }
 .side-recent, .side-tree { display: flex; flex-direction: column; gap: 0; }
 .side-divider { height: 1px; margin: 5px 8px; background: color-mix(in srgb, var(--ink-soft) 14%, transparent); }
 
@@ -649,11 +657,11 @@ body { font-family: var(--font-ui); }
 .tree-parent {
   flex: 0 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--ink-soft);
   font-size: 11px;
-  opacity: 0.8;
 }
-.tree-item.current .tree-parent { color: inherit; opacity: 0.65; }
+/* Soft ink alone is ~3.8:1 on the panel in some themes: pull it a little
+   towards ink so the folder hint stays readable (4.5:1, WCAG 1.4.3). */
+.tree-item .tree-parent, .tree-item.current .tree-parent { color: color-mix(in srgb, var(--ink-soft) 65%, var(--ink)); }
 /* Files sit where a folder's chevron would be, so names align down a level. */
 .tree-indent { flex: none; width: 12px; }
 .tree-item .file-icon { flex: none; color: var(--ink-soft); }
@@ -681,9 +689,12 @@ body { font-family: var(--font-ui); }
    previously it looked identical to a working one and clicking did nothing.
    Kept visible (not auto-removed) because an unmounted drive comes back; the
    row stays clickable so the click can offer to remove it. */
-.tree-item.missing { color: var(--ink-soft); opacity: 0.62; }
+/* A missing file is still a live row (it explains itself when opened), so it
+   keeps readable contrast: the strike-through and warning icon mark it,
+   not fading. */
+.tree-item.missing { color: color-mix(in srgb, var(--ink-soft) 72%, var(--ink)); }
 .tree-item.missing .tree-nm { text-decoration: line-through; text-decoration-thickness: 1px; }
-.tree-item.missing:hover { opacity: 0.85; background: var(--tint); }
+.tree-item.missing:hover { background: var(--tint); }
 .missing-icon { flex: none; color: var(--warn, #c2542f); }
 /* Pin glyph — accent, shown on pinned rows and in the pin menu. */
 .pin-icon { flex: none; color: var(--accent); }
@@ -788,8 +799,10 @@ body { font-family: var(--font-ui); }
 .search-input:focus,
 .search-input:focus-visible { outline: none; }
 .search-input::placeholder { color: var(--ink-soft); }
-.search-toggles { display: flex; align-items: center; gap: 2px; margin: 5px 0 2px; }
-.search-summary { margin-left: auto; font: var(--fw-regular) 11px var(--font-ui); color: var(--ink-soft); }
+/* Wraps in a narrow sidebar: the summary ("12 matches in 3 files") drops
+   under the toggles rather than overflowing. */
+.search-toggles { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 5px 0 2px; }
+.search-summary { margin-left: auto; font: var(--fw-regular) 11px var(--font-ui); color: color-mix(in srgb, var(--ink-soft) 65%, var(--ink)); }
 .search-empty { padding: 8px 4px; font: var(--fw-regular) 12px var(--font-ui); color: var(--ink-soft); }
 
 .search-file { margin-top: 6px; }
@@ -2035,16 +2048,25 @@ body.tables-full .rendered table { width: 100%; }
 .d2-zoom-btn:disabled { opacity: 0.35; cursor: default; }
 .d2-controls-sep { width: 1px; align-self: stretch; margin: 1px 2px; background: var(--border); }
 .d2-theme-select {
+  appearance: none;
+  -webkit-appearance: none;
   border: none;
-  background: none;
   color: var(--ink);
   font: var(--fw-regular) 12px var(--font-ui);
   cursor: pointer;
   border-radius: 4px;
-  padding: 2px 4px;
+  padding: 2px 16px 2px 4px;
   max-width: 150px;
+  /* Borderless toolbar dropdown: the same drawn chevron as .ip-select. */
+  background: no-repeat
+    linear-gradient(45deg, transparent 50%, currentColor 50%) calc(100% - 9px) calc(50% + 1px) / 4px 4px,
+    no-repeat linear-gradient(135deg, currentColor 50%, transparent 50%) calc(100% - 5px) calc(50% + 1px) / 4px 4px;
 }
-.d2-theme-select:hover { background: var(--accent-soft); color: var(--accent); }
+.d2-theme-select option { background: var(--bg-page); color: var(--ink); }
+@media (forced-colors: active) {
+  .d2-theme-select { appearance: auto; -webkit-appearance: auto; background: none; padding-right: 4px; }
+}
+.d2-theme-select:hover { background-color: var(--accent-soft); color: var(--accent); }
 
 /* ---- Image hover toolbar (anchored to a rendered image's top-right) ---- */
 .img-tools {
@@ -2269,6 +2291,16 @@ body.tables-full .rendered table { width: 100%; }
 .set-pane-head .settings-search { flex: 1; margin: 0; }
 .set-body { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 16px 18px; }
 .set-group { position: static; background: transparent; padding-top: 14px; }
+/* A titled group of rows inside a section (Settings > Voice). */
+.set-subhead {
+  margin: 18px 0 2px;
+  padding: 0 0 6px;
+  color: var(--ink-soft);
+  font: var(--fw-semibold) 11px var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.set-subhead:first-child { margin-top: 4px; }
 
 /* A row is label + description on the left, control on the right. The control
    column is fixed so switches and selects line up down the pane instead of
@@ -2642,7 +2674,38 @@ body.tables-full .rendered table { width: 100%; }
   font: var(--fw-regular) 12px var(--font-ui);
 }
 .ip-input:focus { outline: none; border-color: var(--accent); }
-.ip-select { cursor: pointer; }
+/* Dropdowns. The native control ignores the theme (macOS WebKit draws its
+   own up/down arrows and a cramped box), so draw our own: same box as the
+   text inputs, and a chevron made of two gradients in the theme's soft ink
+   so it follows every theme, light or dark. Comes after .ip-input, whose
+   `background` shorthand would otherwise reset the chevron. */
+.ip-select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 30px;
+  padding: 5px 28px 5px 9px;
+  border-radius: 7px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%),
+    linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%);
+  background-position: calc(100% - 15px) calc(50% + 1px), calc(100% - 11px) calc(50% + 1px);
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+  transition: border-color 120ms ease;
+}
+.ip-select:hover { border-color: color-mix(in srgb, var(--ink) 28%, var(--rule)); }
+.ip-select:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.ip-select:disabled { opacity: 0.5; cursor: default; }
+/* The open list: Windows and Linux draw it from these (macOS uses a native menu). */
+.ip-select option { background: var(--bg-page); color: var(--ink); }
+@media (forced-colors: active) {
+  .ip-select { appearance: auto; -webkit-appearance: auto; background-image: none; padding-right: 9px; }
+}
 
 
 .ip-adv-toggle {

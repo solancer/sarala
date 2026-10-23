@@ -244,6 +244,17 @@ await bare.locator(".ai-agent-card").first().waitFor();
 await bare.waitForTimeout(300);
 check((await bare.locator(".ai-agent-card .ai-pill", { hasText: "Not installed" }).count()) >= 3, "onboarding lists each agent as not installed");
 check((await bare.locator(".ai-cmd code").count()) >= 3, "with an install command to copy");
+{
+  const card = bare.locator(".ai-agent-card").first();
+  const cmd = () => card.locator(".ai-cmd code").textContent();
+  check(!(await cmd()).startsWith("npm"), "the recommended install is the native installer, not npm");
+  check((await card.locator(".ai-install-tab").count()) >= 2, "with other install methods to switch to");
+  await card.locator(".ai-install-tab", { hasText: "npm" }).click();
+  check((await cmd()).startsWith("npm install -g"), "switching method swaps the command");
+  check(await card.locator(".ai-agent-note", { hasText: "Node.js" }).isVisible(), "and npm says it needs Node.js");
+  check(await card.locator(".ai-agent-note a", { hasText: "Install guide" }).isVisible(), "the official install guide is linked");
+  await bare.locator(".ai-agent-cards").screenshot({ path: process.env.SHOT ?? "/dev/null" }).catch(() => {});
+}
 check(await bare.locator(".ai-hero-cta").isDisabled(), "Turn on is disabled until an agent is installed");
 await bare.close();
 const bare2 = await browser.newPage();

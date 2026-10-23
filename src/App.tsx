@@ -38,7 +38,7 @@ import { autoCheckForUpdates } from "./updater";
 import {
   activeTabId, openTabs, removeTab, currentTabView, setTabViewProvider, cycleTab, setTabExternalChange,
   doc, theme, sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
-  fileName, setActive, fileTree, folderName, THEMES, targetBlockIndex,
+  fileName, setActive, fileTree, setFileTree, folderName, folderPath, THEMES, targetBlockIndex,
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
   focusMode, typewriterMode, statusBarVisible, alwaysOnTop, zoom, tableFullWidth,
   mathAltDelimiters, mathFence, bumpMermaidEpoch, customScheme,
@@ -47,7 +47,7 @@ import {
 } from "./store";
 import {
   isTauri, isMac, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS,
-  onExternalChange,
+  onExternalChange, onTreeChange,
 } from "./platform";
 import {
   executeCommand, openFile, openFolder, insertImageFromPath,
@@ -248,10 +248,16 @@ export default function App() {
         unwatch = u;
       });
 
+      // Live file tree: Rust pushes a fresh tree when the open folder changes.
+      let untree: (() => void) | undefined;
+      onTreeChange((root, tree) => { if (root === folderPath()) setFileTree(tree); }).then((u) => {
+        untree = u;
+      });
+
       // Autosave shadows of dirty (saved) documents.
       startAutosave();
 
-      onCleanup(() => { disposed = true; unlisten?.(); undrop?.(); unclose?.(); unwatch?.(); unopen?.(); });
+      onCleanup(() => { disposed = true; unlisten?.(); undrop?.(); unclose?.(); unwatch?.(); untree?.(); unopen?.(); });
     } else if (isMac) {
       // Browser dev on macOS has neither a native menu nor the in-app menubar,
       // so keep the minimal chord fallback there.

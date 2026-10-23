@@ -4,7 +4,8 @@
  */
 import { For, Show, createEffect, createResource, createSignal, on, onCleanup, onMount } from "solid-js";
 import {
-  SHORTCUTS, setVoiceDevice, setVoiceModel, setVoiceShortcut, shortcutLabel, voiceDevice, voiceModel, voiceShortcut,
+  SHORTCUTS, TRIGGER_OPTIONS, setVoiceDevice, setVoiceModel, setVoiceShortcut, setVoiceTrigger, shortcutLabel, voiceDevice, voiceModel,
+  voiceShortcut, voiceTrigger, type TriggerMode,
 } from "../voice/config";
 import { accelToShortcut, shortcutFromEvent } from "../voice/text";
 import { MENUS, type MenuNode } from "../menudata";
@@ -36,21 +37,64 @@ export function VoiceModelRow() {
 }
 
 export function VoiceDeviceRow() {
-  const [devices] = createResource(async () => (await voiceBackend()).devices().catch(() => [] as string[]));
+  const [devices, { refetch }] = createResource(async () => (await voiceBackend()).devices().catch(() => [] as string[]));
   return (
-    <select
-      class="ip-input ip-select"
-      aria-label="Microphone"
-      value={voiceDevice()}
-      onChange={(e) => void setVoiceDevice(e.currentTarget.value)}
-    >
-      <option value="">System default</option>
-      <For each={devices() ?? []}>{(d) => <option value={d}>{d}</option>}</For>
-      {/* Keep a chosen device that is unplugged right now. */}
-      <Show when={voiceDevice() && !(devices() ?? []).includes(voiceDevice())}>
-        <option value={voiceDevice()}>{voiceDevice()} (not connected)</option>
-      </Show>
-    </select>
+    <div class="voice-device-row">
+      <select
+        class="ip-input ip-select"
+        aria-label="Microphone"
+        value={voiceDevice()}
+        onChange={(e) => void setVoiceDevice(e.currentTarget.value)}
+      >
+        <option value="">System default</option>
+        <For each={devices() ?? []}>{(d) => <option value={d}>{d}</option>}</For>
+        {/* Keep a chosen device that is unplugged right now. */}
+        <Show when={voiceDevice() && !(devices() ?? []).includes(voiceDevice())}>
+          <option value={voiceDevice()}>{voiceDevice()} (not connected)</option>
+        </Show>
+      </select>
+      {/* Plugging in a headset doesn't tell the app: look again on request. */}
+      <button class="ghost-btn voice-icon-btn" aria-label="Look for microphones again" title="Look for microphones again" onClick={() => void refetch()}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Shortcut behaviour: push to talk, tap to toggle, or both (the default, like Handy's "Auto"): three choices with one line on what
+ * the chosen one does. A radio group (arrow keys move and choose, like the
+ * native control), shown as a segmented switch.
+ */
+export function VoiceTriggerRow() {
+  const pick = (v: string) => void setVoiceTrigger(v as TriggerMode);
+  const onKey = (e: KeyboardEvent) => {
+    const i = TRIGGER_OPTIONS.findIndex((o) => o.value === voiceTrigger());
+    const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const next = TRIGGER_OPTIONS[(i + step + TRIGGER_OPTIONS.length) % TRIGGER_OPTIONS.length];
+    pick(next.value);
+    queueMicrotask(() => (e.currentTarget as HTMLElement).querySelector<HTMLElement>('[aria-checked="true"]')?.focus());
+  };
+  return (
+    <div class="voice-trigger">
+      <div class="voice-seg" role="radiogroup" aria-label="Shortcut behaviour" onKeyDown={onKey}>
+        <For each={TRIGGER_OPTIONS}>
+          {(o) => (
+            <button
+              role="radio" class="voice-seg-btn" aria-checked={voiceTrigger() === o.value}
+              tabIndex={voiceTrigger() === o.value ? 0 : -1} onClick={() => pick(o.value)}
+            >
+              {o.label}
+            </button>
+          )}
+        </For>
+      </div>
+      <span class="voice-trigger-desc">{TRIGGER_OPTIONS.find((o) => o.value === voiceTrigger())?.desc}</span>
+    </div>
   );
 }
 

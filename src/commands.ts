@@ -27,7 +27,7 @@ import { fontEmbedCss } from "./fonts";
 import {
   isTauri, pickFolder, pickMarkdownFile, pickSavePath, pickImportFile,
   readFileEncoded, reopenWithEncoding, writeTextFile, type EncodedDoc,
-  watchFile, clearShadow, listDirectory, openExternal,
+  watchFile, clearShadow, watchTree, openExternal,
   confirmDialog, alertDialog, renameFile, deleteFile, openNewWindow,
   pandocImport, pandocExport, exportPdf, runCommand, revealInDir,
   clipboardWriteText, clipboardReadText, pathExists,
@@ -127,7 +127,7 @@ const heading = (level: number) => () => {
 
 export async function refreshTree() {
   const root = folderPath();
-  if (root) setFileTree(await listDirectory(root));
+  if (root) setFileTree(await watchTree(root));
 }
 
 export async function openFolder() {
@@ -135,7 +135,7 @@ export async function openFolder() {
   if (!path) return;
   setFolderPath(path);
   setFolderName(path.replace(/\\/g, "/").split("/").pop() ?? path);
-  setFileTree(await listDirectory(path));
+  setFileTree(await watchTree(path));
 }
 
 // ---------- File ----------

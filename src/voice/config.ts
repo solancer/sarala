@@ -56,9 +56,9 @@ export const shortcutLabel = (id: string) => labelFor(id, isMac);
  *  long press is easy to make by accident. */
 export type TriggerMode = "both" | "toggle" | "hold";
 export const TRIGGER_OPTIONS = [
-  { value: "both", label: "Hold or tap" },
-  { value: "toggle", label: "Press to toggle" },
-  { value: "hold", label: "Hold only" },
+  { value: "both", label: "Hold or tap", desc: "Hold to talk, or tap to start and tap again to stop." },
+  { value: "hold", label: "Hold to talk", desc: "Push to talk: listens only while the keys are down. Never starts by accident." },
+  { value: "toggle", label: "Tap to start and stop", desc: "No holding: easier when keeping keys pressed is hard." },
 ];
 
 /** What a pause in speech does. "keep": nothing (pauses never end a
@@ -82,6 +82,10 @@ export const PAUSE_SECONDS = [
 export const recommendedModel = () =>
   (typeof navigator !== "undefined" && /^en\b/i.test(navigator.language ?? "en")) ? "parakeet-en" : "whisper-small";
 
+/** The model to suggest for a spoken language ("auto" goes by the locale). */
+export const recommendedFor = (lang: string) =>
+  lang === "auto" ? recommendedModel() : lang === "en" ? "parakeet-en" : "whisper-small";
+
 export const IDLE_OPTIONS = [
   { value: "0", label: "After each use" },
   { value: "5", label: "After 5 minutes" },
@@ -99,6 +103,9 @@ export const LANGUAGES = [
 ].map(([value, label]) => ({ value, label }));
 
 export const [voiceEnabled, setVoiceEnabledSig] = createSignal(false);
+/** The mic button beside Focus mode. Shown before set-up too (as the way
+ *  in), so people who never want voice typing can hide it. */
+export const [voiceShowButton, setVoiceShowButtonSig] = createSignal(true);
 /** The chosen model id; empty until set up. */
 export const [voiceModel, setVoiceModelSig] = createSignal("");
 /** Input device name; empty is the system default. */
@@ -117,12 +124,17 @@ export const [voiceReadBack, setVoiceReadBackSig] = createSignal(true);
 export const [voiceCommands, setVoiceCommandsSig] = createSignal(true);
 /** "comma", "period", "question mark"... */
 export const [voicePunctuation, setVoicePunctuationSig] = createSignal(false);
+/** Dictations started so far, up to HINT_RUNS: the pill explains itself
+ *  (how to finish, how to discard) for the first few, then stays quiet. */
+export const HINT_RUNS = 3;
+export const [voiceHintRuns, setVoiceHintRunsSig] = createSignal(0);
 /** Minutes before the model is unloaded; -1 keeps it loaded. */
 export const [voiceIdleMinutes, setVoiceIdleMinutesSig] = createSignal(5);
 
 /** Called from settings.ts once persisted settings are loaded. */
 export function hydrateVoiceSettings() {
   setVoiceEnabledSig(getSetting("voiceEnabled", false));
+  setVoiceShowButtonSig(getSetting("voiceShowButton", true));
   setVoiceModelSig(getSetting("voiceModel", ""));
   setVoiceDeviceSig(getSetting("voiceDevice", ""));
   setVoiceLanguageSig(getSetting("voiceLanguage", "auto"));
@@ -139,11 +151,16 @@ export function hydrateVoiceSettings() {
   setVoiceCommandsSig(getSetting("voiceCommands", true));
   setVoicePunctuationSig(getSetting("voicePunctuation", false));
   setVoiceIdleMinutesSig(getSetting("voiceIdleMinutes", 5));
+  setVoiceHintRunsSig(getSetting("voiceHintRuns", 0));
 }
 
 export async function setVoiceEnabled(on: boolean) {
   setVoiceEnabledSig(on);
   await setSetting("voiceEnabled", on);
+}
+export async function setVoiceShowButton(on: boolean) {
+  setVoiceShowButtonSig(on);
+  await setSetting("voiceShowButton", on);
 }
 export async function setVoiceModel(id: string) {
   setVoiceModelSig(id);
@@ -192,6 +209,11 @@ export async function setVoiceCommands(on: boolean) {
 export async function setVoicePunctuation(on: boolean) {
   setVoicePunctuationSig(on);
   await setSetting("voicePunctuation", on);
+}
+export async function countVoiceRun() {
+  if (voiceHintRuns() > HINT_RUNS) return;
+  setVoiceHintRunsSig(voiceHintRuns() + 1);
+  await setSetting("voiceHintRuns", voiceHintRuns());
 }
 export async function setVoiceCommandKey(id: string) {
   setVoiceCommandKeySig(id);
