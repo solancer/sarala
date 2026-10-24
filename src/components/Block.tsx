@@ -507,8 +507,84 @@ export default function Block(props: Props) {
       /** Already-resolved URL of the rendered image, so the panel can show a
        *  thumbnail without re-running the asset-protocol path resolution. */
       resolvedSrc: string;
+      /** Opened over the editable source (edit mode) rather than the rendered
+       *  view; it only shows in the mode it was opened in. */
+      editMode?: boolean;
     } | null
   >(null);
+  // The toolbar/properties UI, shown over the rendered view and (for images
+  // previewed inside the editable source) in edit mode.
+  // A toolbar opened in one mode never shows in the other (no effect on the
+  // mode switch: watching `active` disturbed caret tracking elsewhere).
+  const imageToolUI = () => (
+            <Show when={imgTool() && !!imgTool()!.editMode === !!props.active ? imgTool() : null}>
+              {(it) => (
+                <Show
+                  when={!imgProps()}
+                  fallback={
+                    <ImageProperties
+                      // Re-read the occurrence from the live block text: a
+                      // committed edit rewrites the source, so the target
+                      // captured on hover is stale by the next keystroke.
+                      target={imageAt(it().ordinal) ?? it().target}
+                      natural={it().natural}
+                      preview={it().resolvedSrc}
+                      top={it().top}
+                      left={it().left}
+                      onEnter={cancelHide}
+                      onLeave={scheduleHide}
+                      onClose={() => { setImgProps(false); setImgTool(null); }}
+                    />
+                  }
+                >
+                  <ImageHoverTools
+                    target={it().target}
+                    top={it().top}
+                    left={it().left}
+                    onEnter={cancelHide}
+                    onLeave={scheduleHide}
+                    onClose={() => setImgTool(null)}
+                    onProperties={() => setImgProps(true)}
+                    onShowSource={() => {
+                      const start = it().target.start;
+                      setImgTool(null);
+                      props.onActivate(start);
+                    }}
+                  />
+                </Show>
+              )}
+            </Show>
+  );
+
+  /** Image hover inside the editable source (edit mode). Only Markdown
+   *  `![](…)` images are previewed there, so the nth <img> is the nth
+   *  Markdown image; map it back to its index among all occurrences. */
+  const onSourceMouseOver = (e: MouseEvent) => {
+    const img = (e.target as HTMLElement).closest("img");
+    if (!img || !el?.contains(img) || !rootEl || imgProps()) return;
+    const k = [...el.querySelectorAll("img")].indexOf(img as HTMLImageElement);
+    const all = findImages(props.text);
+    const ordinal = all.map((r, i) => (r.kind === "md" ? i : -1)).filter((i) => i >= 0)[k];
+    const target = ordinal === undefined ? null : imageAt(ordinal);
+    if (!target) return;
+    cancelHide();
+    const br = rootEl.getBoundingClientRect();
+    const ir = img.getBoundingClientRect();
+    const im = img as HTMLImageElement;
+    setImgTool({
+      target, ordinal,
+      natural: { w: im.naturalWidth || 0, h: im.naturalHeight || 0 },
+      resolvedSrc: im.currentSrc || im.src,
+      top: ir.top - br.top + 8,
+      left: ir.left - br.left + 8,
+      editMode: true,
+    });
+  };
+  const onSourceMouseOut = (e: MouseEvent) => {
+    const to = e.relatedTarget as HTMLElement | null;
+    if (to && rootEl?.contains(to) && (to.closest("img") || to.closest(".img-tools") || to.closest(".img-props"))) return;
+    scheduleHide();
+  };
   // Swaps the hover toolbar for the full Image Properties panel. The panel is
   // a click-to-open surface, so it ignores the hover-out timer.
   const [imgProps, setImgProps] = createSignal(false);
@@ -524,8 +600,11 @@ export default function Block(props: Props) {
   // Same hover model as images, but resolved by href rather than ordinal: the
   // renderer emits anchors with no link behind them (footnote refs, [TOC]), so
   // counting anchors would drift off the source.
+  /** `pinned`: opened by a click or keyboard focus, so it stays until Escape,
+   *  a click elsewhere, or focus leaving (not until the pointer wanders off).
+   *  `above`: flipped above the link, for links near the bottom edge. */
   const [linkTool, setLinkTool] = createSignal<
-    { target: LinkTarget; top: number; left: number } | null
+    { target: LinkTarget; top: number; left: number; pinned?: boolean; above?: boolean } | null
   >(null);
   /**
    * Hover intent. Text is full of links, and a helper that appears the instant
@@ -538,22 +617,110 @@ export default function Block(props: Props) {
    * crosses dead space (see .link-tools / .lht-card).
    */
   const LINK_HOVER_MS = 380;
+  /** Grace before a hover card closes: crossing between the link and the
+   *  card, or briefly overshooting, shouldn't close and re-open it. */
+  const LINK_HIDE_MS = 260;
   let linkShowTimer: number | undefined;
-  const cancelLinkShow = () => { clearTimeout(linkShowTimer); linkShowTimer = undefined; };
-  const showLinkAfterRest = (state: { target: LinkTarget; top: number; left: number }) => {
+  let linkHideTimer: number | undefined;
+  const cancelLinkShow = () => {
+    clearTimeout(linkShowTimer); linkShowTimer = undefined;
+    clearTimeout(linkHideTimer); linkHideTimer = undefined;
+  };
+  type LinkState = { target: LinkTarget; top: number; left: number; pinned?: boolean; above?: boolean };
+  const showLinkAfterRest = (state: LinkState) => {
     cancelLinkShow();
-    // Already open on this same link — keep it, don't re-animate.
+    // Already open on this same link: keep it, don't re-animate.
     if (linkTool()?.target.start === state.target.start) return;
+    // A pinned card (clicked open) stays put while the pointer passes other links.
+    if (linkTool()?.pinned) return;
     // A different link: drop the open card now rather than leaving it pointing
     // at the link you just left for the length of the hover delay.
     if (linkTool()) setLinkTool(null);
     linkShowTimer = window.setTimeout(() => setLinkTool(state), LINK_HOVER_MS);
   };
+  /** Opened on purpose (click, keyboard): at once, and it stays. */
+  const showLinkNow = (state: LinkState) => {
+    cancelLinkShow();
+    setLinkTool({ ...state, pinned: true });
+  };
   const hideLinkNow = () => {
     cancelLinkShow();
     setLinkTool(null);
   };
+  /** The pointer left the link or the card: close after a grace period,
+   *  unless it was opened on purpose. */
+  const hideLinkSoon = () => {
+    clearTimeout(linkShowTimer); linkShowTimer = undefined;
+    if (!linkTool() || linkTool()!.pinned) return;
+    clearTimeout(linkHideTimer);
+    linkHideTimer = window.setTimeout(() => setLinkTool(null), LINK_HIDE_MS);
+  };
   onCleanup(cancelLinkShow);
+
+  /**
+   * Where the card goes for an anchor: under the line box being hovered or
+   * clicked (a link that wraps has one box per line; its overall bounding box
+   * would put the card under the *last* line, far from the pointer), kept
+   * inside the window, and flipped above the link when there's no room below.
+   */
+  const LINK_CARD_W = 340;
+  const LINK_CARD_H = 52;
+  const linkPlacement = (anchor: HTMLElement, x?: number, y?: number) => {
+    const br = rootEl!.getBoundingClientRect();
+    const lines = [...anchor.getClientRects()];
+    const line = (x !== undefined && y !== undefined
+      ? lines.find((r) => x >= r.left - 1 && x <= r.right + 1 && y >= r.top - 1 && y <= r.bottom + 1)
+      : undefined) ?? lines[0] ?? anchor.getBoundingClientRect();
+    // The visible editing area ends at the editor's scroll box (the status
+    // bar sits below it), not at the window's edge.
+    const view = rootEl!.closest(".scroll")?.getBoundingClientRect();
+    const bottom = view?.bottom ?? window.innerHeight;
+    const top = view?.top ?? 0;
+    const above = line.bottom + LINK_CARD_H + 8 > bottom && line.top - LINK_CARD_H - 8 > top;
+    const viewportLeft = Math.min(line.left, window.innerWidth - LINK_CARD_W - 8);
+    return {
+      top: (above ? line.top - LINK_CARD_H : line.bottom) - br.top,
+      left: Math.max(8, viewportLeft) - br.left,
+      above,
+    };
+  };
+  /** The source link behind a rendered anchor. */
+  const linkTargetOf = (anchor: HTMLElement): LinkTarget | null => {
+    if (!renderedEl) return null;
+    const href = anchor.getAttribute("href") ?? "";
+    // Which occurrence of this href is it? Repeated links to one URL still
+    // resolve to the right span.
+    const same = [...renderedEl.querySelectorAll("a")].filter((a) => a.getAttribute("href") === href);
+    const ref = href ? linkForHref(props.text, href, same.indexOf(anchor as HTMLAnchorElement)) : null;
+    return ref ? { ...ref, blockId: props.id } : null;
+  };
+
+  // Escape dismisses the card (WCAG 1.4.13), and a click anywhere else closes
+  // a pinned one. Listening only while a card is actually shown: the card
+  // belongs to the rendered view, so once the block is being edited (e.g. the
+  // second click of a double-click) it's gone, and its state is dropped too
+  // (after the activation settles, not in the middle of it).
+  createEffect(() => {
+    if (!linkTool()) return;
+    if (props.active) { queueMicrotask(hideLinkNow); return; }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || !linkTool()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      hideLinkNow();
+    };
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest(".link-tools") || (rootEl?.contains(t) && t.closest(".rendered a"))) return;
+      hideLinkNow();
+    };
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("mousedown", onDown, true);
+    onCleanup(() => {
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("mousedown", onDown, true);
+    });
+  });
 
   /**
    * Re-resolve an image occurrence against the block's current text. Committing
@@ -573,23 +740,11 @@ export default function Block(props: Props) {
   const onRenderedMouseOver = (e: MouseEvent) => {
     const anchor = (e.target as HTMLElement).closest("a");
     if (anchor && renderedEl?.contains(anchor) && rootEl && !imgProps()) {
-      const href = anchor.getAttribute("href") ?? "";
-      // Which occurrence of this href is it? Repeated links to one URL still
-      // resolve to the right span.
-      const same = [...renderedEl.querySelectorAll("a")].filter(
-        (a) => a.getAttribute("href") === href,
-      );
-      const ref = href ? linkForHref(props.text, href, same.indexOf(anchor)) : null;
-      if (ref) {
-        const br = rootEl.getBoundingClientRect();
-        const ar = anchor.getBoundingClientRect();
-        showLinkAfterRest({
-          target: { ...ref, blockId: props.id },
-          // Flush to the link's underside; the card pads itself away, so the
-          // pointer can travel into it without leaving the element.
-          top: ar.bottom - br.top,
-          left: ar.left - br.left,
-        });
+      const target = linkTargetOf(anchor);
+      if (target) {
+        // Flush to the hovered line's edge; the card pads itself away, so the
+        // pointer can travel into it without leaving the element.
+        showLinkAfterRest({ target, ...linkPlacement(anchor, e.clientX, e.clientY) });
         return;
       }
     }
@@ -621,8 +776,11 @@ export default function Block(props: Props) {
     // one is concerned: keeping our helper alive for it would strand it, since
     // the next mouseout arrives on that block, not here.
     const inBlock = !!to && !!rootEl?.contains(to);
-    if (inBlock && (to!.closest("a") || to!.closest(".link-tools"))) return;
-    hideLinkNow();
+    if (inBlock && (to!.closest("a") || to!.closest(".link-tools"))) {
+      if (linkTool()) clearTimeout(linkHideTimer);
+      return;
+    }
+    hideLinkSoon();
     if (inBlock && (to!.closest("img") || to!.closest(".img-tools") || to!.closest(".img-props")))
       return;
     scheduleHide();
@@ -742,6 +900,18 @@ export default function Block(props: Props) {
       void followLink(link.getAttribute("href")!);
       return;
     }
+    // A plain click on a link shows its card at once and keeps it open (like
+    // Google Docs), instead of dropping the paragraph into raw Markdown;
+    // following a link stays a deliberate Cmd/Ctrl+click so it can't happen
+    // by accident while editing. A double-click edits the text there.
+    if (link && e.button === 0 && e.detail < 2) {
+      const target = linkTargetOf(link);
+      if (target && rootEl) {
+        e.preventDefault();
+        showLinkNow({ target, ...linkPlacement(link, e.clientX, e.clientY) });
+        return;
+      }
+    }
     // Clicking an image no longer drops the block into raw ![](…) source — the
     // hover toolbar owns image edits. Leave surrounding text clickable so the
     // rest of the paragraph still enters edit mode normally.
@@ -829,54 +999,38 @@ export default function Block(props: Props) {
               onContextMenu={onRenderedContextMenu}
               onMouseOver={onRenderedMouseOver}
               onMouseOut={onRenderedMouseOut}
+              onFocusIn={(e) => {
+                // Keyboard parity with hover: a focused link shows its card.
+                const a = (e.target as HTMLElement).closest("a");
+                const target = a && renderedEl?.contains(a) ? linkTargetOf(a) : null;
+                if (a && target && rootEl) showLinkNow({ target, ...linkPlacement(a) });
+              }}
+              onFocusOut={(e) => {
+                const to = e.relatedTarget as HTMLElement | null;
+                if (!to?.closest(".link-tools") && linkTool()?.pinned) hideLinkNow();
+              }}
+              onKeyDown={(e) => {
+                // Enter on a focused link follows it, as in a browser.
+                const a = (e.target as HTMLElement).closest("a");
+                if (e.key === "Enter" && a?.getAttribute("href")) {
+                  e.preventDefault();
+                  hideLinkNow();
+                  void followLink(a.getAttribute("href")!);
+                }
+              }}
               // eslint-disable-next-line solid/no-innerhtml -- renderMarkdown output is DOMPurify-sanitized
               innerHTML={renderedHtml()}
             />
-            <Show when={imgTool()}>
-              {(it) => (
-                <Show
-                  when={!imgProps()}
-                  fallback={
-                    <ImageProperties
-                      // Re-read the occurrence from the live block text: a
-                      // committed edit rewrites the source, so the target
-                      // captured on hover is stale by the next keystroke.
-                      target={imageAt(it().ordinal) ?? it().target}
-                      natural={it().natural}
-                      preview={it().resolvedSrc}
-                      top={it().top}
-                      left={it().left}
-                      onEnter={cancelHide}
-                      onLeave={scheduleHide}
-                      onClose={() => { setImgProps(false); setImgTool(null); }}
-                    />
-                  }
-                >
-                  <ImageHoverTools
-                    target={it().target}
-                    top={it().top}
-                    left={it().left}
-                    onEnter={cancelHide}
-                    onLeave={scheduleHide}
-                    onClose={() => setImgTool(null)}
-                    onProperties={() => setImgProps(true)}
-                    onShowSource={() => {
-                      const start = it().target.start;
-                      setImgTool(null);
-                      props.onActivate(start);
-                    }}
-                  />
-                </Show>
-              )}
-            </Show>
+            {imageToolUI()}
             <Show when={linkTool()}>
               {(lt) => (
                 <LinkHoverTools
                   target={lt().target}
                   top={lt().top}
                   left={lt().left}
+                  above={lt().above}
                   onEnter={cancelLinkShow}
-                  onLeave={hideLinkNow}
+                  onLeave={hideLinkSoon}
                   onClose={hideLinkNow}
                 />
               )}
@@ -898,6 +1052,7 @@ export default function Block(props: Props) {
             innerHTML={renderedHtml()} />
         </Show>
         <div ref={panelEl} class="source-container" classList={{ "block-source-panel": !!panelKind() }} role={panelKind() ? "region" : undefined} aria-label={panelKind() ? `${panelTitle()} source editor` : undefined}>
+          {imageToolUI()}
           <Show when={panelKind()}>
             <div class="block-source-panel-header">
               <span>{panelTitle()}</span>
@@ -913,6 +1068,8 @@ export default function Block(props: Props) {
           role="textbox" aria-multiline="true" aria-label={panelKind() ? `Edit ${panelKind()?.toLowerCase()} source` : "Edit Markdown block"}
           spellcheck={spellcheckOn()}
           onMouseDown={onSourceMouseDown}
+          onMouseOver={onSourceMouseOver}
+          onMouseOut={onSourceMouseOut}
           onInput={onInput}
           onKeyDown={onKeyDown}
           onPaste={onPaste}

@@ -12,7 +12,7 @@
  */
 
 import { Show, createSignal } from "solid-js";
-import { clipboardWriteText } from "../platform";
+import { clipboardWriteText, isMac } from "../platform";
 import { followLink } from "../commands";
 import { removeLink, setLinkUrl, type LinkTarget } from "../links";
 
@@ -45,6 +45,8 @@ interface Props {
   /** Absolute position within the block. */
   top: number;
   left: number;
+  /** Placed above the link (near the window's bottom edge). */
+  above?: boolean;
   onEnter: () => void;
   onLeave: () => void;
   onClose: () => void;
@@ -73,10 +75,14 @@ export default function LinkHoverTools(props: Props) {
   return (
     <div
       class="link-tools"
+      classList={{ above: !!props.above }}
       contentEditable={false}
+      role="group"
+      aria-label="Link"
       style={{ top: `${props.top}px`, left: `${props.left}px` }}
       onMouseEnter={() => props.onEnter()}
-      onMouseLeave={() => props.onLeave()}
+      // Never close under someone typing a new address.
+      onMouseLeave={() => { if (!editing()) props.onLeave(); }}
       // Let the input take focus; block everything else from moving the caret.
       onMouseDown={(e) => {
         e.stopPropagation();
@@ -98,22 +104,27 @@ export default function LinkHoverTools(props: Props) {
               {props.target.url}
             </a>
             <span class="lht-sep" />
-            <button class="lht-btn" title="Open link" onClick={() => void followLink(props.target.url)}>
+            <button
+              class="lht-btn" aria-label="Open link" title={`Open link (${isMac ? "⌘" : "Ctrl"}-click the link)`}
+              onClick={() => void followLink(props.target.url)}
+            >
               <Icon name="open" />
             </button>
-            <button class="lht-btn" title="Edit link" onClick={startEdit}>
+            <button class="lht-btn" aria-label="Edit link address" title="Edit link address" onClick={startEdit}>
               <Icon name="edit" />
             </button>
             <button
               class="lht-btn"
               classList={{ ok: copied() }}
-              title={copied() ? "Copied" : "Copy link"}
+              aria-label={copied() ? "Copied" : "Copy link address"}
+              title={copied() ? "Copied" : "Copy link address"}
               onClick={() => void copy()}
             >
               <Icon name="copy" />
             </button>
             <button
               class="lht-btn danger"
+              aria-label="Remove link"
               title={props.target.kind === "bare" ? "Remove link (keeps the URL text)" : "Remove link (keeps the text)"}
               onClick={() => { removeLink(props.target); props.onClose(); }}
             >
@@ -125,6 +136,7 @@ export default function LinkHoverTools(props: Props) {
         <div class="lht-field">
           <input
             class="lht-input"
+            aria-label="Link address"
             autofocus
             spellcheck={false}
             autocomplete="off"

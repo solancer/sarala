@@ -81,7 +81,7 @@ check(
 // Repeated hrefs must resolve to the right occurrence, which is why this
 // matches by href + index rather than by anchor ordinal.
 await hoverLink(1);
-await page.locator(".lht-btn[title='Edit link']").click();
+await page.locator(".lht-btn[aria-label='Edit link address']").click();
 await page.waitForTimeout(250);
 await page.locator(".lht-input").fill("https://second.example");
 await page.locator(".lht-ok").click();
@@ -96,7 +96,7 @@ await page.waitForTimeout(500);
 
 // Remove link unwraps to the label, keeping the visible text.
 await hoverLink(0);
-await page.locator(".lht-btn[title^='Remove link']").click();
+await page.locator(".lht-btn[aria-label='Remove link']").click();
 await page.waitForTimeout(500);
 {
   const md = await source();
@@ -120,8 +120,10 @@ await page.evaluate(() => {
   document.querySelector(".block .rendered")
     ?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
 });
-await page.waitForTimeout(200);
-check(!(await tools.isVisible().catch(() => false)), "leaving dismisses immediately, with no lingering popover");
+// A short grace period (so crossing between link and card, or a brief
+// overshoot, doesn't close and re-open it), then it goes: no lingering.
+await page.waitForTimeout(450);
+check(!(await tools.isVisible().catch(() => false)), "leaving dismisses after a short grace period, with no lingering popover");
 await page.locator(".block .rendered a").first().dispatchEvent("mouseover");
 await page.waitForTimeout(120);
 check(
@@ -200,6 +202,74 @@ check(titles.length === 4, `four actions (${JSON.stringify(titles)})`);
   await wpage.waitForTimeout(300);
   check(wpage.url() === home, "a plain click edits instead of navigating");
   await wk.close();
+}
+
+// --- interaction model (Google Docs-style; WCAG 1.4.13) ---
+{
+  const filler = Array.from({ length: 10 }, (_, i) => `Filler paragraph ${i}.`).join("\n\n");
+  await page.evaluate(async (md) => (await import("/src/store.ts")).openDocument(md, "/bench/links-model.md"),
+    `Read [the guide](https://example.com/guide) now.\n\nA long link to [a really quite long label that keeps going and wraps onto the next line of the paragraph for sure here and more](https://example.com/wrap) ok.\n\n${filler}\n\nBottom [low link](https://example.com/low).`);
+  await page.waitForTimeout(400);
+  const link = (t) => page.locator(".rendered a", { hasText: t }).first();
+  const card = page.locator(".link-tools");
+  const away = async () => { await page.mouse.move(4, 700); await page.waitForTimeout(450); };
+  const editing = () => page.evaluate(() => !!document.querySelector(".block.active"));
+
+  // Click: card at once, stays, no jump into raw Markdown.
+  await link("the guide").click();
+  await page.waitForTimeout(120);
+  check(await card.count() === 1 && !(await editing()), "a plain click opens the link card at once, without entering raw Markdown");
+  await away();
+  check(await card.count() === 1, "a clicked card stays when the pointer moves away");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(100);
+  check(await card.count() === 0, "Escape dismisses it (WCAG 1.4.13)");
+
+  // Hover then Escape, without moving the pointer.
+  const gb = await link("the guide").boundingBox();
+  await page.mouse.move(gb.x + 4, gb.y + gb.height / 2);
+  await page.waitForTimeout(550);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(80);
+  check(await card.count() === 0, "a hover card is dismissed by Escape too");
+  await away();
+
+  // Wrapped link: the card goes under the hovered line, not the last one.
+  const line1 = await link("really quite long").evaluate((el) => { const r = el.getClientRects()[0]; return { x: r.left, y: r.top, b: r.bottom }; });
+  await page.mouse.move(line1.x + 8, line1.y + 4);
+  await page.waitForTimeout(550);
+  const cb = await page.locator(".lht-card").boundingBox();
+  check(cb && cb.y - line1.b < 14 && Math.abs(cb.x - line1.x) < 4, `a wrapped link's card sits under the hovered line (card ${Math.round(cb?.y)} vs line ${Math.round(line1.b)})`);
+  await away();
+
+  // Double-click edits the text there.
+  await link("the guide").dblclick();
+  await page.waitForTimeout(250);
+  check(await editing(), "a double-click edits the link text");
+  await page.keyboard.press("Escape");
+  await page.mouse.click(4, 700);
+  await page.waitForTimeout(300);
+
+  // Keyboard: focus shows the card.
+  await link("the guide").focus();
+  await page.waitForTimeout(120);
+  check(await card.count() === 1, "a focused link shows its card (keyboard parity)");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(80);
+
+  // Near the window's bottom edge the card flips above and stays on screen.
+  await page.setViewportSize({ width: 1150, height: 520 });
+  const low = link("low link");
+  // Just above the bottom of the editing area (the status bar sits below it).
+  const viewBottom = await low.evaluate((el) => { let sc = el.parentElement; while (sc && sc.scrollHeight <= sc.clientHeight + 1) sc = sc.parentElement; sc.scrollTop += el.getBoundingClientRect().bottom - (sc.getBoundingClientRect().bottom - 8); return sc.getBoundingClientRect().bottom; });
+  await page.waitForTimeout(200);
+  const lb = await low.boundingBox();
+  await page.mouse.move(lb.x + 4, lb.y + lb.height / 2);
+  await page.waitForTimeout(550);
+  const lc = await page.locator(".lht-card").boundingBox({ timeout: 2000 }).catch(() => null);
+  check(lc && lc.y + lc.height <= lb.y + 2 && lc.y >= 0 && lb.y + lb.height > viewBottom - 52,
+    `near the bottom edge the card flips above the link (link ${Math.round(lb.y)}, card ${Math.round(lc?.y)}-${Math.round((lc?.y ?? 0) + (lc?.height ?? 0))})`);
+  await page.setViewportSize({ width: 1150, height: 760 });
 }
 
 await browser.close();

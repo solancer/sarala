@@ -673,6 +673,29 @@ await page.waitForTimeout(100);
 // which drives src/mermaid.ts directly — the editor's fast-typing choreography
 // is too racy to build a fenced diagram reliably.)
 
+// Inline HTML: an element's opening and closing tags are one reveal unit, so a
+// caret beside `<span id="x">` never shows that tag without its `</span>`
+// (it read as broken markup in a heading with a TOC anchor).
+{
+  const line = `## [Content Delivery Network](https://example.com/cdn) <span id="content-5"></span>`;
+  await page.evaluate(async (md) => (await import("/src/store.ts")).openDocument(md, "/bench/span.md"), `Intro.\n\n${line}\n\nAfter.`);
+  await page.waitForTimeout(300);
+  const shown = async (offset) => {
+    await page.evaluate(async () => (await import("/src/store.ts")).setActive(-1));
+    await page.waitForTimeout(100);
+    await page.evaluate(async (off) => { const st = await import("/src/store.ts"); st.requestCaret(off); st.setActive(1); }, offset);
+    await page.waitForTimeout(200);
+    return page.evaluate(() => [...document.querySelectorAll(".block.active .source .md-mark")]
+      .filter((m) => getComputedStyle(m).display !== "none" && /^<\/?span/.test(m.textContent)).map((m) => m.textContent));
+  };
+  const beside = await shown(line.indexOf("<span"));
+  check(beside.length === 2, `caret beside an inline HTML tag reveals both halves together (${JSON.stringify(beside)})`);
+  const away = await shown(line.indexOf("Delivery"));
+  check(away.length === 0, "and with the caret in the text, neither shows");
+  check(await page.evaluate(() => document.querySelector(".block.active .source").textContent) === line, "the live view keeps the source byte-for-byte");
+  await page.evaluate(async () => (await import("/src/store.ts")).setActive(-1));
+}
+
 await browser.close();
 kill();
 console.log(failures ? `\n${failures} FAILURES` : "\nall live-app checks passed");

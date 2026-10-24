@@ -41,19 +41,47 @@ const mark = (s: string) => `<span class="md-mark">${s}</span>`;
  */
 const tok = (html: string) => `<span class="md-tok">${html}</span>`;
 
+/** Inline HTML the live view styles (everything else stays literal text). */
+const INLINE_TAG = /^<\/?(u|kbd|mark|sub|sup|span|ruby|rt|rp|b|i|strong|em|s|del)(?:\s[^>]*)?>$/i;
+
+/** A tag's safe presentational styles (colour, weight…), as a style attribute. */
+function tagStyle(raw: string): string {
+  const element = document.createElement("template"); element.innerHTML = raw;
+  const node = element.content.firstElementChild as HTMLElement | null;
+  let style = "";
+  for (const property of ["color", "background-color", "font-weight", "font-style", "text-decoration"]) {
+    const value = node?.style.getPropertyValue(property);
+    if (value && !/url\s*\(/i.test(value)) style += `${property}:${value};`;
+  }
+  return style ? ` style="${esc(style).replace(/"/g, "&quot;")}"` : "";
+}
+
 /** Parse the original source with preview's grammar, retaining every source byte. */
 function inline(text: string): string {
   const raw = text.replace(/&(?:amp|lt|gt);/g, entity => ({ "&amp;": "&", "&lt;": "<", "&gt;": ">" })[entity]!);
   const attr = (s: string) => esc(s).replace(/"/g, "&quot;").replace(/\n/g, "&#10;");
   const generated = (source: string, value: string) => tok(`${mark(esc(source))}<span class="md-generated" data-visible="${attr(value)}"></span>`);
   const render = (tokens: Token[]): string => tokens.map((token, index) => {
-    // Pair underline tags so both delimiters share a caret-scoped token.
-    if (token.type === "html" && /^<u>$/i.test(token.raw)) {
-      const end = tokens.findIndex((t, i) => i > index && t.type === "html" && /^<\/u>$/i.test(t.raw));
+    // Pair an inline HTML tag with its closing tag so both delimiters share
+    // one caret-scoped token: they show and hide together, like ** around
+    // bold. Unpaired, a caret beside `<span id="x">` revealed that tag alone
+    // while its `</span>` stayed hidden, which reads as broken markup.
+    const open = token.type === "html" ? INLINE_TAG.exec(token.raw) : null;
+    if (open && !token.raw.startsWith("</") && !/\/>$/.test(token.raw)) {
+      const name = open[1].toLowerCase();
+      let depth = 0;
+      const end = tokens.findIndex((t, i) => {
+        if (i <= index || t.type !== "html") return false;
+        const m = INLINE_TAG.exec(t.raw);
+        if (!m || m[1].toLowerCase() !== name) return false;
+        if (!t.raw.startsWith("</")) { depth++; return false; }
+        if (depth) { depth--; return false; }
+        return true;
+      });
       if (end > index) {
         const body = tokens.splice(index + 1, end - index);
         const close = body.pop()!;
-        return tok(`${mark(esc(token.raw))}<u>${render(body)}</u>${mark(esc(close.raw))}`);
+        return tok(`${mark(esc(token.raw))}<${name}${tagStyle(token.raw)}>${render(body)}</${name}>${mark(esc(close.raw))}`);
       }
     }
     const t = token as Tokens.Generic;
@@ -91,18 +119,10 @@ function inline(text: string): string {
     }
     if (token.type === "br") return `${tok(mark(esc(raw.slice(0,-1))))}<span class="md-hard-break">\n</span>`;
     if (token.type === "html") {
-      const tag = /^<\/?(u|kbd|mark|sub|sup|span|ruby|rt|rp|b|i|strong|em|s|del)(?:\s[^>]*)?>$/i.exec(raw);
+      // An unpaired tag (its partner is in another block, or missing).
+      const tag = INLINE_TAG.exec(raw);
       if (tag) {
-        let style = "";
-        if (!raw.startsWith("</")) {
-          const element = document.createElement("template"); element.innerHTML = raw;
-          const node = element.content.firstElementChild as HTMLElement | null;
-          for (const property of ["color", "background-color", "font-weight", "font-style", "text-decoration"]) {
-            const value = node?.style.getPropertyValue(property);
-            if (value && !/url\s*\(/i.test(value)) style += `${property}:${value};`;
-          }
-        }
-        return tok(mark(esc(raw))) + `<${raw.startsWith("</") ? "/" : ""}${tag[1].toLowerCase()}${style ? ` style="${attr(style)}"` : ""}>`;
+        return tok(mark(esc(raw))) + `<${raw.startsWith("</") ? "/" : ""}${tag[1].toLowerCase()}${raw.startsWith("</") ? "" : tagStyle(raw)}>`;
       }
       if (/^<br\s*\/?>$/i.test(raw)) return tok(mark(esc(raw))) + "<br>";
       if (raw.startsWith("<!--")) return tok(mark(esc(raw)));

@@ -74,7 +74,7 @@ await page.waitForTimeout(300);
 {
   const labels = await page.locator(".set-row-label").allTextContents();
   check(
-    labels.length === 10 && labels[0] === "Preserve single line breaks" && !labels.includes("Theme"),
+    labels.length === 10 && labels[0] === "Keep single line breaks" && !labels.includes("Theme"),
     `switching category swaps the rows (${JSON.stringify(labels)})`,
   );
 }

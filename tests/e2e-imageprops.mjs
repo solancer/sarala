@@ -280,6 +280,26 @@ check(
   "clicking outside closes the panel",
 );
 
+// --- Edit mode: an image previewed inside the editable source also gets the
+// toolbar (a heading with a list and image right under it is one block, so
+// clicking the heading puts the image in edit mode) ---
+{
+  // A served file, not a data: URI: edit mode doesn't preview data: images.
+  await page.evaluate(async () => (await import("/src/store.ts")).openDocument(`## Load balancer\n- Image\n  ![](${location.origin}/docs/screenshot.png)\n- More text.`, "/bench/img-edit.md"));
+  await page.waitForTimeout(400);
+  await page.locator(".block .rendered h2").first().click();
+  await page.waitForSelector(".block.active .source img");
+  await page.waitForFunction(() => document.querySelector(".block.active .source img")?.naturalWidth > 0);
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(250);
+  const img = page.locator(".block.active .source img").first();
+  const box = await img.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(250);
+  check(await page.locator(".block.active .img-tools").isVisible(), "in edit mode, hovering a previewed image shows the toolbar");
+  check(await page.evaluate(() => document.querySelector(".block.active .source").textContent.startsWith("## Load balancer")), "and the block stays in edit mode");
+}
+
 await browser.close();
 kill();
 console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");

@@ -75,8 +75,10 @@ check(!(await page.locator(".ctx-menu").isVisible()) && (await focus()).id.start
 await page.evaluate(() => { window.__opened = []; window.open = (u) => { window.__opened.push(String(u)); return null; }; });
 await store((s) => s.openDocument("Intro.\n\nSee [the site](https://example.com) now.", "/bench/links.md"));
 await page.waitForTimeout(300);
-await page.locator(".editor .page > .block a").first().click();
-await page.waitForTimeout(150);
+// A plain click shows the link card; a double-click puts the caret in the
+// link's text for editing, where the keyboard link actions apply.
+await page.locator(".editor .page > .block a").first().dblclick();
+await page.waitForTimeout(200);
 await page.keyboard.press("Shift+F10");
 await page.waitForTimeout(200);
 const labels = await page.locator(".ctx-menu .ctx-label").allTextContents();
