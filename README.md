@@ -1,50 +1,82 @@
-<div align="left">
+<div align="center">
+
+<img src="src-tauri/icons/128x128@2x.png" alt="" width="96" height="96" />
 
 <h1>Sarala</h1>
 
-**A seamless WYSIWYG Markdown editor. No preview pane, no split view.**
+**Markdown that reads like a finished document.**
 
-The editing surface *is* the preview. Every paragraph, heading, list, quote, table, and code fence is a live block: click into one and it opens to raw Markdown, click away and it renders in place. One parser, one theme, one window: what you see while writing is exactly what exports.
+A free, open-source WYSIWYG Markdown editor for macOS, Windows and Linux.<br />
+No preview pane, no split view: the page you write *is* the page you read.
 
-<br />
-
-[![Latest release](https://img.shields.io/github/v/release/solancer/sarala?sort=semver&label=release&color=6C5CE7)](https://github.com/solancer/sarala/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/solancer/sarala?sort=semver&label=release&color=C0602F)](https://github.com/solancer/sarala/releases/latest)
 [![Build](https://github.com/solancer/sarala/actions/workflows/release.yml/badge.svg)](https://github.com/solancer/sarala/actions/workflows/release.yml)
 [![Snap Store](https://snapcraft.io/sarala/badge.svg)](https://snapcraft.io/sarala)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
-[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#build-from-source)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg?logo=tauri&logoColor=white)](https://tauri.app)
-[![SolidJS](https://img.shields.io/badge/SolidJS-2C4F7C.svg?logo=solid&logoColor=white)](https://www.solidjs.com)
+
+**[Website](https://sarala.solancer.com)** · **[Download](https://sarala.solancer.com/#download)** · [Release notes](https://github.com/solancer/sarala/releases) · [Build from source](#build-from-source)
 
 <br />
 
-<img src="screenshots/header.png" alt="Sarala: Markdown that reads like a finished document" width="820" />
+<img src="screenshots/banner.webp" alt="Three Sarala windows: a Mermaid diagram, the live editor with a table and task list, and the AI assistant proposing edits, with the voice typing pill" width="900" />
 
 </div>
 
 ---
 
-## See it
+## Why Sarala
 
-<div align="center">
+- **One page, not two.** Formatting appears the moment you type it. Click any block to edit its Markdown, click away and it renders in place.
+- **Plain files you own.** Documents are `.md` files in folders you choose. Open them anywhere, keep them in Git, sync them however you like.
+- **Private by default.** No account and no telemetry. Voice typing runs on your computer, and the AI assistant only changes what you approve.
+- **Free, with no paid tier.** GPL-3.0, built in the open.
 
-<img src="screenshots/feature.png" alt="Sarala editing a Markdown document in the light theme, with file tree and outline sidebar, a live-rendered table, and syntax-highlighted C" width="880" />
+---
 
-<sub>*Light theme: rendered tables and Shiki-highlighted code, with the file tree and outline in the sidebar.*</sub>
+## New in 1.3
 
-<br /><br />
+<table>
+<tr>
+<td width="50%" valign="top">
+<img src="screenshots/ai-assistant.webp" alt="The AI assistant proposing two edits to a Kubernetes runbook, shown as diffs with Accept and Reject" />
+<h3>AI assistant</h3>
+Ask Claude Code, OpenAI Codex or GitHub Copilot CLI to review, summarise or rewrite. Every change arrives as a word-level diff you accept or reject, and the agent works on a scratch copy, never your file. Sarala uses the agent already installed on your computer, so there are no API keys to manage.
+</td>
+<td width="50%" valign="top">
+<img src="screenshots/voice-typing.webp" alt="Voice typing: a recording pill with a live waveform while words stream into the document" />
+<h3>Voice typing, fully offline</h3>
+Hold a shortcut and talk. An open speech model on your computer turns it into text: nothing is uploaded, and there's no account. Push to talk or tap to toggle, say "new paragraph" or "scratch that", and set it all up in a minute with a live microphone check.
+</td>
+</tr>
+</table>
 
-<img src="screenshots/feature-2-dark.png" alt="Sarala in the Night theme showing a welcome document with clickable task-list checkboxes and the theme palette" width="880" />
+---
 
-<sub>*Night theme: clickable task lists, live-styled inline formatting, and the quick theme palette.*</sub>
+## A look around
 
-</div>
+<table>
+<tr>
+<td width="50%"><img src="screenshots/diagrams.webp" alt="A Mermaid flowchart of a Kubernetes request path rendered inline" /><br /><sub><b>Diagrams.</b> Mermaid and D2, rendered right in the page.</sub></td>
+<td width="50%"><img src="screenshots/math.webp" alt="Queueing-theory equations typeset with KaTeX" /><br /><sub><b>Math.</b> LaTeX typeset as you write, with KaTeX.</sub></td>
+</tr>
+<tr>
+<td><img src="screenshots/code.webp" alt="A syntax-highlighted Java Kafka producer in the Night theme, with the outline" /><br /><sub><b>Code.</b> Highlighting for 100+ languages, in your theme.</sub></td>
+<td><img src="screenshots/tables.webp" alt="A settings table, rollout checklist and warning callout in the GitHub theme" /><br /><sub><b>Tables, tasks and callouts.</b> Edit tables cell by cell, tick tasks with a click.</sub></td>
+</tr>
+<tr>
+<td><img src="screenshots/command-palette.webp" alt="The command palette listing themes" /><br /><sub><b>Command palette.</b> Every action is one <code>Cmd/Ctrl+K</code> away.</sub></td>
+<td><img src="screenshots/themes.webp" alt="The theme picker with thirteen light and dark themes" /><br /><sub><b>Themes.</b> Thirteen built in, or your own from any base16 scheme.</sub></td>
+</tr>
+</table>
 
 ---
 
 ## Install
 
-**macOS** via Homebrew:
+### macOS
+
+With [Homebrew](https://brew.sh) (no security prompt, and `brew upgrade --cask sarala` keeps it current):
 
 ```bash
 brew tap solancer/sarala https://github.com/solancer/sarala
@@ -52,27 +84,30 @@ brew trust --cask solancer/sarala/sarala
 brew install --cask --yes sarala
 ```
 
-> `brew trust` is a one-time step: Homebrew 6 refuses to load casks from third-party taps until you trust them (skip it and you get *"Refusing to load cask ... from untrusted tap"*). Older Homebrew has no `trust` command and doesn't need one. Upgrade later with `brew upgrade --cask sarala`.
+> `brew trust` is a one-time step: Homebrew 6 refuses casks from third-party taps until you trust them. Older Homebrew has no `trust` command and doesn't need one.
 
-> The universal build is ad-hoc signed (native on Apple Silicon and Intel) but not Apple-notarized. The cask clears the quarantine attribute on install, so Gatekeeper won't block the first launch.
-
-Sarala registers as an editor for `.md`, `.markdown`, and `.mdown` files on macOS. In Finder, choose **Open With → Sarala** to open a document in a tab, including when Sarala is already running. To make it the default, use **Get Info → Open with → Sarala → Change All…** after installing the updated app.
-
-**Linux** via the [Snap Store](https://snapcraft.io/sarala):
+Or download the universal `.dmg` (Apple Silicon and Intel, macOS 10.15+) from the [latest release](https://github.com/solancer/sarala/releases/latest). Sarala is ad-hoc signed but not notarized by Apple, so macOS blocks the first launch. After dragging it into Applications, run this once:
 
 ```bash
-sudo snap install sarala
+xattr -dr com.apple.quarantine /Applications/Sarala.app
 ```
 
-On Linux, Sarala opens `.md` files passed to it, so your file manager's **Open With** works too.
+(Or open it, click **Done**, then **System Settings › Privacy & Security › Open Anyway**.) Sarala registers for `.md`, `.markdown` and `.mdown`, so **Open With › Sarala** works in Finder, including when it's already running.
 
-**Everything else**: grab an installer from the [latest release](https://github.com/solancer/sarala/releases/latest):
+### Windows
 
-| Platform | Files |
+Download the installer (`.exe`) or `.msi` from the [latest release](https://github.com/solancer/sarala/releases/latest). Windows 10 and 11, 64-bit. The installer isn't code-signed yet, so if SmartScreen says **"Windows protected your PC"**, click **More info › Run anyway**.
+
+### Linux
+
+| Format | Install |
 | --- | --- |
-| **macOS** | `.dmg` (universal) |
-| **Windows** | `.exe` · `.msi` |
-| **Linux** | `.AppImage` · `.deb` · `.rpm` · [snap](https://snapcraft.io/sarala) |
+| [Snap Store](https://snapcraft.io/sarala) | `sudo snap install sarala` |
+| `.deb` (Ubuntu, Debian, Mint) | `sudo apt install ./Sarala_<version>_amd64.deb` |
+| `.rpm` (Fedora, RHEL, openSUSE) | `sudo dnf install ./Sarala-<version>-1.x86_64.rpm` |
+| `.AppImage` (any distribution) | `chmod +x Sarala_<version>_amd64.AppImage && ./Sarala_<version>_amd64.AppImage` |
+
+All from the [latest release](https://github.com/solancer/sarala/releases/latest). Sarala opens `.md` files passed to it, so your file manager's **Open With** works. In-app updates cover the AppImage, `.deb` and `.rpm`; Snap and distribution packages update through their package manager.
 
 ---
 
@@ -88,42 +123,43 @@ On Linux, Sarala opens `.md` files passed to it, so your file manager's **Open W
 
 **Content**
 
-- Full GFM: tables, task lists with clickable checkboxes, strikethrough, footnotes, GitHub alerts
-- Code fences highlighted by [Shiki](https://shiki.style), with light/dark handled through CSS variables
+- Full GFM: tables, task lists with clickable checkboxes, strikethrough, footnotes, GitHub alerts, YAML front matter
+- Code fences highlighted by [Shiki](https://shiki.style), with light and dark handled through CSS variables
 - Math via KaTeX; diagrams via [Mermaid](https://mermaid.js.org) and [D2](https://d2lang.com). A broken one keeps its last good render instead of blanking
 - Tables edit in place; hover an edge to add a row or column
-- Images resolve relative to the document, with a properties panel for size, alt, and loading behaviour
+- Images resolve relative to the document, with a properties panel for size, alt text and loading
 
 **Getting around**
 
-- Document tabs with independent edits and undo history; `Cmd/Ctrl+T` opens a tab, `Cmd/Ctrl+W` closes it, and `Ctrl+Tab` switches tabs
-
-- Sidebar with a file tree, live outline, and full-text search across the folder
-- Open Quickly (`Shift+Cmd/Ctrl+P`), find & replace, and a command palette (`Cmd/Ctrl+K`)
+- Document tabs with independent edits and undo history (`Cmd/Ctrl+T`, `Cmd/Ctrl+W`, `Ctrl+Tab`)
+- Sidebar with a live file tree, outline, and full-text search across the folder
+- Open Quickly (`Shift+Cmd/Ctrl+P`), find and replace, and a command palette (`Cmd/Ctrl+K`)
 - Focus and Typewriter modes, plus Source mode as an escape hatch to the raw document
+
+**AI assistant** (opt-in)
+
+- Works with Claude Code, OpenAI Codex or GitHub Copilot CLI, using their own sign-in; Sarala stores no keys
+- Proposals arrive block by block as word-level diffs, with Accept, Reject and Accept all; undo works as usual
+- The agent edits a scratch copy with file tools only, never your real file
 
 **Voice typing** (opt-in)
 
-- Speak and Sarala types it. Speech becomes text on your computer: no cloud, no account, no keys. One speech model is downloaded when you turn it on
-- Hold the shortcut to talk, or press once to start and again to stop; or let it type at each pause, hands-free
-- Text streams into the document as you speak; Return keeps it, Esc discards it (Cmd/Ctrl+Z brings it back)
-- One-key control: tap Right Option (Mac) / Right Ctrl to start or stop, hold it to say a command, which is never typed
-- Commands for Markdown: "new bullet …", "new heading …", "new task …", "make that bold", "make that a heading", "scratch that"; say "what can I say" for all of them
+- Speech becomes text on your computer: no cloud, no account, no keys. One model is downloaded when you turn it on
+- Hold the shortcut to talk, press once to start and again to stop, or let it type at each pause
+- Commands for Markdown: "new bullet …", "new heading …", "make that bold", "scratch that"; say "what can I say" for the rest
 - Built for people who can't easily type or see the screen: read-back through the screen reader, distinct sounds for every state, spoken punctuation, any shortcut you can reach
-- Settings > Voice, or Edit > Voice Typing
 
 **Making it yours**
 
-- 13 built-in themes, plus a **custom theme** built from any [base16](https://github.com/tinted-theming/schemes) scheme: paste one in or edit the sixteen swatches
-- Any installed system font for prose and code
-- A settings dialog for the rest: Markdown extensions, autosave, line endings, image handling
+- 13 built-in themes, plus a custom theme from any [base16](https://github.com/tinted-theming/schemes) scheme
+- Any installed font for prose and code
+- A searchable settings window for the rest: Markdown extensions, autosave, line endings, images, AI and voice
 
 **Getting it out**
 
-- HTML with an outline sidebar, and real PDF via headless Chromium (page size, margins, header/footer)
-- docx, odt, rtf, epub, LaTeX, MediaWiki, rst, Textile, OPML through [Pandoc](https://pandoc.org), with import too
-- Named export presets, and per-document YAML keys to override them
-- Atomic saves, autosave, crash recovery, and opt-in signed auto-updates
+- HTML with an outline sidebar, and real PDF via headless Chromium (page size, margins, header and footer)
+- docx, odt, rtf, epub, LaTeX, MediaWiki, rst, Textile and OPML through [Pandoc](https://pandoc.org), with import too
+- Atomic saves, autosave, crash recovery, and signed in-app updates
 
 ---
 
@@ -148,7 +184,7 @@ The menus show every accelerator inline. The ones worth learning:
 
 ## Build from source
 
-Node 18+, Rust stable, [Tauri's platform prerequisites](https://tauri.app/start/prerequisites/) (on Linux, `webkit2gtk-4.1` and friends), and CMake plus a C++ compiler for voice typing's speech engine (on Linux also `libasound2-dev`). To build without voice typing, pass `--no-default-features` to Cargo.
+Node 22+, [pnpm](https://pnpm.io), Rust stable, [Tauri's platform prerequisites](https://tauri.app/start/prerequisites/) (on Linux, `webkit2gtk-4.1` and friends), and CMake plus a C++ compiler for voice typing's speech engine (on Linux also `libasound2-dev` and `libopenblas-dev`). To build without voice typing, pass `--no-default-features` to Cargo.
 
 ```bash
 pnpm install
@@ -168,13 +204,13 @@ Three decisions shape everything else:
 
 **One render pipeline.** The same `renderMarkdown()` draws editor blocks and the HTML export, so what you see and what you ship cannot drift apart.
 
-**Rust holds the filesystem, not the logic.** The backend does directory walks, atomic saves, and the Pandoc bridge; the native menu forwards item ids as events. Every editing decision lives in one frontend command bus shared by the menus, the shortcuts, and the command palette.
+**Rust holds the filesystem, not the logic.** The backend does directory walks, atomic saves, the Pandoc bridge and the speech engine; the native menu forwards item ids as events. Every editing decision lives in one frontend command bus shared by the menus, the shortcuts and the command palette.
 
 ---
 
 ## Releasing
 
-`pnpm release 0.2.0 --push` bumps the manifests, tags, and pushes; CI builds and signs for all three platforms, publishes the release, and updates the manifest existing installs check. Details in [RELEASING.md](RELEASING.md).
+`pnpm release X.Y.Z` bumps the manifests and tags; pushing the tag makes CI build and sign for all three platforms, publish the release, and update the manifest existing installs check. Details in [RELEASING.md](RELEASING.md).
 
 ## License
 
