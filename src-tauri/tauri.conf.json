@@ -49,13 +49,17 @@
     "linux": {
       "deb": {
         "depends": [
-          "libasound2"
-        ]
+          "libasound2",
+          "libopenblas0"
+        ],
+        "desktopTemplate": "linux/sarala.desktop"
       },
       "rpm": {
         "depends": [
-          "alsa-lib"
-        ]
+          "alsa-lib",
+          "libopenblas.so.0()(64bit)"
+        ],
+        "desktopTemplate": "linux/sarala.desktop"
       }
     }
   },

@@ -87,6 +87,7 @@ jobs:
             libappindicator3-dev \
             libwayland-dev \
             libasound2-dev \
+            libopenblas-dev \
             cmake \
             patchelf
 
@@ -120,10 +121,33 @@ jobs:
           # reads TRANSCRIBE_CMAKE_ARGS directly (confirmed locally: a bare
           # MACOSX_DEPLOYMENT_TARGET env var does NOT reach its cmake::Config);
           # ignored by CMake on non-Apple platforms, so harmless on Linux/Windows.
-          TRANSCRIBE_CMAKE_ARGS: "-DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_AVX512=OFF -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15"
+          # BLA_VENDOR (Linux): the speech decoder calls cblas_sgemv. Left to
+          # probe, CMake linked whatever libblas.so.3 the runner had, which the
+          # .deb didn't declare and which Arch/Fedora's reference BLAS doesn't
+          # export (CBLAS is a separate library there). libopenblas.so.0 always
+          # has CBLAS and exists under that name on every major distro.
+          TRANSCRIBE_CMAKE_ARGS: "-DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_AVX512=OFF -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15${{ matrix.platform == 'ubuntu-22.04' && ' -DBLA_VENDOR=OpenBLAS' || '' }}"
         with:
           releaseId: ${{ needs.create-release.outputs.id }}
           args: ${{ matrix.args }}
+
+      # The packages must only need libraries they declare. Runs after upload,
+      # but a failure here still blocks update-gist, so no updater feed points
+      # installs at a broken build.
+      - name: Check the Linux packages' library dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          bin=src-tauri/target/release/sarala
+          needed=$(readelf -d "$bin" | sed -n 's/.*Shared library: \[\(.*\)\]/\1/p')
+          echo "$needed"
+          echo "$needed" | grep -qx libopenblas.so.0 \
+            || { echo "::error::sarala doesn't link libopenblas.so.0 (voice decoding falls back to a slow loop)"; exit 1; }
+          if echo "$needed" | grep -qx libblas.so.3; then
+            echo "::error::sarala links libblas.so.3, which the packages don't declare"; exit 1
+          fi
+          deb=$(ls src-tauri/target/release/bundle/deb/*.deb)
+          dpkg-deb -f "$deb" Depends | tee /dev/stderr | grep -q libopenblas0
+          dpkg-deb --fsys-tarfile "$deb" | tar -xO --wildcards '*usr/share/applications/*.desktop' | tee /dev/stderr | grep -q '^MimeType=text/markdown'
 
   # The updater endpoint in tauri.conf.json points at a gist, so mirror the
   # latest.json that tauri-action attached to the release into that gist. Runs

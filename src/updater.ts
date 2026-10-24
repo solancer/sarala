@@ -1,6 +1,6 @@
 import { createSignal } from "solid-js";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { isTauri, isFlatpak, isMac, alertDialog, relaunchApp } from "./platform";
+import { isTauri, isFlatpak, isMac, alertDialog, relaunchApp, canSelfUpdate } from "./platform";
 
 /**
  * Auto-updater flow. On launch the app silently checks the updater endpoint (a
@@ -14,7 +14,8 @@ import { isTauri, isFlatpak, isMac, alertDialog, relaunchApp } from "./platform"
  * `app.restart()` so the new version takes effect.
  *
  * Browser-mode (`pnpm dev`) has no updater: the manual entry just says so. The
- * Flatpak build (isFlatpak) also opts out — Flathub delivers its own updates.
+ * Flatpak build (isFlatpak) also opts out — Flathub delivers its own updates —
+ * as does a Linux install owned by the system package manager (canSelfUpdate).
  */
 export type UpdatePhase =
   | { kind: "idle" }
@@ -89,6 +90,17 @@ async function runCheck(silent: boolean): Promise<void> {
     if (!silent) {
       await alertDialog(
         "Sarala was installed via Flathub — updates are delivered through your software center.",
+        "Update",
+      );
+    }
+    return;
+  }
+  // Likewise for a snap, an AUR package or a distro build: snapd, pacman or
+  // apt/dnf owns the binary.
+  if (!(await canSelfUpdate())) {
+    if (!silent) {
+      await alertDialog(
+        "This copy of Sarala is managed by your system (the Snap Store, the AUR or your distribution), so updates arrive through it.",
         "Update",
       );
     }
