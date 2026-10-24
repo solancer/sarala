@@ -475,8 +475,15 @@ fn save_file(
 /// version: the frontend drives check/download/install (via the JS updater
 /// plugin) and then calls this so the swap takes effect. `restart()` diverges
 /// (it never returns — it re-execs the process), so this command has no result.
+///
+/// Called on the main thread, `restart()` exits without a `RunEvent::Exit`, so
+/// free the speech model here first, or ggml's exit-time check aborts the old
+/// process ("Sarala quit unexpectedly" right after every update).
 #[tauri::command]
 fn relaunch(app: AppHandle) {
+    if let Some(voice) = app.try_state::<voice::VoiceState>() {
+        voice.shutdown();
+    }
     app.restart();
 }
 

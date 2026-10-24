@@ -908,6 +908,52 @@ mod live {
     use super::*;
     use std::sync::mpsc;
 
+    /// Quitting with a model loaded must exit cleanly. ggml's Metal device is a
+    /// C++ static whose destructor (run by `exit()`) aborts if any buffer is
+    /// still allocated, which crashed every quit after a dictation. Each case
+    /// runs in a child process, since it ends in `exit()`:
+    /// `VOICE_TEST_MODEL=/path/model.gguf cargo test -- --ignored quit_with_model_loaded`
+    #[test]
+    #[ignore]
+    fn quit_with_model_loaded() {
+        let model = std::env::var("VOICE_TEST_MODEL").expect("VOICE_TEST_MODEL");
+        if let Ok(mode) = std::env::var("SARALA_QUIT_CASE") {
+            let (etx, erx) = mpsc::channel();
+            let engine = engine::Engine::spawn(Arc::new(move |e| {
+                let _ = etx.send(e);
+            }))
+            .unwrap();
+            engine.send(engine::Cmd::Load { id: "t".into(), path: model.into() });
+            loop {
+                match erx.recv_timeout(std::time::Duration::from_secs(60)).unwrap() {
+                    VoiceEvent::Loaded { .. } => break,
+                    VoiceEvent::Error { message } => panic!("{message}"),
+                    _ => {}
+                }
+            }
+            let state = VoiceState {
+                engine: Mutex::new(Some(engine)),
+                ..Default::default()
+            };
+            if mode == "shutdown" {
+                state.shutdown();
+            } else {
+                std::mem::forget(state); // what quitting did before the fix
+            }
+            std::process::exit(0);
+        }
+        let run = |mode: &str| {
+            std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--ignored", "--exact", "voice::live::quit_with_model_loaded"])
+                .env("SARALA_QUIT_CASE", mode)
+                .output()
+                .unwrap()
+                .status
+        };
+        assert!(!run("keep").success(), "without shutdown the exit should abort (test can't see the bug)");
+        assert!(run("shutdown").success(), "quitting after shutdown() must exit cleanly");
+    }
+
     #[test]
     #[ignore]
     fn live_microphone() {
