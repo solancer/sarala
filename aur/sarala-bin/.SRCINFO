@@ -1,0 +1,20 @@
+pkgbase = sarala-bin
+	pkgdesc = A seamless WYSIWYG Markdown editor
+	pkgver = 1.3.1
+	pkgrel = 1
+	url = https://github.com/solancer/sarala
+	arch = x86_64
+	license = GPL-3.0-or-later
+	depends = webkit2gtk-4.1
+	depends = gtk3
+	depends = alsa-lib
+	depends = openblas
+	depends = hicolor-icon-theme
+	provides = sarala
+	conflicts = sarala
+	options = !strip
+	options = !debug
+	source_x86_64 = https://github.com/solancer/sarala/releases/download/v1.3.1/Sarala_1.3.1_amd64.deb
+	sha256sums_x86_64 = 68d7e8917494843c0f9548cb8325aa3ecfcd2403a2835f9a0acc7c21f34ca9be
+
+pkgname = sarala-bin

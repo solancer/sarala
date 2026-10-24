@@ -1358,13 +1358,19 @@ fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building Sarala")
-        .run(|_app, _event| {
-            #[cfg(target_os = "macos")]
-            match _event {
-                tauri::RunEvent::Opened { urls } => file_open::opened(_app, urls),
-                tauri::RunEvent::Ready => file_open::ready(_app),
-                _ => {}
+        .run(|_app, _event| match _event {
+            // Runs before the process exits (on macOS, from
+            // applicationWillTerminate, ahead of AppKit's exit()).
+            tauri::RunEvent::Exit => {
+                if let Some(voice) = _app.try_state::<voice::VoiceState>() {
+                    voice.shutdown();
+                }
             }
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Opened { urls } => file_open::opened(_app, urls),
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Ready => file_open::ready(_app),
+            _ => {}
         });
 }
 

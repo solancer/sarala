@@ -46,6 +46,10 @@ pub enum Cmd {
     Cancel,
     /// Unload after this long without use (None: keep loaded).
     SetIdle(Option<Duration>),
+    /// Free the model and end the thread, then acknowledge. Sent when the app
+    /// quits: the model's Metal buffers must be released before `exit()` runs
+    /// ggml's static destructors, which abort if any are still allocated.
+    Shutdown(mpsc::Sender<()>),
 }
 
 pub struct Engine {
@@ -102,6 +106,7 @@ struct Worker {
     load_error: Option<String>,
     idle: Option<Duration>,
     last_used: Instant,
+    stopping: bool,
 }
 
 /// Previews of a non-streaming model are skipped past this much audio; the
@@ -116,6 +121,7 @@ impl Worker {
             load_error: None,
             idle: Some(Duration::from_secs(5 * 60)),
             last_used: Instant::now(),
+            stopping: false,
         }
     }
 
@@ -139,6 +145,9 @@ impl Worker {
                 },
             };
             self.handle(cmd, &rx);
+            if self.stopping {
+                return;
+            }
         }
     }
 
@@ -162,6 +171,11 @@ impl Worker {
                 }
             }
             Cmd::SetIdle(d) => self.idle = d,
+            Cmd::Shutdown(done) => {
+                self.loaded = None;
+                self.stopping = true;
+                let _ = done.send(());
+            }
             // Strays from a dictation that was already cancelled.
             Cmd::Feed(_) | Cmd::Cancel => {}
             Cmd::Finish(reply) | Cmd::Commit(reply) => {
@@ -269,7 +283,10 @@ impl Worker {
 
 /// Keep commands that must not be lost during a dictation for afterwards.
 fn defer(cmd: Cmd, deferred: &mut Vec<Cmd>) {
-    if matches!(cmd, Cmd::Load { .. } | Cmd::Unload | Cmd::SetIdle(_)) {
+    if matches!(
+        cmd,
+        Cmd::Load { .. } | Cmd::Unload | Cmd::SetIdle(_) | Cmd::Shutdown(_)
+    ) {
         deferred.push(cmd);
     }
 }
