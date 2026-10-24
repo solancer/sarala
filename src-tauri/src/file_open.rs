@@ -14,7 +14,19 @@ pub struct FileOpenRequests {
 }
 
 impl FileOpenRequests {
-    #[cfg(any(target_os = "macos", test))]
+    /// Linux and Windows launchers pass documents as arguments (`Exec=sarala %F`
+    /// in the .desktop entry) rather than as an OS event, so queue them for the
+    /// main window up front.
+    #[cfg(not(target_os = "macos"))]
+    pub fn from_args(args: impl IntoIterator<Item = std::ffi::OsString>) -> Self {
+        let requests = Self::default();
+        let paths = launch_paths(args);
+        if !paths.is_empty() {
+            requests.push("main", paths);
+        }
+        requests
+    }
+
     fn push(&self, label: &str, paths: Vec<String>) {
         self.pending
             .lock()
@@ -31,6 +43,18 @@ impl FileOpenRequests {
             .remove(label)
             .unwrap_or_default()
     }
+}
+
+/// The existing files among the launch arguments, as absolute paths. Flags and
+/// anything that isn't a file (a typo, a GTK option) are ignored.
+#[cfg(any(not(target_os = "macos"), test))]
+fn launch_paths(args: impl IntoIterator<Item = std::ffi::OsString>) -> Vec<String> {
+    args.into_iter()
+        .map(std::path::PathBuf::from)
+        .filter(|p| !p.to_string_lossy().starts_with('-') && p.is_file())
+        .filter_map(|p| std::fs::canonicalize(p).ok())
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect()
 }
 
 #[cfg(target_os = "macos")]
@@ -98,7 +122,27 @@ pub fn opened(app: &tauri::AppHandle, urls: Vec<tauri::Url>) {
 
 #[cfg(test)]
 mod tests {
-    use super::FileOpenRequests;
+    use super::{launch_paths, FileOpenRequests};
+
+    #[test]
+    fn launch_arguments_keep_only_existing_files() {
+        let dir = std::env::temp_dir().join(format!("sarala-args-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("notes one.md");
+        std::fs::write(&file, "# Hi").unwrap();
+        let args = [
+            file.clone().into_os_string(),
+            "--gtk-flag".into(),
+            dir.join("missing.md").into_os_string(),
+            dir.clone().into_os_string(),
+        ];
+        let expected = std::fs::canonicalize(&file).unwrap();
+        assert_eq!(
+            launch_paths(args),
+            vec![expected.to_string_lossy().into_owned()]
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn retains_startup_requests_in_order_and_delivers_once_to_target_window() {

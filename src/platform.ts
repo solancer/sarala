@@ -390,6 +390,14 @@ export async function setMenuEnabled(id: string, enabled: boolean): Promise<void
   await invoke("set_menu_enabled", { id, enabled }).catch(() => {});
 }
 
+/** False when something else owns this install (a snap, an AUR package, a
+ *  distro build), so the in-app updater can't replace it. See can_self_update. */
+export async function canSelfUpdate(): Promise<boolean> {
+  if (!isTauri) return false;
+  const { invoke } = await tauriCore();
+  return invoke<boolean>("can_self_update").catch(() => true);
+}
+
 /** Restart the app (Rust `app.restart()`); used after an update installs. */
 export async function relaunchApp(): Promise<void> {
   if (!isTauri) return;

@@ -64,6 +64,8 @@ Sarala registers as an editor for `.md`, `.markdown`, and `.mdown` files on macO
 sudo snap install sarala
 ```
 
+On Linux, Sarala opens `.md` files passed to it, so your file manager's **Open With** works too.
+
 **Everything else**: grab an installer from the [latest release](https://github.com/solancer/sarala/releases/latest):
 
 | Platform | Files |

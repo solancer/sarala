@@ -1,0 +1,21 @@
+# Maintainer: Srinivas Gowda
+# Repackages the release .deb. Bump with aur/update.sh after each release.
+pkgname=sarala-bin
+_pkgname=sarala
+pkgver=1.3.1
+pkgrel=1
+pkgdesc="A seamless WYSIWYG Markdown editor"
+arch=('x86_64')
+url="https://github.com/solancer/sarala"
+license=('GPL-3.0-or-later')
+# openblas: voice typing's decoder calls CBLAS through libopenblas.so.0.
+depends=('webkit2gtk-4.1' 'gtk3' 'alsa-lib' 'openblas' 'hicolor-icon-theme')
+provides=("$_pkgname")
+conflicts=("$_pkgname")
+options=('!strip' '!debug')
+source_x86_64=("$url/releases/download/v$pkgver/Sarala_${pkgver}_amd64.deb")
+sha256sums_x86_64=('SKIP')
+
+package() {
+  bsdtar -xf data.tar.gz -C "$pkgdir"
+}

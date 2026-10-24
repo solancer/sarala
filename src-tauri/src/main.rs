@@ -480,6 +480,42 @@ fn relaunch(app: AppHandle) {
     app.restart();
 }
 
+/// Whether the in-app updater can replace this install. On Linux the updater
+/// picks its installer from the bundle type baked into the binary: a .deb runs
+/// `dpkg -i`, an .rpm `rpm -U`, anything else is swapped like an AppImage. That
+/// only holds when the package manager the binary was built for actually owns
+/// it, so a snap (built from the .deb, but snapd owns it), an AUR package
+/// repacked from the .deb (no dpkg on Arch) or a distro build from source must
+/// leave updates to whatever installed it.
+#[tauri::command]
+fn can_self_update() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        use tauri::utils::{config::BundleType, platform::bundle_type};
+        let Ok(exe) = std::env::current_exe() else {
+            return false;
+        };
+        // `dpkg -S` / `rpm -qf` succeed only for a file the package database owns.
+        let owned_by = |cmd: &str, flag: &str| {
+            std::process::Command::new(cmd)
+                .arg(flag)
+                .arg(&exe)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success())
+        };
+        match bundle_type() {
+            Some(BundleType::AppImage) => std::env::var_os("APPIMAGE").is_some(),
+            Some(BundleType::Deb) => owned_by("dpkg", "-S"),
+            Some(BundleType::Rpm) => owned_by("rpm", "-qf"),
+            _ => false,
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    true
+}
+
 #[tauri::command]
 fn new_window(app: AppHandle) -> Result<(), String> {
     let label = format!(
@@ -1163,7 +1199,13 @@ fn font_faces_b64(family: String) -> Result<Vec<FontFace>, String> {
 
 fn main() {
     tauri::Builder::default()
-        .manage(file_open::FileOpenRequests::default())
+        .manage({
+            #[cfg(target_os = "macos")]
+            let requests = file_open::FileOpenRequests::default();
+            #[cfg(not(target_os = "macos"))]
+            let requests = file_open::FileOpenRequests::from_args(std::env::args_os().skip(1));
+            requests
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -1252,6 +1294,7 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            can_self_update,
             file_open::take_open_files,
             watch_tree,
             read_file,
