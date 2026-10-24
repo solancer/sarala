@@ -1,6 +1,6 @@
 cask "sarala" do
-  version "1.3.0"
-  sha256 "1a40ba574e90a35e76dad7f5d566457553d4a9ecf2461739630e9f513bae8b9a"
+  version "1.3.1"
+  sha256 "3866c69abf9f0878c69bdd6bef0b8608a5bc9e3e49e5850400d1b6500bb12742"
 
   url "https://github.com/solancer/sarala/releases/download/v#{version}/Sarala_#{version}_universal.dmg"
   name "Sarala"
