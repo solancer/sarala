@@ -202,7 +202,11 @@
 .voice-hud-icon .voice-mic { width: 17px; height: 17px; }
 .voice-shortcut { display: grid; gap: 4px; justify-items: end; }
 .voice-shortcut-row { display: flex; gap: 4px; align-items: center; }
-.voice-shortcut-row .ghost-btn { min-width: 72px; min-height: 30px; }
+/* "Record…" is a button, so it looks like one (it read as a link). */
+.voice-shortcut-row .ghost-btn {
+  min-width: 72px; min-height: 30px; padding: 0 10px;
+  border: 1px solid var(--rule); border-radius: 7px; color: var(--ink);
+}
 .voice-shortcut-msg { color: var(--ink-soft); font-size: 11.5px; line-height: 1.45; max-width: 260px; text-align: right; }
 .voice-shortcut-msg:empty { display: none; }
 .voice-shortcut button[aria-pressed="true"] { outline: 2px solid var(--accent); }

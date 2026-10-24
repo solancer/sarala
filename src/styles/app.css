@@ -2275,7 +2275,17 @@ body.tables-full .rendered table { width: 100%; }
   font: var(--fw-regular) 13px var(--font-ui);
   cursor: pointer;
 }
+.set-rail-item { display: flex; align-items: center; gap: 9px; }
+.set-rail-ic { width: 16px; height: 16px; flex: none; color: var(--ink-soft); }
+.set-rail-item.on .set-rail-ic { color: inherit; }
 .set-rail-item:hover { background: var(--tint); }
+/* Page header: the page's icon and name, so you always know where you are. */
+.set-page-head { display: flex; align-items: center; gap: 10px; margin: 14px 4px 2px; }
+.set-page-ic {
+  width: 30px; height: 30px; padding: 6px; flex: none; box-sizing: border-box;
+  border-radius: 8px; background: var(--accent-soft); color: var(--accent);
+}
+.set-page-title { margin: 0; font: var(--fw-semibold) 17px var(--font-ui); color: var(--ink); }
 .set-rail-item.on {
   background: var(--select-soft, var(--accent-soft));
   color: var(--select, var(--accent));
@@ -2289,19 +2299,32 @@ body.tables-full .rendered table { width: 100%; }
   border-bottom: 1px solid var(--rule);
 }
 .set-pane-head .settings-search { flex: 1; margin: 0; }
-.set-body { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 16px 18px; }
+.set-body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 20px 24px; }
+/* Readable line length on wide windows (Fluent: constrained max width). */
+.set-body > * { max-width: 640px; margin-inline: auto; }
 .set-group { position: static; background: transparent; padding-top: 14px; }
 /* A titled group of rows inside a section (Settings > Voice). */
 .set-subhead {
-  margin: 18px 0 2px;
-  padding: 0 0 6px;
+  margin: 20px 4px 0;
+  padding: 0 0 7px;
   color: var(--ink-soft);
   font: var(--fw-semibold) 11px var(--font-ui);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.set-subhead:first-child { margin-top: 4px; }
-
+.set-section:first-child .set-subhead { margin-top: 8px; }
+/* Boxed list (GNOME HIG, Fluent settings cards, macOS grouped form): a group
+   of related rows in one rounded box, divided by hairlines. */
+.set-section + .set-section .set-card { margin-top: 0; }
+.set-card {
+  margin-top: 8px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 2.5%, var(--bg-page));
+}
+.set-subhead + .set-card { margin-top: 0; }
+.set-card .set-row { padding: 11px 14px; }
+.set-card .set-row:last-child { border-bottom: 0; }
 /* A row is label + description on the left, control on the right. The control
    column is fixed so switches and selects line up down the pane instead of
    tracking each row's text length. */
@@ -2312,8 +2335,8 @@ body.tables-full .rendered table { width: 100%; }
 }
 .set-row:last-child { border-bottom: 0; }
 .set-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.set-row-label { font: var(--fw-semibold) 13px var(--font-ui); color: var(--ink); }
-.set-row-desc { font-size: 11.5px; line-height: 1.45; color: var(--ink-soft); }
+.set-row-label { font: var(--fw-medium) 13px var(--font-ui); color: var(--ink); }
+.set-row-desc { font-size: 12px; line-height: 1.4; color: color-mix(in srgb, var(--ink-soft) 80%, var(--ink)); }
 .set-row-ctl { flex: none; display: flex; align-items: center; justify-content: flex-end; min-width: 148px; }
 .set-row-ctl .ip-input { width: 148px; }
 
@@ -2346,6 +2369,16 @@ body.tables-full .rendered table { width: 100%; }
 }
 .set-stepper > button:hover { border-color: var(--accent); color: var(--accent); }
 .set-stepper > span { min-width: 42px; text-align: center; font-variant-numeric: tabular-nums; }
+/* Text buttons in a settings row ("Browse themes…", "Set up…", "Change…",
+   "Remove", "Record…") look like buttons, one style for all: borderless text
+   there read as a label, not a control. Icon-only buttons stay plain. */
+.set-card .ghost-btn:not(.voice-icon-btn) {
+  min-height: 28px; padding: 0 10px;
+  border: 1px solid var(--rule); border-radius: 7px;
+  background: var(--bg-page); color: var(--ink);
+  font: var(--fw-medium) 12px var(--font-ui);
+}
+.set-card .ghost-btn:not(.voice-icon-btn):hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: var(--bg-page); }
 .set-stepper .set-reset { width: auto; padding: 0 8px; font-size: 11px; }
 .set-font-search { margin-top: 10px; }
 
@@ -2568,6 +2601,9 @@ body.tables-full .rendered table { width: 100%; }
   padding-top: 6px;
   animation: ov-rise var(--dur-2) var(--ease-out);
 }
+/* Near the window's bottom edge the card sits above the link; the hit-area
+   padding then bridges the gap downward instead. */
+.link-tools.above { padding-top: 0; padding-bottom: 6px; }
 .lht-card {
   background: var(--bg-page);
   border: 1px solid var(--rule);
@@ -3250,19 +3286,33 @@ body.tables-full .rendered table { width: 100%; }
 .settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .settings-head h2 { margin: 0; font: var(--fw-bold) 18px var(--font-ui); }
 .settings-head .primary { color: var(--accent); font-weight: var(--fw-semibold); }
-.settings-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
-.settings-tabs button {
-  flex: 1;
-  padding: 6px 0;
-  font: var(--fw-semibold) 12px var(--font-ui);
-  color: var(--ink-soft);
-  background: var(--tint);
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  cursor: pointer;
+/* Fonts page, in the same language as the rest of Settings: a segmented
+   switch (like Shortcut behaviour), the current font as a boxed row with a
+   real Reset button, and the list in a box. */
+.settings-tabs {
+  display: flex; width: fit-content; gap: 2px; padding: 2px; margin: 10px 0 12px;
+  border: 1px solid var(--rule); border-radius: 9px;
+  background: color-mix(in srgb, var(--ink) 5%, var(--bg-page));
 }
-.settings-tabs button.on { color: var(--bg-page); background: var(--accent); border-color: var(--accent); }
-.settings-current { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: var(--fw-regular) 12px var(--font-ui); color: var(--ink-soft); margin-bottom: 10px; }
+.settings-tabs button {
+  padding: 5px 14px; border: 0; border-radius: 7px; background: none; cursor: pointer;
+  font: var(--fw-medium) 12px var(--font-ui); color: var(--ink-soft);
+}
+.settings-tabs button:hover { color: var(--ink); }
+.settings-tabs button.on { background: var(--bg-page); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+.settings-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.settings-current {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 10px 14px; margin-bottom: 10px;
+  border: 1px solid var(--rule); border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 2.5%, var(--bg-page));
+  font: var(--fw-regular) 13px var(--font-ui); color: var(--ink-soft);
+}
+.settings-current .ghost-btn {
+  min-height: 28px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 7px;
+  background: var(--bg-page); color: var(--ink); font: var(--fw-medium) 12px var(--font-ui);
+}
+.settings-current .ghost-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .settings-current strong { color: var(--ink); font-weight: var(--fw-semibold); }
 .settings-search {
   width: 100%;
@@ -3276,8 +3326,14 @@ body.tables-full .rendered table { width: 100%; }
   margin-bottom: 8px;
 }
 .settings-search:focus { border-color: var(--select); }
-.settings-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+.settings-list {
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column; margin-top: 10px; padding: 4px;
+  border: 1px solid var(--rule); border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 2.5%, var(--bg-page));
+}
+.settings-list:has(.settings-empty, .settings-loading) { border: 0; background: none; }
 .settings-font {
+  border-radius: 6px;
   text-align: left;
   padding: 7px 10px;
   font-size: 16px;

@@ -23,7 +23,7 @@ import {
   platformInfo, privacySettingsAction, setSetupOpen, setupOpen, shortcutSeenAt, voiceSupported,
 } from "../voice/session";
 import { VoiceDeviceRow, VoiceShortcutRow, VoiceTriggerRow } from "./VoiceSettings";
-import { openSettings } from "./SettingsModal";
+import { closeSettings, isSettingsOpen, openSettings } from "./SettingsModal";
 import { formatSize, voiceBackend, type VoiceModel } from "../voice/transport";
 
 type Step = "language" | "mic" | "shortcut" | "try";
@@ -85,8 +85,13 @@ export default function VoiceSetup() {
   const installed = () => !!current()?.installed || (dl().state === "done" && (dl() as { model: string }).model === chosen());
   const downloading = () => dl().state === "running";
 
+  // Opened from Settings: take its place rather than stacking a dialog on a
+  // dialog, and hand back to Settings > Voice when done.
+  let backToSettings = false;
   createEffect(on(setupOpen, (isOpen) => {
     if (!isOpen) return;
+    backToSettings = isSettingsOpen();
+    if (backToSettings) closeSettings();
     setStep("language");
     setLang(voiceLanguage() || "auto");
     setChosen(voiceModel() || recommendedFor(voiceLanguage() || "auto"));
@@ -104,6 +109,7 @@ export default function VoiceSetup() {
     void stopMicTest();
     if (downloading()) void voiceBackend().then((b) => b.cancelDownload());
     setSetupOpen(false);
+    if (backToSettings) { backToSettings = false; openSettings("voice"); }
   }
 
   /* ---------- step 1: language and model ---------- */
@@ -582,7 +588,7 @@ export default function VoiceSetup() {
                     </p>
                   </Show>
                   <div class="voice-setup-actions">
-                    <button class="pandoc-btn ghost" onClick={() => { close(); openSettings("voice"); }}>More options</button>
+                    <button class="pandoc-btn ghost" onClick={() => { backToSettings = true; close(); }}>More options</button>
                     <button class="pandoc-btn primary" onClick={close}>Done</button>
                   </div>
                 </Match>

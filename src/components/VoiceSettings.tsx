@@ -68,7 +68,7 @@ export function VoiceDeviceRow() {
  * the chosen one does. A radio group (arrow keys move and choose, like the
  * native control), shown as a segmented switch.
  */
-export function VoiceTriggerRow() {
+export function VoiceTriggerRow(props: { compact?: boolean }) {
   const pick = (v: string) => void setVoiceTrigger(v as TriggerMode);
   const onKey = (e: KeyboardEvent) => {
     const i = TRIGGER_OPTIONS.findIndex((o) => o.value === voiceTrigger());
@@ -85,7 +85,7 @@ export function VoiceTriggerRow() {
         <For each={TRIGGER_OPTIONS}>
           {(o) => (
             <button
-              role="radio" class="voice-seg-btn" aria-checked={voiceTrigger() === o.value}
+              role="radio" class="voice-seg-btn" aria-checked={voiceTrigger() === o.value} title={o.desc}
               tabIndex={voiceTrigger() === o.value ? 0 : -1} onClick={() => pick(o.value)}
             >
               {o.label}
@@ -93,7 +93,11 @@ export function VoiceTriggerRow() {
           )}
         </For>
       </div>
-      <span class="voice-trigger-desc">{TRIGGER_OPTIONS.find((o) => o.value === voiceTrigger())?.desc}</span>
+      {/* In Settings the row's own description covers it; each choice explains
+          itself on hover. The set-up shows the chosen one's line. */}
+      <Show when={!props.compact}>
+        <span class="voice-trigger-desc">{TRIGGER_OPTIONS.find((o) => o.value === voiceTrigger())?.desc}</span>
+      </Show>
     </div>
   );
 }

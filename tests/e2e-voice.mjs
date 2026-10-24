@@ -739,14 +739,36 @@ const on = { settings: { voiceEnabled: true, voiceModel: "parakeet-en", aiEnable
   // Settings: push to talk as a segmented radio group.
   await page.evaluate(async () => (await import("/src/commands.ts")).executeCommand("app.settings"));
   await page.locator(".set-rail-item", { hasText: "Voice" }).click();
-  check(await page.locator(".set-subhead").allTextContents().then((t) => t.join("|") === "General|Microphone & sound|Speech|Storage"), "Settings > Voice is grouped");
+  // Grouped boxes (boxed lists); less-used options in an Advanced group,
+  // always open (the people using this are technical).
+  check(await page.locator(".set-subhead").allTextContents().then((t) => t.map((x) => x.trim()).join("|") === "General|Microphone & sound|Speech|Advanced"), "Settings > Voice is grouped, with an Advanced group");
+  check(await page.locator('select[aria-label="Command key"]').count() === 1, "Advanced is open, not folded away");
+  check(await page.locator(".set-page-head .set-page-title").textContent() === "Voice" && await page.locator(".set-rail-item .set-rail-ic").count() === 8, "each page has a titled header, and the rail has an icon per page");
   const seg = page.locator('[role="radiogroup"][aria-label="Shortcut behaviour"]');
   check(await seg.locator('[role="radio"][aria-checked="true"]').textContent() === "Hold or tap", "push to talk defaults to hold or tap");
   await seg.locator('[role="radio"]', { hasText: "Hold to talk" }).click();
   await page.keyboard.press("ArrowRight");
   await page.waitForTimeout(400);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("sarala.settings")).voiceTrigger);
-  check(saved === "toggle" && /No holding/.test(await page.locator(".voice-trigger-desc").textContent()), `arrow keys move the choice, it is saved, and its line explains it (${saved})`);
+  check(saved === "toggle" && /No holding/.test(await seg.locator('[role="radio"][aria-checked="true"]').getAttribute("title")), `arrow keys move the choice, it is saved, and the choice explains itself (${saved})`);
+
+  // Rows that don't apply are hidden; toggling keeps focus on the switch.
+  const sw = page.locator('[role="switch"][aria-label="Voice typing"]');
+  await sw.focus();
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(300);
+  check(await page.locator(".set-card .set-row").count() === 2, "with voice typing off, only Voice typing and Mic button are shown");
+  check(await page.evaluate(() => document.activeElement?.getAttribute("aria-label")) === "Voice typing", "and focus stays on the switch");
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(300);
+
+  // The set-up replaces Settings instead of stacking on it, then hands back.
+  await page.locator(".set-card button", { hasText: "Change…" }).click();
+  await page.waitForSelector(".voice-setup");
+  check(await page.locator(".settings").count() === 0, "the voice set-up replaces Settings rather than stacking a dialog on it");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(250);
+  check(await page.locator(".settings").count() === 1 && await page.locator('.set-rail-item[aria-current="page"]').textContent() === "Voice", "closing it returns to Settings > Voice");
   await page.close();
 }
 
