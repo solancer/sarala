@@ -2,7 +2,7 @@ name: Release
 
 # Cut a release by pushing a tag: `git push origin main vX.Y.Z`
 # (use `pnpm release X.Y.Z` to bump + tag for you). The matrix builds and signs
-# on each OS, creates the GitHub Release with the updater artifacts, and the
+# on each OS and uploads to one GitHub Release (created up front), and the
 # final job pushes the generated latest.json to the updater gist.
 on:
   push:
@@ -13,7 +13,29 @@ permissions:
   contents: write
 
 jobs:
+  # Create the release once, before the matrix. Left to tauri-action, each
+  # platform job looks the release up and creates it if missing, so parallel
+  # jobs raced and v1.3.0 ended up as two releases with the Windows assets and
+  # its updater entries on the hidden one. Re-running the workflow reuses it.
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      id: ${{ steps.release.outputs.id }}
+    steps:
+      - id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "Sarala $TAG" \
+              --notes "See the assets below to download and install this version."
+          fi
+          echo "id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .id)" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -80,7 +102,7 @@ jobs:
         # release build fails to link without this, succeeds with it.
         run: echo "RUSTFLAGS=-C link-arg=$(clang -print-file-name=libclang_rt.osx.a)" >> "$GITHUB_ENV"
 
-      - name: Build, sign, and create the GitHub Release
+      - name: Build, sign, and upload to the GitHub Release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -100,11 +122,7 @@ jobs:
           # ignored by CMake on non-Apple platforms, so harmless on Linux/Windows.
           TRANSCRIBE_CMAKE_ARGS: "-DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_AVX512=OFF -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15"
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Sarala ${{ github.ref_name }}
-          releaseBody: "See the assets below to download and install this version."
-          releaseDraft: false
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.id }}
           args: ${{ matrix.args }}
 
   # The updater endpoint in tauri.conf.json points at a gist, so mirror the
@@ -140,6 +158,16 @@ jobs:
           ' latest.json > latest.sized.json
           mv latest.sized.json latest.json
           jq '.platforms | map_values(.size)' latest.json
+
+      # Each platform job merges its entries into the release's latest.json, so
+      # two jobs finishing together could drop one OS. Refuse to publish a
+      # manifest that would leave an OS without updates.
+      - name: Check every OS is in latest.json
+        run: |
+          for os in darwin linux windows; do
+            jq -e --arg os "$os" '.platforms | keys | any(startswith($os))' latest.json > /dev/null \
+              || { echo "::error::latest.json has no $os entries; re-run the $os build job"; exit 1; }
+          done
 
       - name: Push latest.json to the updater gist
         env:

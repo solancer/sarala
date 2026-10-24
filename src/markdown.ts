@@ -204,11 +204,26 @@ export interface RenderContext {
 const optionsKey = () =>
   `${mathAltDelimiters ? 1 : 0}${mathFence ? 1 : 0}${mathAutoNumber ? 1 : 0}${highlightOn ? 1 : 0}${subSupOn ? 1 : 0}${emojiOn ? 1 : 0}${autolinkOn ? 1 : 0}${marked.defaults.breaks ? 1 : 0}`;
 
+/**
+ * A YAML front matter block (`---` … `---`). Rendered as a metadata box, never
+ * as Markdown: parsed as Markdown, its closing `---` is a setext underline that
+ * turns the metadata above it into a heading (a bogus Outline/TOC entry).
+ */
+const isFrontMatter = (text: string) => {
+  const trimmed = text.trim();
+  return trimmed.startsWith("---\n") && /\n---$/.test(trimmed);
+};
+
 const factsCache = new Map<string, BlockFacts>();
 function blockFacts(text: string): BlockFacts {
   const key = optionsKey() + "\0" + text;
   const hit = factsCache.get(key);
   if (hit) return hit;
+  if (isFrontMatter(text)) {
+    const none: BlockFacts = { links: Object.create(null), math: [], footnoteDefs: [], footnoteRefs: [], headingBases: [], headings: [] };
+    factsCache.set(key, none);
+    return none;
+  }
   const tokens = marked.lexer(text);
   const facts: BlockFacts = { links: tokens.links, math: [], footnoteDefs: [], footnoteRefs: [], headingBases: [], headings: [] };
   for (const token of tokens) if (token.type === "heading") facts.headings.push({ level: token.depth, text: token.text });
@@ -726,7 +741,7 @@ export function renderMarkdown(md: string, blockKey?: string): string {
   // YAML front matter. The live view boxes a `---\n…` block (Block.tsx isFence),
   // but marked would parse `---\n…\n---` as a thematic break + setext heading.
   // Render it as a metadata code box so the active and inactive views match.
-  if (trimmed.startsWith("---\n") && /\n---$/.test(trimmed)) {
+  if (isFrontMatter(trimmed)) {
     return DOMPurify.sanitize(
       `<pre class="front-matter"><code>${escapeHtml(trimmed)}</code></pre>`,
       SANITIZE_OPTS,

@@ -42,6 +42,13 @@ check(md.hasOpenFence("````md\n```"), "Short fence cannot close a longer fence")
 check(md.hasOpenFence("```js\n```no"), "Closing fence cannot have info text");
 check(!md.hasOpenFence("~~~js\nx\n~~~~"), "Longer matching fence closes the block");
 equal(md.extractOutline(["Title\n====="]), [{level:1,text:"Title",blockIndex:0}], "Setext headings appear in outline");
+equal(md.extractOutline(["---\ntitle: Notes\n---", "# Real"]), [{level:1,text:"Real",blockIndex:1}], "Front matter is not an outline heading");
+{
+  const fm = ["---\ntitle: Notes\n---", "[TOC]", "# Real"].map((text, id) => ({ id, text }));
+  md.setMarkdownDocumentProvider(() => fm);
+  equal([...host(md.renderMarkdown(fm[1].text, "1")).querySelectorAll(".toc a")].map(n => n.textContent), ["Real"], "Front matter stays out of the TOC");
+  md.setMarkdownDocumentProvider(() => []);
+}
 
 const source = "# Repeat\n\n[label][ref]\n\nText[^n] again[^n].\n\n# Repeat\n\n[toc]\n\n[^n]: First\n\n    Second\n\n[ref]: https://example.com";
 const blocks = md.splitBlocks(source).map((text,id) => ({text,id}));
