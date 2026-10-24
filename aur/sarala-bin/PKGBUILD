@@ -14,7 +14,7 @@ provides=("$_pkgname")
 conflicts=("$_pkgname")
 options=('!strip' '!debug')
 source_x86_64=("$url/releases/download/v$pkgver/Sarala_${pkgver}_amd64.deb")
-sha256sums_x86_64=('SKIP')
+sha256sums_x86_64=('68d7e8917494843c0f9548cb8325aa3ecfcd2403a2835f9a0acc7c21f34ca9be')
 
 package() {
   bsdtar -xf data.tar.gz -C "$pkgdir"

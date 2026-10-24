@@ -87,6 +87,33 @@ pub struct VoiceState {
     download: Arc<Mutex<Option<Child>>>,
 }
 
+impl VoiceState {
+    /// Stop recording and free the speech model before the process exits.
+    /// ggml keeps its Metal device in a C++ static whose destructor (run by
+    /// `exit()`) aborts if a model's buffers are still allocated, which made
+    /// every quit after a dictation end in "Sarala quit unexpectedly".
+    pub fn shutdown(&self) {
+        #[cfg(feature = "voice")]
+        {
+            drop(self.recording.lock().unwrap().take());
+            drop(self.mic_test.lock().unwrap().take());
+            if let Some(engine) = self.engine.lock().unwrap().take() {
+                if engine.alive() {
+                    let (done, wait) = std::sync::mpsc::channel();
+                    engine.send(engine::Cmd::Cancel);
+                    engine.send(engine::Cmd::Shutdown(done));
+                    // A dictation finishing its last pass can take a moment;
+                    // don't hold up quitting for longer than this.
+                    let _ = wait.recv_timeout(std::time::Duration::from_secs(3));
+                }
+            }
+        }
+        if let Some(mut child) = self.download.lock().unwrap().take() {
+            let _ = child.kill();
+        }
+    }
+}
+
 #[cfg_attr(feature = "voice", allow(dead_code))]
 const NOT_BUILT: &str = "Voice typing isn't included in this build of Sarala.";
 
