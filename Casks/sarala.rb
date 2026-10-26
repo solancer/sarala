@@ -17,9 +17,9 @@ cask "sarala" do
   # doesn't block the first launch — this is why plain `brew install --cask sarala`
   # works with no extra flags. (The official homebrew/cask repo forbids this, which
   # is fine: this cask is served from a self-hosted tap, not submitted there.)
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Sarala.app"]
+  # Declarative steps (Homebrew 5.1.14+): Homebrew 7 deprecates `postflight`.
+  postflight_steps do
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/Sarala.app"]
   end
 
   zap trash: [
