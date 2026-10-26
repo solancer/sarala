@@ -9,7 +9,7 @@ import { isTauri, pickImageFile } from "../platform";
 import {
   consumeCaretRequest, consumeSelectionRequest,
   spellcheckOn, smartPunctuation, renderEpoch, mermaidEpoch, mathFence, mathAltDelimiters,
-  setLiveCaretOffset, renderContext,
+  setLiveCaretOffset, blockContextSig,
 } from "../store";
 import { renderMermaidIn } from "../mermaid";
 import { renderD2In } from "../d2";
@@ -127,7 +127,7 @@ export default function Block(props: Props) {
   // Everything this block's rendered HTML depends on: its text, the global
   // render options, and the slice of document context it uses (see
   // buildRenderContext). Edits elsewhere leave the key, and the DOM, untouched.
-  const contextSig = createMemo(() => renderContext().blocks.get(String(props.id))?.sig ?? "");
+  const contextSig = createMemo(() => blockContextSig(String(props.id)));
   // Diagram SVGs bake in theme colours; everything else follows CSS variables,
   // so only diagram blocks re-render on a theme switch.
   const hasDiagram = () => /^[ \t>]*(?:`{3,}|~{3,})[ \t]*(?:mermaid|d2|sequence|flow)\b/im.test(props.text);

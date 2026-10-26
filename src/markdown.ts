@@ -183,6 +183,24 @@ interface BlockFacts {
   footnoteRefs: string[];
   headingBases: string[];
   headings: { level: number; text: string }[];
+  /** Which document-wide data the block's render reads (see the sig in
+   *  buildRenderContext). Derived from the text alone, so cached with it
+   *  instead of re-tested for every block on every keystroke. */
+  uses: { labels: boolean; links: boolean; toc: boolean; assets: boolean; images: boolean };
+}
+
+function blockUses(text: string): BlockFacts["uses"] {
+  return {
+    labels: text.includes("ref{"),
+    links: text.includes("["),
+    toc: /\[TOC\]|\[\[_TOC_\]\]/i.test(text),
+    // Lazily loaded render data (grammars, KaTeX, emoji).
+    assets: text.includes("```") || text.includes("~~~") || text.includes("$") || text.startsWith("---\n")
+      || text.includes("\\(") || text.includes("\\[") || emojiShortcode().test(text),
+    // Image srcs resolve against the document's folder and its front matter's
+    // image-root-url / typora-root-url (images.ts).
+    images: text.includes("![") || /<img\b/i.test(text),
+  };
 }
 
 interface BlockContext {
@@ -205,6 +223,18 @@ const optionsKey = () =>
   `${mathAltDelimiters ? 1 : 0}${mathFence ? 1 : 0}${mathAutoNumber ? 1 : 0}${highlightOn ? 1 : 0}${subSupOn ? 1 : 0}${emojiOn ? 1 : 0}${autolinkOn ? 1 : 0}${marked.defaults.breaks ? 1 : 0}`;
 
 /**
+ * Where a block extension could begin inside the paragraph marked is about to
+ * cut. marked passes the whole rest of the document, and only a position
+ * inside the current paragraph changes anything, which never runs past a blank
+ * line. Searching just that far keeps lexing linear: scanning to the end for
+ * every paragraph made opening a long document quadratic (seconds for 1.5 MB).
+ */
+function blockStart(src: string, re: RegExp): number | undefined {
+  const blank = src.indexOf("\n\n");
+  return (blank < 0 ? src : src.slice(0, blank + 1)).match(re)?.index;
+}
+
+/**
  * A YAML front matter block (`---` … `---`). Rendered as a metadata box, never
  * as Markdown: parsed as Markdown, its closing `---` is a setext underline that
  * turns the metadata above it into a heading (a bogus Outline/TOC entry).
@@ -214,18 +244,19 @@ const isFrontMatter = (text: string) => {
   return trimmed.startsWith("---\n") && /\n---$/.test(trimmed);
 };
 
-const factsCache = new Map<string, BlockFacts>();
+let factsCache = new Map<string, BlockFacts>();
+const factsKey = (text: string) => optionsKey() + "\0" + text;
 function blockFacts(text: string): BlockFacts {
-  const key = optionsKey() + "\0" + text;
+  const key = factsKey(text);
   const hit = factsCache.get(key);
   if (hit) return hit;
   if (isFrontMatter(text)) {
-    const none: BlockFacts = { links: Object.create(null), math: [], footnoteDefs: [], footnoteRefs: [], headingBases: [], headings: [] };
+    const none: BlockFacts = { links: Object.create(null), math: [], footnoteDefs: [], footnoteRefs: [], headingBases: [], headings: [], uses: blockUses(text) };
     factsCache.set(key, none);
     return none;
   }
   const tokens = marked.lexer(text);
-  const facts: BlockFacts = { links: tokens.links, math: [], footnoteDefs: [], footnoteRefs: [], headingBases: [], headings: [] };
+  const facts: BlockFacts = { links: tokens.links, math: [], footnoteDefs: [], footnoteRefs: [], headingBases: [], headings: [], uses: blockUses(text) };
   for (const token of tokens) if (token.type === "heading") facts.headings.push({ level: token.depth, text: token.text });
   marked.walkTokens(tokens, token => {
     if (token.type === "blockMath" || (mathFence && token.type === "code" && token.lang === "math")) facts.math.push(String(token.text ?? ""));
@@ -233,7 +264,6 @@ function blockFacts(text: string): BlockFacts {
     else if (token.type === "footnoteRef") facts.footnoteRefs.push(escapeAttr(String(token.text)));
     else if (token.type === "heading") facts.headingBases.push(slugBase(decodeEntities((marked.parseInline(token.text, { async: false }) as string).replace(/<[^>]+>/g, ""))));
   });
-  if (factsCache.size > 5000) factsCache.clear();
   factsCache.set(key, facts);
   return facts;
 }
@@ -242,6 +272,12 @@ function blockFacts(text: string): BlockFacts {
  *  changes when syntax grammars finish loading. */
 export function buildRenderContext(blocks: readonly { id: number | string; text: string }[], docPath: string | null = null, assetKey = ""): RenderContext {
   const all = blocks.map(b => blockFacts(b.text));
+  // Bound the cache by pruning it to this document's texts (the slack covers
+  // undo and other tabs). Clearing it at a fixed size instead re-lexed every
+  // block on every keystroke once a document had more blocks than that.
+  if (factsCache.size > 2 * blocks.length + 5000) {
+    factsCache = new Map(blocks.map((b, i) => [factsKey(b.text), all[i]]));
+  }
   const links: Links = Object.create(null);
   const footnoteDescriptions = new Map<string, string>();
   const equationPlans: EquationPlan[] = [];
@@ -276,30 +312,25 @@ export function buildRenderContext(blocks: readonly { id: number | string; text:
   const outlineKey = JSON.stringify(outline.map(h => [h.level, h.text]));
   const frontMatter = blocks[0]?.text.startsWith("---\n") ? blocks[0].text : "";
   const contexts = new Map<string, BlockContext>();
-  const shortcode = emojiShortcode();
   const footnoteSeen = new Map<string, number>();
   const headingSeen = new Map<string, number>();
   let eqCursor = 0;
   blocks.forEach((block, i) => {
     const facts = all[i];
-    const text = block.text;
     const footnotePrefix = new Map<string, number>();
     const headingPrefix = new Map<string, number>();
     for (const id of facts.footnoteRefs) if (!footnotePrefix.has(id)) footnotePrefix.set(id, footnoteSeen.get(id) ?? 0);
     for (const base of facts.headingBases) if (!headingPrefix.has(base)) headingPrefix.set(base, headingSeen.get(base) ?? 0);
     const sig: string[] = [];
     if (facts.math.length) sig.push("eq", JSON.stringify(equationPlans.slice(eqCursor, eqCursor + facts.math.length).map(p => [p.tex, [...p.labels]])));
-    if (text.includes("ref{")) sig.push("lbl", labelsKey);
+    if (facts.uses.labels) sig.push("lbl", labelsKey);
     if (footnotePrefix.size) sig.push("fn", JSON.stringify([...footnotePrefix].map(([id, n]) => [id, n, footnoteDescriptions.get(id)])));
     if (headingPrefix.size) sig.push("h", JSON.stringify([...headingPrefix]));
-    if (text.includes("[")) sig.push("ln", linksKey);
-    if (/\[TOC\]|\[\[_TOC_\]\]/i.test(text)) sig.push("toc", outlineKey);
-    // Lazily loaded render data (grammars, KaTeX, emoji): blocks that use it
-    // re-render once it arrives.
-    if (text.includes("```") || text.includes("~~~") || text.includes("$") || text.startsWith("---\n") || text.includes("\\(") || text.includes("\\[") || shortcode.test(text)) sig.push("asset", assetKey);
-    // Image srcs resolve against the document's folder and its front matter's
-    // image-root-url / typora-root-url (images.ts).
-    if (text.includes("![") || /<img\b/i.test(text)) sig.push("img", docPath ?? "", frontMatter);
+    if (facts.uses.links) sig.push("ln", linksKey);
+    if (facts.uses.toc) sig.push("toc", outlineKey);
+    // Blocks using lazily loaded render data re-render once it arrives.
+    if (facts.uses.assets) sig.push("asset", assetKey);
+    if (facts.uses.images) sig.push("img", docPath ?? "", frontMatter);
     contexts.set(String(block.id), { eqStart: eqCursor, footnotePrefix, headingPrefix, sig: sig.join("\u0001") });
     eqCursor += facts.math.length;
     for (const id of facts.footnoteRefs) footnoteSeen.set(id, (footnoteSeen.get(id) ?? 0) + 1);
@@ -328,7 +359,7 @@ marked.use({
   extensions: [
     {
       name: "footnoteDef", level: "block",
-      start(src: string) { return src.match(/^ {0,3}\[\^[^\]\s]+\]:/m)?.index; },
+      start(src: string) { return blockStart(src, /^ {0,3}\[\^[^\]\s]+\]:/m); },
       tokenizer(src: string) {
         const match = /^ {0,3}\[\^([^\]\s]+)\]:[ \t]*(.*)(?:\n|$)/.exec(src);
         if (!match) return undefined;
@@ -371,10 +402,7 @@ marked.use({
     {
       name: "blockMath",
       level: "block",
-      start(src: string) {
-        const m = src.match(/\$\$|\\\[/);
-        return m ? m.index : undefined;
-      },
+      start(src: string) { return blockStart(src, /\$\$|\\\[/); },
       tokenizer(src: string) {
         let m = /^\$\$([\s\S]+?)\$\$/.exec(src);
         if (m) return { type: "blockMath", raw: m[0], text: m[1] };
@@ -633,6 +661,21 @@ const SANITIZE_OPTS = {
   ADD_ATTR: ["target", "style", "controls", "open", "src", "type", "id", "fetchpriority", "referrerpolicy"],
 };
 
+/**
+ * Sanitize with SANITIZE_OPTS. A private DOMPurify instance holds them via
+ * setConfig: passed per call, DOMPurify re-parses and deep-clones the options
+ * for every block, a large share of opening a long document. (Private, so the
+ * global instance d2.ts uses with its own SVG options is unaffected.)
+ */
+let purify: ReturnType<typeof DOMPurify> | null = null;
+function sanitize(html: string): string {
+  if (!purify) {
+    purify = DOMPurify(window);
+    purify.setConfig(SANITIZE_OPTS);
+  }
+  return purify.sanitize(html);
+}
+
 /* ---------- GitHub-style alerts ---------- */
 
 const ALERT_LABEL: Record<string, string> = {
@@ -742,10 +785,7 @@ export function renderMarkdown(md: string, blockKey?: string): string {
   // but marked would parse `---\n…\n---` as a thematic break + setext heading.
   // Render it as a metadata code box so the active and inactive views match.
   if (isFrontMatter(trimmed)) {
-    return DOMPurify.sanitize(
-      `<pre class="front-matter"><code>${escapeHtml(trimmed)}</code></pre>`,
-      SANITIZE_OPTS,
-    );
+    return sanitize(`<pre class="front-matter"><code>${escapeHtml(trimmed)}</code></pre>`);
   }
 
   mathStash = [];
@@ -790,7 +830,7 @@ export function renderMarkdown(md: string, blockKey?: string): string {
     }
     raw = root.innerHTML;
   }
-  let html = addHeadingIds(DOMPurify.sanitize(raw, SANITIZE_OPTS), headingCounts)
+  let html = addHeadingIds(sanitize(raw), headingCounts)
     .replace(/<div data-embed="(\d+)"><\/div>/g, (_, i) => embeds[Number(i)] ?? "");
   // Re-inject the KaTeX markup the sanitizer left as empty placeholders, swap
   // each mermaid placeholder's numeric key for its real source (DOMPurify

@@ -1,4 +1,4 @@
-import { batch, createSignal, createMemo } from "solid-js";
+import { batch, createSignal, createMemo, createComputed, untrack, type Signal } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 import type { FileNode, FileTimes } from "./platform";
 import type { Base16Scheme } from "./base16";
@@ -215,6 +215,33 @@ export const fullText = createMemo(() => joinBlocks(state.blocks.map((b) => b.te
 export const renderContext = createMemo(() => {
   renderEpoch();
   return buildRenderContext(state.blocks, state.filePath, String(assetEpoch()));
+});
+/**
+ * One block's render signature (its slice of the document context), as its
+ * own signal. Each block subscribing to renderContext() directly meant every
+ * keystroke re-ran a memo in every block: 12,000 of them in a long document.
+ * Here a plain loop compares signatures and notifies only blocks whose
+ * signature changed.
+ */
+const blockSigs = new Map<string, Signal<string>>();
+export function blockContextSig(id: string): string {
+  let sig = blockSigs.get(id);
+  if (!sig) {
+    const [get, set] = createSignal(untrack(renderContext).blocks.get(id)?.sig ?? "");
+    sig = [get, set];
+    blockSigs.set(id, sig);
+  }
+  return sig[0]();
+}
+createComputed(() => {
+  const blocks = renderContext().blocks;
+  for (const [id, [get, set]] of blockSigs) {
+    const ctx = blocks.get(id);
+    // A block that left the document is being disposed; one that comes back
+    // (undo) gets a fresh signal.
+    if (!ctx) blockSigs.delete(id);
+    else if (untrack(get) !== ctx.sig) set(ctx.sig);
+  }
 });
 // Structural equality: typing in a paragraph must not hand the sidebar a new
 // outline array (and rebuild every row) when no heading changed.
