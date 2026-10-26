@@ -1,7 +1,7 @@
 import {
   doc, fullText, fileName, retargetTabPath, cycleTab, setHeading,
   activeTabId, openDocument, findTabByPath, switchTab, removeTab, getTabDocument, markTabSaved, replaceTabDocument,
-  sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
+  sourceMode, sidebarOpen, setSidebarOpen,
   theme, setTheme, THEMES, setFileTree, setFolderName,
   folderPath, setFolderPath, setQuickOpenVisible, setCommandPaletteVisible,
   moveBlock, removeBlock, updateBlock, insertBlockAfter, appendBlock,
@@ -74,6 +74,7 @@ import { checkForUpdates } from "./updater";
 import { aiPanelOpen, setAiPanelOpen } from "./ai/config";
 import { askAboutSelection, newChat, reviewDocument, runQuickAction, stop as stopAi } from "./ai/session";
 import { printDocument } from "./virtualize";
+import { showSource } from "./viewswitch";
 import { cancelDictation, openVoiceCommands, openVoiceSetup, removeLastDictation, selectLastDictation, toggleDictation } from "./voice/session";
 import {
   skeletonTable, editTable, resizeTable, prettifyTable, parseTable, cellRanges, columnAtOffset, lineAtOffset,
@@ -1314,7 +1315,7 @@ const registry: Record<string, Command> = {
   "themes.custom": () => openThemeEditor(),
 
   // View
-  "view.source_mode": () => { setSourceMode(!sourceMode()); },
+  "view.source_mode": () => { showSource(!sourceMode()); },
   "view.sidebar": () => { setSidebarOpen(!sidebarOpen()); },
   "view.file_tree": () => { setSidebarOpen(true); setSidebarTab("files"); },
   "view.outline": () => { setSidebarOpen(true); setSidebarTab("outline"); },
