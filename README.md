@@ -84,7 +84,9 @@ brew trust --cask solancer/sarala/sarala
 brew install --cask --yes sarala
 ```
 
-> `brew trust` is a one-time step: Homebrew 6 refuses casks from third-party taps until you trust them. Older Homebrew has no `trust` command and doesn't need one.
+> `brew trust` is a one-time step: Homebrew 6 refuses casks from third-party taps until you trust them. Older Homebrew has no `trust` command and doesn't need one. The cask needs Homebrew 5.1.14 or newer; `brew update` gets you there.
+>
+> If `brew install` fails with ``Calling `depends_on macos: :catalina` is disabled``, your tap holds an old copy of the cask: run `brew update` (or `brew untap solancer/sarala` and tap it again), then install.
 
 Or download the universal `.dmg` (Apple Silicon and Intel, macOS 10.15+) from the [latest release](https://github.com/solancer/sarala/releases/latest). Sarala is ad-hoc signed but not notarized by Apple, so macOS blocks the first launch. After dragging it into Applications, run this once:
 
