@@ -5,43 +5,73 @@ import {
   splitBlock, setHeading, requestCaret, replaceBlocks,
 } from "../store";
 import { toggleTask } from "../markdown";
-import { selectedBlockRange } from "../blockselect";
+import { selectedSourceRange } from "../blockselect";
+import { deleteSourceRange } from "../livesource";
+import { pasteToInsert } from "../richpaste";
 import { openEditorMenu } from "./EditorContextMenu";
 import { parseTable } from "../tabletools";
 
 export default function Editor() {
-  // Make a selection that spans blocks actionable (native selection can't,
-  // since each block is its own render/edit host). Single-block and collapsed
-  // selections fall through to the browser's own handling.
+  // Make a selection outside the block being edited actionable: one that
+  // spans blocks (a native selection can't edit across them, since each block
+  // is its own render/edit host), or one dragged inside a rendered block.
+  // Only the selected source is replaced, not the blocks it touches. A
+  // selection inside the edited block is that block's own to handle.
   onMount(() => {
+    /** The blocks a selection touches, joined, with its offsets in that text. */
+    const selected = () => {
+      const r = selectedSourceRange();
+      if (!r) return null;
+      let from = 0;
+      for (let i = r.start.block; i < r.end.block; i++) from += doc.blocks[i].text.length + 2;
+      const text = doc.blocks.slice(r.start.block, r.end.block + 1).map((b) => b.text).join("\n\n");
+      return { first: r.start.block, last: r.end.block, text, start: r.start.offset, end: from + r.end.offset };
+    };
+    /** Replace the selection with `insert`, leaving the caret after it. */
+    const replace = (s: NonNullable<ReturnType<typeof selected>>, insert: string) => {
+      const cut = deleteSourceRange(s.text, s.start, s.end);
+      window.getSelection()?.removeAllRanges();
+      replaceBlocks(s.first, s.last, cut.text.slice(0, cut.caret) + insert + cut.text.slice(cut.caret), cut.caret + insert.length);
+    };
+    // Dialogs and form fields (sidebar filter, find bar) keep their own keys.
+    const inModal = (e: Event) => !!(e.target as HTMLElement | null)?.closest?.('[aria-modal="true"], input, textarea, select');
     const clipboard = (e: ClipboardEvent, cut: boolean) => {
-      const r = selectedBlockRange();
-      if (!r) return;
+      if (inModal(e)) return;
+      const s = selected();
+      if (!s) return;
       e.preventDefault();
-      const md = doc.blocks.slice(r.start, r.end + 1).map((b) => b.text).join("\n\n");
-      e.clipboardData?.setData("text/plain", md);
-      if (cut) replaceBlocks(r.start, r.end, "");
+      e.clipboardData?.setData("text/plain", s.text.slice(s.start, s.end));
+      if (cut) replace(s, "");
     };
     const onCopy = (e: ClipboardEvent) => clipboard(e, false);
     const onCut = (e: ClipboardEvent) => clipboard(e, true);
+    const onPaste = (e: ClipboardEvent) => {
+      if (inModal(e)) return;
+      const s = selected();
+      if (!s || !e.clipboardData) return;
+      e.preventDefault();
+      replace(s, pasteToInsert({ html: e.clipboardData.getData("text/html"), plain: e.clipboardData.getData("text/plain"), inFence: false }));
+    };
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.closest('[aria-modal="true"]')) return;
-      const r = selectedBlockRange();
-      if (!r) return;
+      if (inModal(e) || e.isComposing) return;
+      const s = selected();
+      if (!s) return;
       if (e.key === "Backspace" || e.key === "Delete" || e.key === "Enter") {
         e.preventDefault();
-        replaceBlocks(r.start, r.end, "");
+        replace(s, "");
       } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
-        replaceBlocks(r.start, r.end, e.key);
+        replace(s, e.key);
       }
     };
     document.addEventListener("copy", onCopy);
     document.addEventListener("cut", onCut);
+    document.addEventListener("paste", onPaste);
     document.addEventListener("keydown", onKeyDown);
     onCleanup(() => {
       document.removeEventListener("copy", onCopy);
       document.removeEventListener("cut", onCut);
+      document.removeEventListener("paste", onPaste);
       document.removeEventListener("keydown", onKeyDown);
     });
   });

@@ -554,7 +554,7 @@ export function removeBlock(index: number) {
 
 /** Replace blocks[start..end] (inclusive) with a single block of `text` and
  *  activate it — used to delete/replace a selection that spans blocks. */
-export function replaceBlocks(start: number, end: number, text: string) {
+export function replaceBlocks(start: number, end: number, text: string, caret = text.length) {
   const lo = Math.max(0, Math.min(start, end));
   const hi = Math.min(state.blocks.length - 1, Math.max(start, end));
   if (lo > hi) return;
@@ -567,7 +567,7 @@ export function replaceBlocks(start: number, end: number, text: string) {
       s.dirty = true;
     })
   );
-  requestCaret(text.length);
+  requestCaret(caret);
 }
 
 /** Replace `deleteCount` blocks at `start` with one block per entry of
