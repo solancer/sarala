@@ -1,4 +1,4 @@
-import { Show, createEffect, createMemo, createSignal, on, onCleanup, untrack } from "solid-js";
+import { Show, createEffect, createMemo, createSignal, on, onCleanup, onMount, untrack } from "solid-js";
 import { complexBlockKind } from "../complexblocks";
 import { renderMarkdown, hasOpenFence } from "../markdown";
 import {
@@ -29,6 +29,7 @@ import TableReorder from "./TableReorder";
 import TableRails from "./TableRails";
 import CodeLangPicker from "./CodeLangPicker";
 import D2SizeControl from "./D2SizeControl";
+import { placeholderHeight, startsNear, watchBlock, windowing } from "../virtualize";
 
 /** Caret Range at a viewport point (WebKit caretRangeFromPoint / Firefox fallback). */
 function caretRangeAt(x: number, y: number): Range | null {
@@ -46,6 +47,8 @@ function caretRangeAt(x: number, y: number): Range | null {
 
 interface Props {
   id: number;
+  /** Position in the document when the block is created. */
+  index: number;
   text: string;
   active: boolean;
   onActivate: (caret?: number) => void;
@@ -128,6 +131,16 @@ export default function Block(props: Props) {
   // render options, and the slice of document context it uses (see
   // buildRenderContext). Edits elsewhere leave the key, and the DOM, untouched.
   const contextSig = createMemo(() => blockContextSig(String(props.id)));
+  // Far from the viewport in a long document, an inactive block renders a
+  // placeholder instead of its HTML (see virtualize.ts).
+  const [near, setNear] = createSignal(untrack(() => startsNear(props.index)));
+  const shown = () => near() || !windowing();
+  onMount(() => onCleanup(watchBlock(rootEl!, {
+    id: untrack(() => props.id),
+    text: () => props.text,
+    shown,
+    setNear,
+  })));
   // Diagram SVGs bake in theme colours; everything else follows CSS variables,
   // so only diagram blocks re-render on a theme switch.
   const hasDiagram = () => /^[ \t>]*(?:`{3,}|~{3,})[ \t]*(?:mermaid|d2|sequence|flow)\b/im.test(props.text);
@@ -1086,7 +1099,7 @@ export default function Block(props: Props) {
       <Show
         when={props.active}
         fallback={
-          <>
+          <Show when={shown()} fallback={<div class="block-placeholder" style={{ height: `${placeholderHeight(props.id, props.text)}px` }} />}>
             <div
               class="rendered"
               ref={bindRendered}
@@ -1139,7 +1152,7 @@ export default function Block(props: Props) {
                 onTheme={setD2Theme}
               />
             </Show>
-          </>
+          </Show>
         }
       >
         <Show when={panelKind()}>

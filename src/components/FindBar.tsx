@@ -1,6 +1,7 @@
-import { Show, createSignal, createEffect } from "solid-js";
+import { Show, createSignal, createEffect, createComputed } from "solid-js";
 import { doc, fullText, updateBlock, renderEpoch, activeTabId } from "../store";
 import { buildSearchRegex } from "../search";
+import { holdAllBlocks } from "../virtualize";
 
 /**
  * Live find: every match in the document is highlighted (CSS Custom
@@ -161,6 +162,11 @@ export default function FindBar() {
     query();
     setCursor(0);
   });
+
+  // Matches are found in the rendered text, so a search renders every block
+  // of a long document while it is open. A computed runs before the effect
+  // below, so the blocks are in the DOM by the time it searches.
+  createComputed(() => holdAllBlocks("find", visible() && query().length > 0));
 
   // Paint all matches + the current one; track everything that changes the
   // DOM text (doc edits, block activation swaps, render-option flips).

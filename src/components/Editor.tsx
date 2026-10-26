@@ -151,6 +151,7 @@ export default function Editor() {
           {(block, i) => (
             <Block
               id={block.id}
+              index={i()}
               text={block.text}
               active={doc.activeIndex === i()}
               onActivate={(caret) => {

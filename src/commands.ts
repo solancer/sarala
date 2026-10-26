@@ -73,6 +73,7 @@ import { openThemeEditor } from "./components/ThemeEditor";
 import { checkForUpdates } from "./updater";
 import { aiPanelOpen, setAiPanelOpen } from "./ai/config";
 import { askAboutSelection, newChat, reviewDocument, runQuickAction, stop as stopAi } from "./ai/session";
+import { printDocument } from "./virtualize";
 import { cancelDictation, openVoiceCommands, openVoiceSetup, removeLastDictation, selectLastDictation, toggleDictation } from "./voice/session";
 import {
   skeletonTable, editTable, resizeTable, prettifyTable, parseTable, cellRanges, columnAtOffset, lineAtOffset,
@@ -455,7 +456,7 @@ async function runExport(
     } catch (e) {
       if (String(e).includes("no_chromium")) {
         await alertDialog("PDF export needs Chrome/Chromium installed. Falling back to the print dialog.");
-        window.print();
+        printDocument();
         return null;
       }
       await alertDialog(`PDF export failed:\n${String(e)}`);
@@ -1179,7 +1180,7 @@ const registry: Record<string, Command> = {
   "file.revert.last_saved": revertToSaved,
   "file.import": importViaPandoc,
   "file.export.previous": exportPrevious,
-  "file.print": () => { window.print(); },
+  "file.print": printDocument,
 
   // Edit
   // In a text field (AI composer, rename box, search) these act on the field,
