@@ -47,12 +47,25 @@ impl FileOpenRequests {
 
 /// The existing files among the launch arguments, as absolute paths. Flags and
 /// anything that isn't a file (a typo, a GTK option) are ignored.
+///
+/// - Launchers using `%U` (the Flatpak's .desktop entry) pass `file://` URIs,
+///   not paths; those are decoded.
+/// - `path::absolute`, not `fs::canonicalize`: on Windows canonicalize yields a
+///   verbatim `\\?\C:\…` path, which matches no path the app gets elsewhere
+///   (the file dialog, the folder tree), so the same file opened twice
+///   wouldn't be recognised and image paths beside it wouldn't resolve.
 #[cfg(any(not(target_os = "macos"), test))]
 fn launch_paths(args: impl IntoIterator<Item = std::ffi::OsString>) -> Vec<String> {
     args.into_iter()
-        .map(std::path::PathBuf::from)
-        .filter(|p| !p.to_string_lossy().starts_with('-') && p.is_file())
-        .filter_map(|p| std::fs::canonicalize(p).ok())
+        .filter_map(|arg| {
+            let text = arg.to_string_lossy();
+            if text.starts_with("file://") {
+                return tauri::Url::parse(&text).ok()?.to_file_path().ok();
+            }
+            (!text.starts_with('-')).then(|| std::path::PathBuf::from(&arg))
+        })
+        .filter(|p| p.is_file())
+        .filter_map(|p| std::path::absolute(p).ok())
         .map(|p| p.to_string_lossy().into_owned())
         .collect()
 }
@@ -130,17 +143,19 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("notes one.md");
         std::fs::write(&file, "# Hi").unwrap();
+        let uri = tauri::Url::from_file_path(&file).unwrap();
+        assert!(uri.as_str().contains("notes%20one.md"));
         let args = [
             file.clone().into_os_string(),
             "--gtk-flag".into(),
             dir.join("missing.md").into_os_string(),
             dir.clone().into_os_string(),
+            // A `%U` launcher's form of the same file, and of a missing one.
+            uri.as_str().into(),
+            "file:///no/such/file.md".into(),
         ];
-        let expected = std::fs::canonicalize(&file).unwrap();
-        assert_eq!(
-            launch_paths(args),
-            vec![expected.to_string_lossy().into_owned()]
-        );
+        let expected = file.to_string_lossy().into_owned();
+        assert_eq!(launch_paths(args), vec![expected.clone(), expected]);
         std::fs::remove_dir_all(dir).unwrap();
     }
 
