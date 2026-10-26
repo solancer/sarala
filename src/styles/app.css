@@ -1020,6 +1020,14 @@ body { font-family: var(--font-ui); }
 [data-theme="classic"] .shiki, [data-theme="classic"] .shiki span {
   color: var(--shiki-dark) !important;
 }
+/* Native controls (dropdown boxes and their open lists, scrollbars, date and
+   number inputs) follow color-scheme, not our tokens. Without it a dark theme
+   gets light native widgets painted with its light --ink: unreadable. */
+[data-theme="graphite"], [data-theme="night"], [data-theme="pro"],
+[data-theme="octagon"], [data-theme="machine"], [data-theme="ristretto"],
+[data-theme="spectrum"], [data-theme="classic"] {
+  color-scheme: dark;
+}
 /* List rhythm: items sit ~2.06 line-height apart. Spacing lives in
    line-height (not li margins) so the live view — where items are bare text
    lines — can match it exactly and activation stays shift-free. */

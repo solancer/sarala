@@ -257,7 +257,9 @@ export function base16ToCss(scheme: Base16Scheme, selector = '[data-theme="custo
   const code = scheme.variant === "dark"
     ? `${selector} .shiki, ${selector} .shiki span { color: var(--shiki-dark) !important; }\n`
     : "";
-  return `${selector} {\n${body}\n}\n${code}`;
+  // Native controls follow color-scheme (see the curated rule in app.css).
+  const colorScheme = `  color-scheme: ${scheme.variant};\n`;
+  return `${selector} {\n${body}\n${colorScheme}}\n${code}`;
 }
 
 /** A neutral starting scheme for the editor when nothing has been imported. */
