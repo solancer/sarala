@@ -532,7 +532,10 @@ export function applyMarkerVisibility(el: HTMLElement, source: string, caret: nu
         ? (node.nextElementSibling?.classList.contains("md-code-content") ? c >= start && c < end : c > start && c <= end)
         : c >= start && c <= end;
       node.classList.toggle("md-on", node.classList.contains("md-fence")
-        ? showFence : inMarker || (node.classList.contains("md-pre") && c === end && end === source.length));
+        // A bare prefix (an item or heading with nothing typed yet, at the
+        // end of its line) stays visible: there is no text after it to hold
+        // the caret, and a caret parked in hidden text types before it.
+        ? showFence : inMarker || (node.classList.contains("md-pre") && c === end && (end === source.length || source[end] === "\n")));
     }
   };
   walk(el);

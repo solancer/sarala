@@ -66,6 +66,26 @@ interface Props {
  */
 const htmlCache = new Map<number, { key: string; html: string }>();
 
+/**
+ * Renumber the ordered-list siblings below a newly inserted item `n`. `rest`
+ * starts with the remainder of the new item's own line. Only collisions move
+ * (a sibling already numbered `n` becomes `n + 1`, and so on down), so lists
+ * numbered "1. 1. 1." on purpose, or with gaps, are left as written. Deeper
+ * lines (nested items, wrapped text) are passed over.
+ */
+function renumberBelow(rest: string, indent: string, n: number): string {
+  const lines = rest.split("\n");
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith(indent + " ") || line.startsWith(indent + "\t")) continue;
+    const m = line.match(/^(\s*)(\d+)([.)]\s.*)$/);
+    if (!m || m[1] !== indent || Number(m[2]) !== n) break;
+    n++;
+    lines[i] = `${indent}${n}${m[3]}`;
+  }
+  return lines.join("\n");
+}
+
 export default function Block(props: Props) {
   let el: HTMLDivElement | undefined;
   let rootEl: HTMLDivElement | undefined;
@@ -339,6 +359,13 @@ export default function Block(props: Props) {
       const num = marker.match(/^(\s*)(\d+)([.)])(\s+)$/);
       if (num) marker = `${num[1]}${Number(num[2]) + 1}${num[3]}${num[4]}`;
       if (marker.match(/\[[xX]\]/)) marker = marker.replace(/\[[xX]\]/, "[ ]");
+      if (num) {
+        // A new item mid-list: shift the numbers below it along.
+        const sel = getSelectionOffsets(el!);
+        const head = t.slice(0, sel.start) + "\n" + marker;
+        commit(head + renumberBelow(t.slice(sel.end), num[1], Number(num[2]) + 1), head.length);
+        return;
+      }
       insertAtCaret("\n" + marker);
       return;
     }
