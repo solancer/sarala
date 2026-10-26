@@ -157,4 +157,41 @@ check(equationHost.querySelector(".md-inline-preview").shadowRoot.querySelector(
   const texts = md.splitBlocks(source);
   equal(md.countBlockWords(texts), md.countWords(md.joinBlocks(texts)), "Counting block by block matches counting the whole document");
 }
+// Lexing a long document in pieces (lexDocument) must give exactly the tokens
+// lexing it whole does. A tiny piece size cuts at nearly every legal point.
+{
+  const { readFileSync, readdirSync, statSync } = await import("node:fs");
+  const files = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      if (name.startsWith(".") || name === "node_modules" || name === "target") continue;
+      const path = `${dir}/${name}`;
+      if (statSync(path).isDirectory()) walk(path);
+      else if (name.endsWith(".md")) files.push(path);
+    }
+  };
+  walk(root.replace(/\/$/, ""));
+  const tricky = [
+    "Para one\n\n- loose item\n\n- next item\n\n  continued\n\nAfter list",
+    "```js\nconst a = 1;\n\n\nconst b = 2;\n```\n\nText",
+    "~~~~\n```\n\nstill code\n~~~~\n\nOut",
+    "$$\na\n\nb\n$$\n\nText $$x$$ inline\n\nMore",
+    "<!-- note\n\nstill comment -->\n\nText",
+    "<pre>\nline\n\nline\n</pre>\n\nText",
+    "Note[^n]\n\n[^n]: First\n\n    Continued\n\nAfter",
+    "> quote\n\n> again\n\nText",
+    "1. one\n\n2. two\n\n10) ten\n\nText",
+    "Title\n=====\n\nSub\n---\n\n| a | b |\n|---|---|\n| 1 | 2 |",
+    "See [ref] and [other][o].\n\n# Heading\n\n[ref]: https://a.example\n\n[o]: https://b.example \"T\"",
+    "    indented code\n\n    more code\n\nText\n\n<details>\n<summary>S</summary>\n\nBody\n\n</details>\n\nEnd",
+  ].join("\n\n");
+  const docs = [["tricky constructs", tricky], ...files.map((f) => [f.slice(root.length), readFileSync(f, "utf8")])];
+  for (const [name, text] of docs) {
+    const whole = md.lexDocument(text, undefined, Infinity);
+    const pieces = md.lexDocument(text, undefined, 16);
+    equal(JSON.stringify([pieces, pieces.links]), JSON.stringify([whole, whole.links]), `Lexing ${name} in pieces matches lexing it whole`);
+  }
+  check(md.documentPieces(tricky, 16).length > 5, "A document is cut into pieces");
+  check(md.documentPieces("```\na\n\nb\n\nc\n```", 1).length === 1, "A fence is never cut");
+}
 console.log(`${checks} Markdown regression checks passed`);

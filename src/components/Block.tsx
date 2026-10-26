@@ -133,12 +133,14 @@ export default function Block(props: Props) {
   const contextSig = createMemo(() => blockContextSig(String(props.id)));
   // Far from the viewport in a long document, an inactive block renders a
   // placeholder instead of its HTML (see virtualize.ts).
-  const [near, setNear] = createSignal(untrack(() => startsNear(props.index)));
+  const initiallyNear = untrack(() => startsNear(props.index));
+  const [near, setNear] = createSignal(initiallyNear);
   const shown = () => near() || !windowing();
   onMount(() => onCleanup(watchBlock(rootEl!, {
     id: untrack(() => props.id),
     text: () => props.text,
     shown,
+    near: initiallyNear,
     setNear,
   })));
   // Diagram SVGs bake in theme colours; everything else follows CSS variables,

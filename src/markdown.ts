@@ -1,4 +1,4 @@
-import { Marked, Lexer, type Tokens } from "marked";
+import { Marked, Lexer, type Token, type Tokens, type TokensList } from "marked";
 import DOMPurify from "dompurify";
 import type Katex from "katex";
 import { planEquation, type EquationPlan } from "./equations";
@@ -234,6 +234,80 @@ function blockStart(src: string, re: RegExp): number | undefined {
   return (blank < 0 ? src : src.slice(0, blank + 1)).match(re)?.index;
 }
 
+/** Documents shorter than this are lexed in one piece. */
+const PIECE_CHARS = 8192;
+
+/**
+ * Where a long document can be cut into pieces that lex exactly as the whole
+ * does: blank lines that nothing carries across. Each cut starts at a line that
+ * can't continue a list, quote or indented code (not indented, not a list
+ * marker or `>`), outside a fence, a `$$`/`\[` math block and a multi-line
+ * HTML block (comment, script, pre…), the constructs that span blank lines.
+ * Misjudging any of them only means cutting less often, never wrongly, as
+ * long as an opening is never missed.
+ */
+export function documentPieces(src: string, size = PIECE_CHARS): string[] {
+  const pieces: string[] = [];
+  let start = 0;
+  let pos = 0;
+  let fence: { char: string; length: number } | null = null;
+  let math = false;
+  let html: RegExp | null = null;
+  let prevBlank = false;
+  while (pos < src.length) {
+    const nl = src.indexOf("\n", pos);
+    const end = nl < 0 ? src.length : nl + 1;
+    const line = src.slice(pos, nl < 0 ? src.length : nl);
+    const open = !!fence || math || !!html;
+    if (!open && prevBlank && pos - start >= size && /^[^\s>]/.test(line) && !/^(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/.test(line)) {
+      pieces.push(src.slice(start, pos));
+      start = pos;
+    }
+    const trimmed = line.trimStart();
+    if (fence) {
+      const close = trimmed.match(/^(`{3,}|~{3,})\s*$/);
+      if (close && close[1][0] === fence.char && close[1].length >= fence.length) fence = null;
+    } else if (html) {
+      if (html.test(line)) html = null;
+    } else {
+      const opening = trimmed.match(/^(`{3,}|~{3,})/);
+      if (opening) fence = { char: opening[1][0], length: opening[1].length };
+      else {
+        if (((line.match(/\$\$/g)?.length ?? 0) % 2) === 1) math = !math;
+        if (line.includes("\\[") && !line.includes("\\]")) math = true;
+        else if (line.includes("\\]") && !line.includes("\\[")) math = false;
+        const tag = trimmed.match(/^<(script|pre|style|textarea)\b/i)?.[1];
+        if (tag && !new RegExp(`</${tag}>`, "i").test(line)) html = new RegExp(`</${tag}>`, "i");
+        else if (trimmed.startsWith("<!--") && !trimmed.includes("-->")) html = /-->/;
+        else if (trimmed.startsWith("<?") && !trimmed.includes("?>")) html = /\?>/;
+        else if (trimmed.startsWith("<![CDATA[") && !trimmed.includes("]]>")) html = /\]\]>/;
+      }
+    }
+    prevBlank = line.trim() === "";
+    pos = end;
+  }
+  pieces.push(src.slice(start));
+  return pieces;
+}
+
+/**
+ * Lex a whole document, as `lexer.lex` does, but a piece at a time. marked
+ * matches each block rule against all the text left to lex, and the
+ * JavaScriptCore in macOS's WebView (unlike Chromium's V8, or the newer WebKit
+ * the tests run in) spends time in proportion to that text on most of those
+ * regexes, even anchored ones: opening a 1.5 MB document took 77 seconds in
+ * the app. Block tokens are read piece by piece into one lexer, so reference
+ * definitions still apply across the document, then inline tokens as usual.
+ */
+export function lexDocument(src: string, lexer = new Lexer(marked.defaults), size = PIECE_CHARS): TokensList {
+  const queue = (lexer as unknown as { inlineQueue?: { src: string; tokens: Token[] }[] }).inlineQueue;
+  if (src.length < size || !Array.isArray(queue)) return lexer.lex(src);
+  for (const piece of documentPieces(src.replace(/\r\n|\r/g, "\n"), size)) lexer.blockTokens(piece, lexer.tokens);
+  for (const next of queue) lexer.inlineTokens(next.src, next.tokens);
+  queue.length = 0;
+  return lexer.tokens;
+}
+
 /**
  * A YAML front matter block (`---` … `---`). Rendered as a metadata box, never
  * as Markdown: parsed as Markdown, its closing `---` is a setext underline that
@@ -262,7 +336,7 @@ function blockFacts(text: string): BlockFacts {
     factsCache.set(key, none);
     return none;
   }
-  const tokens = marked.lexer(text);
+  const tokens = lexDocument(text);
   const facts: BlockFacts = { links: tokens.links, math: [], footnoteDefs: [], footnoteRefs: [], headingBases: [], headings: [], uses: blockUses(text) };
   for (const token of tokens) if (token.type === "heading") facts.headings.push({ level: token.depth, text: token.text });
   marked.walkTokens(tokens, token => {
@@ -848,7 +922,7 @@ export function renderMarkdown(md: string, blockKey?: string): string {
     : md.replace(/(!\[[^\]\n]*\]\()([^<>()"\n]*\s[^<>()"\n]*)(\))/g, "$1<$2>$3");
   const lexer = new Lexer(marked.defaults);
   lexer.tokens.links = context.links;
-  const tokens = lexer.lex(src);
+  const tokens = lexDocument(src, lexer);
   if (marked.defaults.walkTokens) marked.walkTokens(tokens, marked.defaults.walkTokens);
   marked.walkTokens(tokens, token => {
     if (token.type === "paragraph" && /^(?:\[TOC\]|\[\[_TOC_\]\])$/i.test(token.text.trim())) {
@@ -918,7 +992,7 @@ export function splitBlocks(md: string): string[] {
   // restarts ordered numbering and detaches indented continuation paragraphs.
   const listInterior = new Set<number>();
   let tokenLine = 0;
-  for (const token of marked.lexer(normalized)) {
+  for (const token of lexDocument(normalized)) {
     if (["list", "code", "blockquote", "html", "blockMath", "footnoteDef"].includes(token.type)) {
       const contentLines = token.raw.trimEnd().split("\n").length;
       for (let n = 1; n < contentLines; n++) listInterior.add(tokenLine + n);
