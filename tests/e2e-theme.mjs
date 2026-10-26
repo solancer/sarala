@@ -240,6 +240,16 @@ check(await editorOnTop(), "the builder is the topmost surface after the drill-i
 await page.keyboard.press("Escape");
 await page.waitForTimeout(300);
 
+// Native controls (dropdowns, their open lists) follow color-scheme: a dark
+// theme must declare it or they paint light with light text (issue #9).
+const scheme = (id) => page.evaluate(async (id) => {
+  (await import("/src/store.ts")).setTheme(id);
+  await new Promise((r) => setTimeout(r, 50));
+  return getComputedStyle(document.querySelector(".app")).colorScheme;
+}, id);
+check(await scheme("graphite") === "dark", "a dark theme declares color-scheme: dark");
+check(await scheme("sarala") !== "dark", "a light theme does not");
+
 await browser.close();
 kill();
 console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");
