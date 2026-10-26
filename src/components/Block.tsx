@@ -3,7 +3,7 @@ import { complexBlockKind } from "../complexblocks";
 import { renderMarkdown, hasOpenFence } from "../markdown";
 import {
   styleSource, stylePanelSource, hydrateInlinePreviews, hasSourceLayout, getCaretOffset, getSelectionOffsets, setCaret, setSelection,
-  applyMarkerVisibility, mapRenderedPrefixToSource,
+  applyMarkerVisibility, mapRenderedPrefixToSource, concealedDeletion, deleteSelection,
 } from "../livesource";
 import { isTauri, pickImageFile } from "../platform";
 import {
@@ -479,6 +479,48 @@ export default function Block(props: Props) {
     if (!el || composing) return;
     pendingCaret = getCaretOffset(el);
     props.onChange(el.textContent ?? "");
+  };
+
+  /**
+   * Deletions and typing over a selection, applied to the source text rather
+   * than left to the browser, which mishandles the hidden markers (see
+   * concealedDeletion). Composition input is never touched (IME safety).
+   */
+  const onBeforeInput = (e: InputEvent) => {
+    if (!el || composing || e.isComposing) return;
+    const t = props.text;
+    const { start, end } = getSelectionOffsets(el);
+    const kind = e.inputType;
+    if (start !== end) {
+      if (kind === "insertText" && e.data) {
+        // Typing over the word inside `**…**` keeps it bold: no widening.
+        e.preventDefault();
+        commit(t.slice(0, start) + e.data + t.slice(end), start + e.data.length);
+      } else if (kind.startsWith("delete") && kind !== "deleteByDrag" && kind !== "deleteByCut") {
+        e.preventDefault();
+        const r = deleteSelection(el, t, start, end);
+        commit(r.text, r.caret);
+      }
+      return;
+    }
+    if (kind !== "deleteContentBackward" && kind !== "deleteContentForward") return;
+    const r = concealedDeletion(el, t, start, kind === "deleteContentBackward" ? -1 : 1);
+    if (!r) return;
+    e.preventDefault();
+    if (r.start === 0 && r.end === 0) props.onMergePrev();
+    else if (r.start !== r.end) commit(t.slice(0, r.start) + t.slice(r.end), r.start);
+  };
+
+  // Cut inside one block: the clipboard gets the Markdown source (as a cut
+  // across blocks does), and the removal goes through the source text.
+  const onCut = (e: ClipboardEvent) => {
+    if (!el || composing) return;
+    const { start, end } = getSelectionOffsets(el);
+    if (start === end || !e.clipboardData) return;
+    e.preventDefault();
+    e.clipboardData.setData("text/plain", props.text.slice(start, end));
+    const r = deleteSelection(el, props.text, start, end);
+    commit(r.text, r.caret);
   };
 
   const onPaste = (e: ClipboardEvent) => {
@@ -1072,6 +1114,8 @@ export default function Block(props: Props) {
           onMouseOut={onSourceMouseOut}
           onInput={onInput}
           onKeyDown={onKeyDown}
+          onBeforeInput={onBeforeInput}
+          onCut={onCut}
           onPaste={onPaste}
           onContextMenu={onSourceContextMenu}
           onBlur={(e) => {

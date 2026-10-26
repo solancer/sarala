@@ -586,6 +586,124 @@ export function hydrateInlinePreviews(el: HTMLElement, render: (source: string) 
   }
 }
 
+/* ---------- deletion around concealed syntax ---------- */
+
+/**
+ * Hidden markers (`**`, `# `, `](url)`) stay in the DOM so offsets match the
+ * source, but the browser's own deletion trips over them: Chromium (WebView2
+ * on Windows) can refuse to delete, or half-delete, a selection that crosses
+ * display:none text, and a Backspace at the start of a heading or bold run
+ * removes an invisible `#` or `*` instead of what the user sees. These map a
+ * deletion onto source offsets so the editor can apply it to the text itself.
+ */
+interface TextSeg { start: number; end: number; hidden: boolean; tok: HTMLElement | null }
+
+function textSegments(el: HTMLElement): TextSeg[] {
+  const segs: TextSeg[] = [];
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let pos = 0;
+  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+    const len = node.data.length;
+    if (!len) continue;
+    const markEl = node.parentElement?.closest<HTMLElement>(".md-mark");
+    segs.push({
+      start: pos,
+      end: pos + len,
+      // display:none (a concealed marker) leaves an element with no boxes.
+      hidden: !!markEl && el.contains(markEl) && markEl.getClientRects().length === 0,
+      tok: markEl?.parentElement?.closest<HTMLElement>(".md-tok") ?? null,
+    });
+    pos += len;
+  }
+  return segs;
+}
+
+/** Source range [start, end) of an element inside `el`. */
+function rangeOf(el: HTMLElement, node: Node): { start: number; end: number } {
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  r.setEndBefore(node);
+  const start = r.toString().length;
+  return { start, end: start + (node.textContent?.length ?? 0) };
+}
+
+/**
+ * The source range a Backspace (dir -1) or Delete (dir 1) at a collapsed
+ * caret should remove, or null when nothing hidden is in the way and the
+ * browser's own deletion is fine.
+ *
+ * - A concealed block prefix (`# `, `- `, `> `) before the caret is removed
+ *   whole: the heading or list item becomes a paragraph, as in other editors.
+ * - A token drawn as something else (emoji shortcode, image, math, footnote)
+ *   goes as a unit, like the single glyph it looks like.
+ * - Otherwise hidden delimiters are stepped over and the visible character
+ *   beyond them is deleted, leaving the delimiters intact.
+ *
+ * Returns `{ start: 0, end: 0 }` for a Backspace that has only hidden text
+ * before it: the caret is at the visual start, so the caller merges blocks.
+ */
+export function concealedDeletion(el: HTMLElement, source: string, caret: number, dir: -1 | 1): { start: number; end: number } | null {
+  const segs = textSegments(el);
+  const adjacent = (at: number) => segs.find((s) => (dir < 0 ? s.start < at && at <= s.end : s.start <= at && at < s.end));
+  const first = adjacent(caret);
+  if (!first?.hidden) return null;
+
+  if (first.tok) {
+    const tok = rangeOf(el, first.tok);
+    const visible = segs.some((s) => !s.hidden && s.start >= tok.start && s.end <= tok.end);
+    if (dir < 0 && first.tok.classList.contains("md-pre")) return { start: tok.start, end: caret };
+    if (!visible && (dir < 0 ? tok.end === caret : tok.start === caret)) return tok;
+  }
+
+  // Step over every hidden run (several tokens can end at the same place).
+  let at = caret;
+  for (let s = adjacent(at); s?.hidden; s = adjacent(at)) at = dir < 0 ? s.start : s.end;
+  if (dir < 0 && at === 0) return { start: 0, end: 0 };
+  if (dir > 0 && at === source.length) return { start: caret, end: caret };
+  // One user-perceived character, which may be a surrogate pair.
+  const cp = dir < 0 ? source.codePointAt(at - 2) : source.codePointAt(at);
+  const width = cp !== undefined && cp > 0xffff ? 2 : 1;
+  return dir < 0 ? { start: at - width, end: at } : { start: at, end: at + width };
+}
+
+/**
+ * Delete a selection [start, end) from the source the way it looks deleted:
+ *
+ * - When it takes all of an inline token's visible content (the word inside
+ *   `**…**`, a link's label), the token's markers go too, rather than leaving
+ *   an empty `****` or `[](url)` behind. Repeats so nested tokens unwrap.
+ * - Hidden markers of a token it only cuts through stay, so deleting "lo wor"
+ *   from "Hello **world**" leaves "Hel**ld**": still bold, as it looked.
+ */
+export function deleteSelection(el: HTMLElement, source: string, start: number, end: number): { text: string; caret: number } {
+  const toks = [...el.querySelectorAll<HTMLElement>(".md-tok")].flatMap((tok) => {
+    const open = tok.firstElementChild, close = tok.lastElementChild;
+    if (tok.classList.contains("md-pre") || tok.classList.contains("md-fence")) return [];
+    if (!open?.classList.contains("md-mark") || !close?.classList.contains("md-mark") || open === close) return [];
+    const whole = rangeOf(el, tok);
+    return [{ ...whole, innerStart: rangeOf(el, open).end, innerEnd: rangeOf(el, close).start }];
+  });
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const t of toks) {
+      const covers = start <= t.innerStart && end >= t.innerEnd && start < t.end && end > t.start;
+      if (covers && (start > t.start || end < t.end)) {
+        start = Math.min(start, t.start);
+        end = Math.max(end, t.end);
+        changed = true;
+      }
+    }
+  }
+  let kept = "";
+  for (const seg of textSegments(el)) {
+    const from = Math.max(seg.start, start), to = Math.min(seg.end, end);
+    if (from >= to || !seg.hidden) continue;
+    const tok = seg.tok && rangeOf(el, seg.tok);
+    if (!tok || tok.start < start || tok.end > end) kept += source.slice(from, to);
+  }
+  return { text: source.slice(0, start) + kept + source.slice(end), caret: start };
+}
+
 /* ---------- caret utilities for contenteditable ---------- */
 
 export function getSelectionOffsets(el: HTMLElement): { start: number; end: number } {
