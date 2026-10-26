@@ -463,9 +463,15 @@ export default function Block(props: Props) {
       else handleEnter();
       return;
     }
-    if (e.key === "Backspace") {
+    if (e.key === "Backspace" || e.key === "Delete") {
       const { start, end } = getSelectionOffsets(el!);
-      if (start === 0 && end === 0) { e.preventDefault(); props.onMergePrev(); }
+      if (e.key === "Backspace" && start === 0 && end === 0) { e.preventDefault(); props.onMergePrev(); return; }
+      // Handled here as well as in beforeinput: WebKit sends no beforeinput
+      // when the only text before the caret is hidden (the start of a
+      // heading or list item), it just does nothing. Alt+Backspace (word
+      // deletion) keeps its native behaviour unless text is selected.
+      if (e.altKey && start === end) return;
+      if (deleteInSource(e.key === "Backspace" ? -1 : 1)) e.preventDefault();
       return;
     }
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
@@ -513,29 +519,40 @@ export default function Block(props: Props) {
    * than left to the browser, which mishandles the hidden markers (see
    * concealedDeletion). Composition input is never touched (IME safety).
    */
-  const onBeforeInput = (e: InputEvent) => {
-    if (!el || composing || e.isComposing) return;
+  /** Apply a Backspace (-1) or Delete (1) to the source when the browser
+   *  can't be trusted with it; false leaves it to the browser. */
+  const deleteInSource = (dir: -1 | 1): boolean => {
+    if (!el) return false;
     const t = props.text;
     const { start, end } = getSelectionOffsets(el);
-    const kind = e.inputType;
     if (start !== end) {
-      if (kind === "insertText" && e.data) {
-        // Typing over the word inside `**…**` keeps it bold: no widening.
-        e.preventDefault();
-        commit(t.slice(0, start) + e.data + t.slice(end), start + e.data.length);
-      } else if (kind.startsWith("delete") && kind !== "deleteByDrag" && kind !== "deleteByCut") {
-        e.preventDefault();
-        const r = deleteSelection(el, t, start, end);
-        commit(r.text, r.caret);
-      }
-      return;
+      const r = deleteSelection(el, t, start, end);
+      commit(r.text, r.caret);
+      return true;
     }
-    if (kind !== "deleteContentBackward" && kind !== "deleteContentForward") return;
-    const r = concealedDeletion(el, t, start, kind === "deleteContentBackward" ? -1 : 1);
-    if (!r) return;
-    e.preventDefault();
+    const r = concealedDeletion(el, t, start, dir);
+    if (!r) return false;
     if (r.start === 0 && r.end === 0) props.onMergePrev();
     else if (r.start !== r.end) commit(t.slice(0, r.start) + t.slice(r.end), r.start);
+    return true;
+  };
+
+  const onBeforeInput = (e: InputEvent) => {
+    if (!el || composing || e.isComposing) return;
+    const kind = e.inputType;
+    const { start, end } = getSelectionOffsets(el);
+    if (start !== end && kind === "insertText" && e.data) {
+      // Typing over the word inside `**…**` keeps it bold: no widening.
+      e.preventDefault();
+      const t = props.text;
+      commit(t.slice(0, start) + e.data + t.slice(end), start + e.data.length);
+      return;
+    }
+    // Word and line deletions with a collapsed caret stay native.
+    const collapsedKinds = kind === "deleteContentBackward" || kind === "deleteContentForward";
+    if (!kind.startsWith("delete") || kind === "deleteByDrag" || kind === "deleteByCut") return;
+    if (start === end && !collapsedKinds) return;
+    if (deleteInSource(kind.endsWith("Forward") ? 1 : -1)) e.preventDefault();
   };
 
   // Cut inside one block: the clipboard gets the Markdown source (as a cut

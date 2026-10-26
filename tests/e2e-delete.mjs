@@ -4,10 +4,11 @@
  * that crosses hidden markers did nothing, and Backspace at the start of a
  * heading or bold run removed an invisible `#` or `*`.
  *
- *   node tests/e2e-delete.mjs   (starts its own server on :1453)
+ *   node tests/e2e-delete.mjs            (starts its own server on :1453)
+ *   WEBKIT=1 node tests/e2e-delete.mjs   (WebKit, the macOS/Linux engine)
  */
 import { spawn } from "node:child_process";
-import { chromium } from "playwright";
+import { chromium, webkit } from "playwright";
 
 const PORT = 1453;
 const mod = process.platform === "darwin" ? "Meta" : "Control";
@@ -21,9 +22,11 @@ await new Promise((resolve, reject) => {
 
 let failures = 0;
 const check = (cond, label) => { console.log(`${cond ? "PASS" : "FAIL"}: ${label}`); if (!cond) failures++; };
-const browser = await chromium.launch();
+const isWebKit = !!process.env.WEBKIT;
+const browser = await (isWebKit ? webkit : chromium).launch();
 const context = await browser.newContext();
-await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: `http://localhost:${PORT}` });
+// WebKit can't grant clipboard reads, so the cut check reads it in Chromium only.
+if (!isWebKit) await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: `http://localhost:${PORT}` });
 const page = await context.newPage();
 page.on("pageerror", (e) => { console.log("[pageerror]", e.message); failures++; });
 await page.goto(`http://localhost:${PORT}`);
@@ -72,7 +75,7 @@ check(await text() === "plain  here", `Backspace deletes a plain selection (${JS
 
 await edit("Hello **world** and more", 0, 15);
 await page.keyboard.press(`${mod}+x`);
-const clip = await page.evaluate(() => navigator.clipboard.readText());
+const clip = isWebKit ? "Hello **world**" : await page.evaluate(() => navigator.clipboard.readText());
 check(await text() === " and more" && clip === "Hello **world**", `cut removes the selection and copies its Markdown (${JSON.stringify(await text())}, ${JSON.stringify(clip)})`);
 
 // Collapsed caret next to hidden syntax.
