@@ -1,6 +1,6 @@
 import { batch, createSignal, createMemo } from "solid-js";
 import { createStore, produce } from "solid-js/store";
-import type { FileNode } from "./platform";
+import type { FileNode, FileTimes } from "./platform";
 import type { Base16Scheme } from "./base16";
 import { onAssetsReady } from "./assets";
 import {
@@ -66,7 +66,19 @@ export const clampZoom = (z: number) => Math.max(90, Math.min(180, z));
 
 // Workspace folder shown in the sidebar (lifted out of App so the command
 // bus can drive "Open Folder…").
-export const [fileTree, setFileTree] = createSignal<FileNode[]>([]);
+const [fileTree, setFileTreeSignal] = createSignal<FileNode[]>([]);
+export { fileTree };
+/**
+ * Newer times for files saved since the tree was last listed, by path. The
+ * watcher reports a save without re-walking (the tree's shape is unchanged),
+ * and patching these in keeps every FileNode object, and so every rendered
+ * row, intact. A fresh tree supersedes them all.
+ */
+export const [treeTimes, setTreeTimes] = createSignal<ReadonlyMap<string, FileTimes>>(new Map());
+export function setFileTree(tree: FileNode[]) {
+  setTreeTimes(new Map());
+  setFileTreeSignal(tree);
+}
 
 /**
  * Expanded folders, keyed by path.

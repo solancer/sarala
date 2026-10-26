@@ -24,8 +24,29 @@ struct FileNode {
     name: String,
     path: String,
     is_dir: bool,
+    /// Milliseconds since the Unix epoch, for the sidebar's date sorts. Files
+    /// only: the sidebar derives a folder's from its contents, so it follows
+    /// saves too. `None` where the OS has no such time (creation time on some
+    /// Linux filesystems).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    modified: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    created: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     children: Option<Vec<FileNode>>,
+}
+
+fn epoch_ms(t: std::io::Result<std::time::SystemTime>) -> Option<u64> {
+    let d = t.ok()?.duration_since(std::time::UNIX_EPOCH).ok()?;
+    Some(d.as_millis() as u64)
+}
+
+/// (modified, created) for a file, in epoch milliseconds.
+fn file_times(path: &Path) -> (Option<u64>, Option<u64>) {
+    match fs::metadata(path) {
+        Ok(m) => (epoch_ms(m.modified()), epoch_ms(m.created())),
+        Err(_) => (None, None),
+    }
 }
 
 const MARKDOWN_EXTS: &[&str] = &["md", "markdown", "mdown", "txt"];
@@ -59,14 +80,19 @@ fn walk(dir: &Path, depth: usize) -> Vec<FileNode> {
                 name,
                 path: path.to_string_lossy().to_string(),
                 is_dir: true,
+                modified: None,
+                created: None,
                 children: Some(children),
             });
         } else {
             if is_markdown(&path) {
+                let (modified, created) = file_times(&path);
                 files.push(FileNode {
                     name,
                     path: path.to_string_lossy().to_string(),
                     is_dir: false,
+                    modified,
+                    created,
                     children: None,
                 });
             }
@@ -188,6 +214,29 @@ fn watch_tree(
                 .iter()
                 .any(|ev| affects_tree(&cb_root, &st.known, &ev.path))
             {
+                // The shape is unchanged, but listed files may have been
+                // saved: send just their new times (one stat each) so a
+                // date-sorted sidebar can re-sort without a full re-walk.
+                let touched: Vec<_> = events
+                    .iter()
+                    .filter(|ev| st.known.contains(&ev.path) && ev.path.is_file())
+                    .map(|ev| {
+                        let (modified, created) = file_times(&ev.path);
+                        serde_json::json!({
+                            "path": ev.path.to_string_lossy(),
+                            "modified": modified,
+                            "created": created,
+                        })
+                    })
+                    .collect();
+                drop(st);
+                if !touched.is_empty() {
+                    let _ = app.emit_to(
+                        cb_label.as_str(),
+                        "tree-touched",
+                        serde_json::json!({ "root": cb_root.to_string_lossy(), "files": touched }),
+                    );
+                }
                 return;
             }
             let (tree, changed) = snapshot(&cb_root, &mut st);
@@ -447,6 +496,24 @@ fn search_in_folder(
     Ok(results)
 }
 
+/// The rename in `save_file` swaps in a brand-new file, which would reset the
+/// document's creation date on every save. Stamp the original one onto the
+/// temp file first. Only macOS and Windows let a program set a creation time;
+/// elsewhere this is a no-op (and few Linux filesystems report one anyway).
+#[allow(unused_variables)]
+fn keep_created(tmp: &Path, created: Option<std::time::SystemTime>) {
+    #[cfg(any(target_os = "macos", windows))]
+    if let Some(t) = created {
+        #[cfg(target_os = "macos")]
+        use std::os::macos::fs::FileTimesExt;
+        #[cfg(windows)]
+        use std::os::windows::fs::FileTimesExt;
+        if let Ok(f) = fs::OpenOptions::new().write(true).open(tmp) {
+            let _ = f.set_times(fs::FileTimes::new().set_created(t));
+        }
+    }
+}
+
 #[tauri::command]
 fn save_file(
     state: tauri::State<FileWatcher>,
@@ -459,7 +526,9 @@ fn save_file(
     // Atomic-ish write: write to a sibling temp file, then rename over.
     let target = Path::new(&path);
     let tmp = target.with_extension("sarala.tmp");
+    let created = fs::metadata(target).and_then(|m| m.created()).ok();
     fs::write(&tmp, &bytes).map_err(|e| format!("Could not write {path}: {e}"))?;
+    keep_created(&tmp, created);
     fs::rename(&tmp, target).map_err(|e| format!("Could not finalize {path}: {e}"))?;
     // Suppress the watcher's self-trigger: record the hash of what we just wrote
     // so the resulting filesystem event is recognised as our own save, not an
@@ -1385,8 +1454,43 @@ fn main() {
 mod tests {
     use super::{
         affects_tree, decode_bytes, encode_contents, enumerate_system_fonts, font_faces_b64,
-        search_in_folder, snapshot, TreeState,
+        keep_created, search_in_folder, snapshot, TreeState,
     };
+
+    #[test]
+    fn tree_lists_file_times() {
+        use std::fs;
+        let dir = std::env::temp_dir().join(format!("sarala-times-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("sub")).unwrap();
+        fs::write(dir.join("sub/a.md"), "a").unwrap();
+        let tree = super::walk(&dir, 0);
+        assert!(tree[0].is_dir && tree[0].modified.is_none());
+        let file = &tree[0].children.as_ref().unwrap()[0];
+        assert!(file.modified.unwrap() > 0);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// The atomic save swaps in a new file; the document's creation date must
+    /// survive it where the OS lets us set one.
+    #[cfg(any(target_os = "macos", windows))]
+    #[test]
+    fn atomic_save_keeps_creation_date() {
+        use std::fs;
+        let dir = std::env::temp_dir().join(format!("sarala-created-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("note.md");
+        fs::write(&target, "one").unwrap();
+        let created = fs::metadata(&target).unwrap().created().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        let tmp = dir.join("note.sarala.tmp");
+        fs::write(&tmp, "two").unwrap();
+        keep_created(&tmp, Some(created));
+        fs::rename(&tmp, &target).unwrap();
+        assert_eq!(fs::metadata(&target).unwrap().created().unwrap(), created);
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn tree_watch_reacts_only_to_shape_changes() {
