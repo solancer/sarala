@@ -125,6 +125,29 @@ try {
       await page.keyboard.press("Enter");
       assert.equal(await page.locator(".source").textContent(), "");
       console.log("PASS ordered continuation and empty-item exit");
+
+      // Enter mid-list (issue #8): the new empty item takes typed text after
+      // its marker (the caret used to sit in the hidden marker, so text went
+      // in front of it), and numbered siblings below move along.
+      const midList = async (text, at, typed) => {
+        await load(text);
+        await page.evaluate(async (at) => {
+          const store = await import("/src/store.ts");
+          store.requestCaret(at); store.setActive(0);
+        }, at);
+        await page.waitForSelector(".source");
+        await page.waitForTimeout(80);
+        await page.keyboard.press("Enter");
+        await page.keyboard.type(typed);
+        return page.locator(".source").textContent();
+      };
+      assert.equal(await midList("- a\n- b\n- c", 3, "new"), "- a\n- new\n- b\n- c");
+      assert.equal(await midList("1. a\n2. b\n3. c", 4, "new"), "1. a\n2. new\n3. b\n4. c");
+      assert.equal(await midList("1. **Given** x\n2. y\n   wrapped\n   1. nested\n3. z", 14, "new"),
+        "1. **Given** x\n2. new\n3. y\n   wrapped\n   1. nested\n4. z");
+      // Lists numbered "1. 1." on purpose keep their numbers.
+      assert.equal(await midList("1. a\n1. b", 4, "new"), "1. a\n2. new\n1. b");
+      console.log("PASS new items mid-list: caret after the marker, numbers shift");
     } finally { await browser.close(); }
   }
 } finally { server.kill("SIGTERM"); }
