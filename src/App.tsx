@@ -37,7 +37,7 @@ import { base16ToCss } from "./base16";
 import { autoCheckForUpdates } from "./updater";
 import {
   activeTabId, openTabs, removeTab, currentTabView, setTabViewProvider, cycleTab, setTabExternalChange,
-  doc, theme, sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
+  doc, theme, sourceMode, sidebarOpen, setSidebarOpen,
   fileName, setActive, fileTree, setFileTree, setTreeTimes, folderName, folderPath, THEMES, targetBlockIndex,
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
   focusMode, typewriterMode, statusBarVisible, alwaysOnTop, zoom, tableFullWidth,
@@ -54,6 +54,7 @@ import {
 } from "./commands";
 import { BLOCK_TARGETED_IDS } from "./menudata";
 import { makeMenuKeyHandler } from "./shortcuts";
+import { showSource } from "./viewswitch";
 import { startAutosave, findRecoverable, restoreSession, shadowBaseName, discardShadows, discardShadowFor } from "./autosave";
 
 export default function App() {
@@ -455,8 +456,8 @@ export default function App() {
               </svg>
             </button>
             <div class="view-toggle" role="group" aria-label="Editor view">
-              <button aria-pressed={!sourceMode()} classList={{ on: !sourceMode() }} onClick={() => setSourceMode(false)}>Live</button>
-              <button aria-pressed={sourceMode()} classList={{ on: sourceMode() }} onClick={() => setSourceMode(true)}>Source</button>
+              <button aria-pressed={!sourceMode()} classList={{ on: !sourceMode() }} onClick={() => showSource(false)}>Live</button>
+              <button aria-pressed={sourceMode()} classList={{ on: sourceMode() }} onClick={() => showSource(true)}>Source</button>
             </div>
             </div>
           </header>

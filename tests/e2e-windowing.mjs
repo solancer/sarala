@@ -57,6 +57,13 @@ c = await counts();
 check(c.blocks === parts.length, `every block keeps its element (${c.blocks}/${parts.length})`);
 check(c.rendered > 0 && c.rendered < 200, `only blocks near the viewport render (${c.rendered})`);
 check(await page.locator(".page > .block .rendered", { hasText: "Section 0" }).count() > 0, "the top of the document is rendered");
+// Placeholders must stay cheap to repaint: unpositioned (no paint layer each)
+// and not hit-testable (left out of WebKit's event region).
+const ph = await page.evaluate(() => {
+  const el = document.querySelector(".page > .block.placeholder");
+  return el && { position: getComputedStyle(el).position, events: getComputedStyle(el).pointerEvents };
+});
+check(ph?.position === "static" && ph.events === "none", `placeholders are unpositioned and not hit-testable (${JSON.stringify(ph)})`);
 
 // Jump far down: blocks there render, the top turns into placeholders.
 await scrollTo(await page.evaluate(() => document.querySelector(".scroll").scrollHeight));
@@ -93,6 +100,7 @@ await page.waitForSelector(".block.active .source");
 await page.keyboard.press("End");
 await page.keyboard.type(" EDITED");
 const edited = await page.evaluate(async () => (await import("/src/store.ts")).doc.blocks.find((b) => b.text.startsWith("Paragraph 300 ")).text);
+check(await page.evaluate(() => getComputedStyle(document.querySelector(".block.active")).willChange) === "opacity", "the block being edited is a layer of its own, so caret blinks repaint only it");
 check(edited.includes(" EDITED"), `a block far down can be edited (${JSON.stringify(edited)})`);
 await page.evaluate(async () => (await import("/src/store.ts")).setActive(-1));
 

@@ -893,6 +893,12 @@ body { font-family: var(--font-ui); }
 @media (max-width: 720px) { .page { padding: 28px 22px 45vh; } }
 
 .block { position: relative; }
+/* A placeholder (an unrendered block far from the viewport, see
+   virtualize.ts) has nothing to position. Positioned, each one is a paint
+   layer of its own in WebKit, and every repaint walked all of them: each
+   blink of the caret in a long document cost a steady slice of a core. */
+.block.placeholder { position: static; pointer-events: none; }
+.block.active { will-change: opacity; z-index: 1; }
 
 
 /* Live source: same prose face as rendered text; markers dim, content

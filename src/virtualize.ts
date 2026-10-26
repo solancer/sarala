@@ -187,6 +187,13 @@ function saveAnchor() {
   if (el) anchor = { el, top: el.getBoundingClientRect().top };
 }
 
+/** Hold the text now at the top of the viewport in place while blocks above
+ *  it render or turn into placeholders, after scrolling it there in code. */
+export function holdPosition() {
+  saveAnchor();
+  scheduleUpdate();
+}
+
 function restoreAnchor() {
   if (anchor && anchor.el.isConnected && root && windowing()) {
     const delta = anchor.el.getBoundingClientRect().top - anchor.top;
