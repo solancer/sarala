@@ -1,4 +1,4 @@
-import { For, onMount, onCleanup } from "solid-js";
+import { For, createSelector, onMount, onCleanup } from "solid-js";
 import Block from "./Block";
 import {
   doc, setActive, updateBlock, mergeWithPrevious, insertBlockAfter,
@@ -75,6 +75,10 @@ export default function Editor() {
       document.removeEventListener("keydown", onKeyDown);
     });
   });
+
+  // Notifies only the blocks gaining and losing focus, rather than every
+  // block re-comparing its index on each activation.
+  const isActive = createSelector(() => doc.activeIndex);
 
   const navigate = (index: number, dir: -1 | 1) => {
     const next = index + dir;
@@ -153,7 +157,7 @@ export default function Editor() {
               id={block.id}
               index={i()}
               text={block.text}
-              active={doc.activeIndex === i()}
+              active={isActive(i())}
               onActivate={(caret) => {
                 if (caret != null) requestCaret(caret);
                 setActive(i());

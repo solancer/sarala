@@ -244,10 +244,17 @@ const isFrontMatter = (text: string) => {
   return trimmed.startsWith("---\n") && /\n---$/.test(trimmed);
 };
 
+// Keyed by the text alone, and cleared when the render options change: a
+// key with the options prepended was a new string to hash for every block on
+// every rebuild, where a block's own text has its hash cached.
 let factsCache = new Map<string, BlockFacts>();
-const factsKey = (text: string) => optionsKey() + "\0" + text;
+let factsOptions = "";
 function blockFacts(text: string): BlockFacts {
-  const key = factsKey(text);
+  if (factsOptions !== optionsKey()) {
+    factsCache = new Map();
+    factsOptions = optionsKey();
+  }
+  const key = text;
   const hit = factsCache.get(key);
   if (hit) return hit;
   if (isFrontMatter(text)) {
@@ -268,15 +275,49 @@ function blockFacts(text: string): BlockFacts {
   return facts;
 }
 
+/** The last context built, with the inputs it was built from. */
+let lastBuild: { key: string; ids: (number | string)[]; texts: string[]; facts: BlockFacts[]; context: RenderContext } | null = null;
+/** An indented paragraph after a footnote definition continues it. */
+const continuesFootnote = (text: string) => /^(?: {4}|\t)\S/.test(text);
+
+/**
+ * The previous context, when `blocks` differ from the ones it was built from
+ * only in text that leaves every block's facts as they were. Typing in a
+ * paragraph is the common case: the context, built from facts alone, comes
+ * out the same, so this skips rebuilding it (and re-serializing its keys)
+ * for every block on every keystroke.
+ */
+function reuseContext(blocks: readonly { id: number | string; text: string }[], key: string): RenderContext | null {
+  const last = lastBuild;
+  if (!last || last.key !== key || last.ids.length !== blocks.length) return null;
+  if (factsCache.size > 2 * blocks.length + 5000) return null; // let a rebuild prune it
+  const changed: [number, string, BlockFacts][] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const { id, text } = blocks[i];
+    if (id !== last.ids[i]) return null;
+    if (text === last.texts[i]) continue;
+    // Front matter feeds image paths; continuation paragraphs feed footnotes.
+    if ((i === 0 && (text.startsWith("---\n") || last.texts[0].startsWith("---\n"))) || continuesFootnote(text) || continuesFootnote(last.texts[i])) return null;
+    const facts = blockFacts(text);
+    if (facts !== last.facts[i] && JSON.stringify(facts) !== JSON.stringify(last.facts[i])) return null;
+    changed.push([i, text, facts]);
+  }
+  for (const [i, text, facts] of changed) { last.texts[i] = text; last.facts[i] = facts; }
+  return last.context;
+}
+
 /** Everything a block render needs from the rest of the document. `codeKey`
  *  changes when syntax grammars finish loading. */
 export function buildRenderContext(blocks: readonly { id: number | string; text: string }[], docPath: string | null = null, assetKey = ""): RenderContext {
+  const key = `${optionsKey()}\0${docPath ?? ""}\0${assetKey}`;
+  const reused = reuseContext(blocks, key);
+  if (reused) return reused;
   const all = blocks.map(b => blockFacts(b.text));
   // Bound the cache by pruning it to this document's texts (the slack covers
   // undo and other tabs). Clearing it at a fixed size instead re-lexed every
   // block on every keystroke once a document had more blocks than that.
   if (factsCache.size > 2 * blocks.length + 5000) {
-    factsCache = new Map(blocks.map((b, i) => [factsKey(b.text), all[i]]));
+    factsCache = new Map(blocks.map((b, i) => [b.text, all[i]]));
   }
   const links: Links = Object.create(null);
   const footnoteDescriptions = new Map<string, string>();
@@ -336,7 +377,9 @@ export function buildRenderContext(blocks: readonly { id: number | string; text:
     for (const id of facts.footnoteRefs) footnoteSeen.set(id, (footnoteSeen.get(id) ?? 0) + 1);
     for (const base of facts.headingBases) headingSeen.set(base, (headingSeen.get(base) ?? 0) + 1);
   });
-  return { links, footnoteDescriptions, equationPlans, equationLabels, outline, blocks: contexts };
+  const context = { links, footnoteDescriptions, equationPlans, equationLabels, outline, blocks: contexts };
+  lastBuild = { key, ids: blocks.map(b => b.id), texts: blocks.map(b => b.text), facts: all, context };
+  return context;
 }
 
 let contextProvider: (() => RenderContext) | null = null;
@@ -968,6 +1011,26 @@ export interface Heading {
 
 export function extractOutline(blocks: string[]): Heading[] {
   return blocks.flatMap((b, blockIndex) => blockFacts(b).headings.map(h => ({ ...h, blockIndex })));
+}
+
+const blockWords = new Map<string, number>();
+/**
+ * `countWords` over a document's blocks, as joined by `joinBlocks`, counted
+ * block by block with each block's count cached by its text: re-scanning the
+ * whole document cost milliseconds a keystroke in a long one. A code fence
+ * never spans blocks, so the sum matches counting the joined text.
+ */
+export function countBlockWords(texts: readonly string[]): { words: number; chars: number } {
+  if (blockWords.size > 2 * texts.length + 5000) blockWords.clear();
+  let words = 0;
+  let chars = 0;
+  for (const text of texts) {
+    let n = blockWords.get(text);
+    if (n === undefined) blockWords.set(text, (n = countWords(text).words));
+    words += n;
+    chars += text.length;
+  }
+  return { words, chars: chars + Math.max(0, texts.length - 1) * 2 + 1 };
 }
 
 export function countWords(md: string): { words: number; chars: number } {
