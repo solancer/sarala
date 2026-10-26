@@ -1,5 +1,5 @@
 import { batch, createSignal, createMemo, createComputed, untrack, type Signal } from "solid-js";
-import { createStore, produce } from "solid-js/store";
+import { createStore, produce, unwrap } from "solid-js/store";
 import type { FileNode, FileTimes } from "./platform";
 import type { Base16Scheme } from "./base16";
 import { onAssetsReady } from "./assets";
@@ -7,7 +7,7 @@ import {
   splitBlocks,
   joinBlocks,
   hasOpenFence,
-  countWords,
+  countBlockWords,
   setTocProvider,
   setRenderContextProvider,
   buildRenderContext,
@@ -206,7 +206,11 @@ onAssetsReady(() => setAssetEpoch((n) => n + 1));
 export const [mermaidEpoch, setMermaidEpoch] = createSignal(0);
 export const bumpMermaidEpoch = () => setMermaidEpoch((n) => n + 1);
 
-export const fullText = createMemo(() => joinBlocks(state.blocks.map((b) => b.text)));
+/** Every block's text, read through the store once per change and shared by
+ *  the document-wide memos below: each walking 12,000 store proxies of a long
+ *  document on every keystroke added up. */
+const blockTexts = createMemo(() => state.blocks.map((b) => b.text));
+export const fullText = createMemo(() => joinBlocks(blockTexts()));
 /**
  * Document-wide render context, rebuilt once per document change (per-block
  * facts are cached by text, so this is a cheap O(blocks) pass). Blocks read
@@ -214,7 +218,8 @@ export const fullText = createMemo(() => joinBlocks(state.blocks.map((b) => b.te
  */
 export const renderContext = createMemo(() => {
   renderEpoch();
-  return buildRenderContext(state.blocks, state.filePath, String(assetEpoch()));
+  blockTexts(); // tracks every block; the raw objects below read faster
+  return buildRenderContext(unwrap(state.blocks), state.filePath, String(assetEpoch()));
 });
 /**
  * One block's render signature (its slice of the document context), as its
@@ -252,7 +257,7 @@ export const outline = createMemo(() => renderContext().outline, [], { equals: s
 setTocProvider(() => outline());
 // eslint-disable-next-line solid/reactivity -- read inside Block's keyed render
 setRenderContextProvider(() => renderContext());
-export const stats = createMemo(() => countWords(fullText()));
+export const stats = createMemo(() => countBlockWords(blockTexts()));
 /** Estimated reading time in whole minutes (200 wpm), never below 1. */
 export const readTime = createMemo(() => Math.max(1, Math.ceil(stats().words / 200)));
 

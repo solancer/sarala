@@ -133,5 +133,28 @@ check(equationHost.querySelector(".md-inline-preview").shadowRoot.querySelector(
   md.setMarkdownDocumentProvider(() => blocks);
   check(md.renderMarkdown(blocks[8].text, "8").includes("(1)"), "Keyed render reads equation labels from the document");
   md.setMarkdownDocumentProvider(() => []);
+
+  // A context reused after an edit (see reuseContext) must equal one built
+  // from scratch for the edited document.
+  const plain = (ctx) => JSON.stringify(ctx, (_k, v) => v instanceof Map ? [...v] : v instanceof Set ? [...v] : v);
+  const doc = [...base, "    continued footnote", "Last plain paragraph"];
+  const build = (texts) => md.buildRenderContext(texts.map((text, id) => ({ id, text })));
+  const fresh = (texts) => { build(["reset"]); return build(texts); };
+  for (const [i, text] of [
+    [2, "Plain words, edited"], [2, "Now with a [link][ref]"], [2, "Now a footnote[^n]"], [0, "# Renamed"],
+    [0, "---\ntitle: x\n---"], [3, "[ref]: https://b.example"], [5, "[^n]: Changed"], [10, "    edited continuation"],
+    [7, "$$c \\label{eq:b}$$"], [11, "## Now a heading"], [11, "Last plain paragraph, longer"],
+  ]) {
+    build(doc);
+    const edited = doc.map((t, j) => j === i ? text : t);
+    equal(plain(build(edited)), plain(fresh(edited)), `Reused context matches a fresh build after editing block ${i} to ${JSON.stringify(text)}`);
+  }
+  build(doc);
+  check(build(doc.map((t, j) => j === 2 ? "Other plain words" : t)) === build(doc.map((t, j) => j === 2 ? "Third plain words" : t)), "Typing in a plain paragraph reuses the context");
+}
+{
+  const source = "# Title\n\nSome *words* here, and [a link](x).\n\n```js\nconst ignored = 1;\n```\n\n- one\n- two three\n\n> quoted words";
+  const texts = md.splitBlocks(source);
+  equal(md.countBlockWords(texts), md.countWords(md.joinBlocks(texts)), "Counting block by block matches counting the whole document");
 }
 console.log(`${checks} Markdown regression checks passed`);
