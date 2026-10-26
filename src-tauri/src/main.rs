@@ -1273,6 +1273,50 @@ fn font_faces_b64(family: String) -> Result<Vec<FontFace>, String> {
     Ok(out)
 }
 
+/// Title-bar buttons on Linux come from GTK's `gtk-decoration-layout`, which
+/// GTK fills from GNOME's `button-layout` preference through the dconf
+/// GSettings backend. The AppImage's bundled GTK usually can't load the host's
+/// dconf module, so it falls back to its built-in close-only layout: no
+/// minimize or maximize (issue #3). Read the preference with the host's own
+/// `gsettings` and hand it to GTK. Scoped to the AppImage on GNOME: native
+/// packages and Flatpak already get it, and other desktops keep theirs.
+///
+/// Rust note: this runs inside `setup`, on the main thread after GTK is
+/// initialised, which is where `gtk::Settings::default()` is valid.
+#[cfg(target_os = "linux")]
+fn apply_gnome_button_layout() {
+    use gtk::prelude::GtkSettingsExt;
+    let gnome =
+        std::env::var("XDG_CURRENT_DESKTOP").is_ok_and(|d| d.to_uppercase().contains("GNOME"));
+    if std::env::var_os("APPIMAGE").is_none() || !gnome {
+        return;
+    }
+    // The AppImage's runtime points these at its bundled libraries; the host
+    // binary must run with its own.
+    let out = Command::new("gsettings")
+        .args(["get", "org.gnome.desktop.wm.preferences", "button-layout"])
+        .env_remove("LD_LIBRARY_PATH")
+        .env_remove("GIO_MODULE_DIR")
+        .env_remove("GIO_EXTRA_MODULES")
+        .env_remove("GSETTINGS_SCHEMA_DIR")
+        .output();
+    let Ok(out) = out else { return };
+    if !out.status.success() {
+        return;
+    }
+    // gsettings prints a GVariant string: 'appmenu:minimize,maximize,close'
+    let layout = String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .trim_matches('\'')
+        .to_string();
+    if layout.is_empty() || !layout.contains(':') {
+        return;
+    }
+    if let Some(settings) = gtk::Settings::default() {
+        settings.set_gtk_decoration_layout(Some(&layout));
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .manage({
@@ -1286,6 +1330,9 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
+            #[cfg(target_os = "linux")]
+            apply_gnome_button_layout();
+
             // Auto-updater (desktop only). The plugin reads its pubkey/endpoints
             // from tauri.conf.json; the frontend invokes `plugin:updater|check`.
             #[cfg(desktop)]
