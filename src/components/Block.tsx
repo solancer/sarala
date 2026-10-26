@@ -519,10 +519,19 @@ export default function Block(props: Props) {
    * than left to the browser, which mishandles the hidden markers (see
    * concealedDeletion). Composition input is never touched (IME safety).
    */
+  /** Whether the selection lies wholly in this block's source. One that runs
+   *  on into other blocks is the editor's to handle (Editor.tsx). */
+  const selectionWithin = () => {
+    const sel = window.getSelection();
+    if (!el || !sel?.rangeCount) return false;
+    const r = sel.getRangeAt(0);
+    return el.contains(r.startContainer) && el.contains(r.endContainer);
+  };
+
   /** Apply a Backspace (-1) or Delete (1) to the source when the browser
    *  can't be trusted with it; false leaves it to the browser. */
   const deleteInSource = (dir: -1 | 1): boolean => {
-    if (!el) return false;
+    if (!el || !selectionWithin()) return false;
     const t = props.text;
     const { start, end } = getSelectionOffsets(el);
     if (start !== end) {
@@ -538,7 +547,7 @@ export default function Block(props: Props) {
   };
 
   const onBeforeInput = (e: InputEvent) => {
-    if (!el || composing || e.isComposing) return;
+    if (!el || composing || e.isComposing || !selectionWithin()) return;
     const kind = e.inputType;
     const { start, end } = getSelectionOffsets(el);
     if (start !== end && kind === "insertText" && e.data) {
@@ -558,7 +567,7 @@ export default function Block(props: Props) {
   // Cut inside one block: the clipboard gets the Markdown source (as a cut
   // across blocks does), and the removal goes through the source text.
   const onCut = (e: ClipboardEvent) => {
-    if (!el || composing) return;
+    if (!el || composing || !selectionWithin()) return;
     const { start, end } = getSelectionOffsets(el);
     if (start === end || !e.clipboardData) return;
     e.preventDefault();
@@ -568,6 +577,7 @@ export default function Block(props: Props) {
   };
 
   const onPaste = (e: ClipboardEvent) => {
+    if (!selectionWithin()) return;
     e.preventDefault();
     const cd = e.clipboardData;
     if (!cd) return;

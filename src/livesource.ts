@@ -707,6 +707,28 @@ export function deleteSelection(el: HTMLElement, source: string, start: number, 
   return { text: source.slice(0, start) + kept + source.slice(end), caret: start };
 }
 
+/**
+ * `deleteSelection` for a block that isn't being edited (a selection made in
+ * rendered blocks): style the source offscreen, with every marker concealed
+ * as it is away from the caret, and delete there.
+ */
+export function deleteSourceRange(source: string, start: number, end: number): { text: string; caret: number } {
+  const host = document.createElement("div");
+  host.className = "source";
+  host.setAttribute("aria-hidden", "true");
+  host.style.cssText = "position:fixed;left:-10000px;top:0;width:800px;visibility:hidden;pointer-events:none";
+  host.innerHTML = styleSource(source);
+  document.body.append(host);
+  try {
+    // Styling must keep textContent identical to the source; if a construct
+    // ever breaks that, fall back to a plain cut rather than misplace it.
+    if (host.textContent !== source) return { text: source.slice(0, start) + source.slice(end), caret: start };
+    return deleteSelection(host, source, start, end);
+  } finally {
+    host.remove();
+  }
+}
+
 /* ---------- caret utilities for contenteditable ---------- */
 
 export function getSelectionOffsets(el: HTMLElement): { start: number; end: number } {
