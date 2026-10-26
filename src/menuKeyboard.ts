@@ -10,7 +10,7 @@
  * same handler.
  */
 
-const ITEM = '[role="menuitem"]:not([disabled]):not([aria-disabled="true"])';
+const ITEM = ':is([role="menuitem"], [role="menuitemradio"]):not([disabled]):not([aria-disabled="true"])';
 
 /** Where a keyboard-opened menu should appear: at the caret or focused element. */
 export function keyboardMenuPoint(): { x: number; y: number } {

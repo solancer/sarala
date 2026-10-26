@@ -353,6 +353,35 @@ check(await page.evaluate(() => document.activeElement?.textContent.trim()) === 
 await page.keyboard.press("End");
 check(await page.evaluate(() => document.activeElement?.textContent.trim()) === "Three", "End goes to the last heading");
 
+// Sort by date (issue #11): newest first, folders by their newest file,
+// saves reported by the watcher re-sort without a fresh tree.
+await page.evaluate(async () => (await import("/src/store.ts")).setSidebarTab("files"));
+const stamp = (name, path, modified, created) => ({ name, path, is_dir: false, modified, created });
+await seedTree([
+  { name: "old", path: "/v/old", is_dir: true, children: [stamp("x.md", "/v/old/x.md", 100, 100)] },
+  { name: "new", path: "/v/new", is_dir: true, children: [stamp("y.md", "/v/new/y.md", 900, 50)] },
+  stamp("a.md", "/v/a.md", 300, 700),
+  stamp("b.md", "/v/b.md", 500, 200),
+]);
+const topNames = () => page.locator('.side-tree [role="treeitem"][aria-level="1"] .tree-nm').allTextContents();
+check(JSON.stringify(await topNames()) === JSON.stringify(["old", "new", "a.md", "b.md"]), `name order by default (${await topNames()})`);
+await page.locator(".side-sort-btn").click();
+await page.locator('[role="menuitemradio"]', { hasText: "Date modified" }).click();
+await page.waitForTimeout(100);
+check(JSON.stringify(await topNames()) === JSON.stringify(["new", "old", "b.md", "a.md"]), `date modified: newest first, folders kept on top (${await topNames()})`);
+check(await page.evaluate(async () => (await import("/src/settings.ts")).getSetting("treeSort", "")) === "modified", "the sort choice persists");
+await page.evaluate(async () => (await import("/src/store.ts")).setTreeTimes(new Map([["/v/a.md", { path: "/v/a.md", modified: 1000 }]])));
+await page.waitForTimeout(100);
+check(JSON.stringify(await topNames()) === JSON.stringify(["new", "old", "a.md", "b.md"]), `a saved file moves up (${await topNames()})`);
+await page.locator(".side-sort-btn").click();
+await page.waitForTimeout(100);
+check(await page.evaluate(() => document.activeElement?.getAttribute("role")) === "menuitemradio", "the sort menu takes keyboard focus");
+await page.keyboard.press("ArrowDown");
+await page.keyboard.press("ArrowDown");
+await page.keyboard.press("Enter");
+await page.waitForTimeout(100);
+check(JSON.stringify(await topNames()) === JSON.stringify(["old", "new", "a.md", "b.md"]), `date created, chosen by keyboard (${await topNames()})`);
+
 await browser.close();
 kill();
 console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");

@@ -1,10 +1,10 @@
 import { For, Show, createSignal, createEffect, createMemo, on, onCleanup, onMount, type JSX } from "solid-js";
-import { isMac, isTauri, type FileNode } from "../platform";
+import { isMac, isTauri, type FileNode, type FileTimes } from "../platform";
 import {
   outline, doc, folderPath, sidebarOpen, sidebarTab, setSidebarTab,
   sidebarWidth, setSidebarWidth, clampSidebar,
   isFolderOpen, toggleFolder, openAncestors, collapseAllFolders, openFolders,
-  isMissing,
+  isMissing, treeTimes,
 } from "../store";
 import {
   setSetting, getSetting, recentFiles, clearRecentFiles, removeRecentFile, saveOpenFolders,
@@ -165,6 +165,40 @@ interface Row {
   size: number;
 }
 
+/** Sidebar file order. Name is the order Rust lists in (folders first, then
+ *  files, case-insensitive); the date sorts put the newest first. */
+type TreeSort = "name" | "modified" | "created";
+const SORTS: { id: TreeSort; label: string }[] = [
+  { id: "name", label: "Name" },
+  { id: "modified", label: "Date modified" },
+  { id: "created", label: "Date created" },
+];
+
+/**
+ * Children of every folder, re-ordered by date. Nodes are not copied (rows
+ * keep their identity, and so their focus and DOM); only the arrays are new.
+ * A folder's date is its newest file's, so recent work bubbles up through
+ * the folders too. Folders stay above files, as in name order, and ties
+ * (or files without that date) keep their name order: the sort is stable.
+ */
+function orderByDate(tree: FileNode[], key: "modified" | "created", times: ReadonlyMap<string, FileTimes>) {
+  const kids = new Map<string, FileNode[]>();
+  const visit = (nodes: FileNode[]): { list: FileNode[]; newest: number } => {
+    const at = new Map<FileNode, number>();
+    let newest = -Infinity;
+    for (const n of nodes) {
+      const t = n.is_dir
+        ? (() => { const sub = visit(n.children ?? []); kids.set(n.path, sub.list); return sub.newest; })()
+        : (times.get(n.path)?.[key] ?? n[key] ?? -Infinity);
+      at.set(n, t);
+      newest = Math.max(newest, t);
+    }
+    const list = [...nodes].sort((a, b) => Number(b.is_dir) - Number(a.is_dir) || at.get(b)! - at.get(a)!);
+    return { list, newest };
+  };
+  return { top: visit(tree).list, kids };
+}
+
 /** Case-insensitive subsequence-free substring match, used by the filter. */
 const hit = (name: string, q: string) => name.toLowerCase().includes(q);
 
@@ -173,7 +207,9 @@ const hit = (name: string, q: string) => name.toLowerCase().includes(q);
  * expanded — except while filtering, when any folder containing a match is
  * forced open so results are reachable without hunting.
  */
-function flatten(nodes: FileNode[], query: string, depth = 0, out: Row[] = []): Row[] {
+function flatten(
+  nodes: FileNode[], query: string, kidsOf: (n: FileNode) => FileNode[], depth = 0, out: Row[] = [],
+): Row[] {
   const q = query.trim().toLowerCase();
   nodes.forEach((node, i) => {
     const row: Row = { node, depth, pos: i + 1, size: nodes.length };
@@ -181,11 +217,11 @@ function flatten(nodes: FileNode[], query: string, depth = 0, out: Row[] = []): 
       if (!q || hit(node.name, q)) out.push(row);
       return;
     }
-    const kids = node.children ?? [];
+    const kids = kidsOf(node);
     if (q) {
       // Probe the subtree first: a folder with no matching descendant and no
       // matching name of its own is omitted entirely rather than shown empty.
-      const sub = flatten(kids, query, depth + 1);
+      const sub = flatten(kids, query, kidsOf, depth + 1);
       if (sub.length || hit(node.name, q)) {
         out.push(row);
         out.push(...sub);
@@ -193,7 +229,7 @@ function flatten(nodes: FileNode[], query: string, depth = 0, out: Row[] = []): 
       return;
     }
     out.push(row);
-    if (isFolderOpen(node.path)) flatten(kids, query, depth + 1, out);
+    if (isFolderOpen(node.path)) flatten(kids, query, kidsOf, depth + 1, out);
   });
   return out;
 }
@@ -209,6 +245,9 @@ export default function Sidebar(props: Props) {
   const [activeHeading, setActiveHeading] = createSignal(-1);
   const [filter, setFilter] = createSignal("");
   const [recentOpen, setRecentOpen] = createSignal(getSetting("recentOpen", true));
+  const [treeSort, setTreeSort] = createSignal<TreeSort>(getSetting("treeSort", "name"));
+  const [sortMenu, setSortMenu] = createSignal<{ x: number; y: number } | null>(null);
+  const chooseSort = (id: TreeSort) => { setTreeSort(id); void setSetting("treeSort", id); setSortMenu(null); };
   // Keep the spin visible briefly so a fast re-list still reads as "done".
   const [refreshing, setRefreshing] = createSignal(false);
   const refresh = async () => {
@@ -227,10 +266,19 @@ export default function Sidebar(props: Props) {
   let filterEl: HTMLInputElement | undefined;
   let treeEl: HTMLDivElement | undefined;
 
+  // Date order is computed apart from the rows, so expanding a folder (which
+  // re-flattens) doesn't re-sort the whole tree.
+  const ordered = createMemo(() => {
+    const key = treeSort();
+    return key === "name" ? null : orderByDate(props.tree, key, treeTimes());
+  });
   // Flattened visible rows. Depends on openFolders() so expanding re-runs it.
   const rows = createMemo(() => {
     void openFolders();
-    return flatten(props.tree, filter());
+    const o = ordered();
+    return o
+      ? flatten(o.top, filter(), (n) => o.kids.get(n.path) ?? [])
+      : flatten(props.tree, filter(), (n) => n.children ?? []);
   });
 
   const windowed = createMemo(() => rows().length > WINDOW_MIN);
@@ -376,8 +424,13 @@ export default function Sidebar(props: Props) {
 
   // Dismiss the pin menu on outside click / Escape.
   onMount(() => {
-    const onDown = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest(".ctx-menu")) setPinMenu(null); };
-    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && setPinMenu(null);
+    const onDown = (e: MouseEvent) => {
+      if ((e.target as HTMLElement).closest(".ctx-menu")) return;
+      setPinMenu(null);
+      // The sort button toggles its own menu; closing here would re-open it.
+      if (!(e.target as HTMLElement).closest(".side-sort-btn")) setSortMenu(null);
+    };
+    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") { setPinMenu(null); setSortMenu(null); } };
     window.addEventListener("mousedown", onDown, true);
     window.addEventListener("keydown", onEsc);
     onCleanup(() => {
@@ -674,6 +727,23 @@ export default function Sidebar(props: Props) {
             </Show>
             <Show when={props.tree.length > 0}>
               <button
+                class="side-clear-btn side-sort-btn"
+                classList={{ on: treeSort() !== "name" }}
+                title={`Sort by ${SORTS.find((s) => s.id === treeSort())!.label.toLowerCase()}`}
+                aria-label="Sort files"
+                aria-haspopup="menu"
+                aria-expanded={!!sortMenu()}
+                onClick={(e) => {
+                  if (sortMenu()) return setSortMenu(null);
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setSortMenu({ x: r.left, y: r.bottom + 4 });
+                }}
+              >
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M5 2.5v11M2.5 11 5 13.5 7.5 11M9.5 4h4M9.5 8h3M9.5 12h2" />
+                </svg>
+              </button>
+              <button
                 class="side-clear-btn"
                 title="Collapse all folders"
                 aria-label="Collapse all folders"
@@ -927,6 +997,43 @@ export default function Sidebar(props: Props) {
                 <span class="ctx-label">Delete…</span>
               </button>
             </Show>
+          </div>
+        )}
+      </Show>
+
+      {/* ===== sort menu ===== */}
+      <Show when={sortMenu()}>
+        {(m) => (
+          <div
+            class="ctx-menu" role="menu" aria-label="Sort files by"
+            ref={(el) => {
+              onCleanup(attachMenuKeyboard(el, () => setSortMenu(null)));
+              // The sidebar can be narrow: keep the menu inside the window.
+              requestAnimationFrame(() => {
+                const r = el.getBoundingClientRect();
+                if (r.right > innerWidth - 8) el.style.left = `${Math.max(8, innerWidth - r.width - 8)}px`;
+              });
+            }}
+            style={{ left: `${m().x}px`, top: `${m().y}px` }} onContextMenu={(e) => e.preventDefault()}
+          >
+            <For each={SORTS}>
+              {(s) => (
+                <button
+                  class="ctx-item" role="menuitemradio" tabIndex={-1}
+                  aria-checked={treeSort() === s.id}
+                  onMouseDown={(e) => { e.preventDefault(); chooseSort(s.id); }}
+                >
+                  <span class="ctx-ic ctx-check" aria-hidden="true">
+                    <Show when={treeSort() === s.id}>
+                      <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m3.5 8.5 3 3 6-7" />
+                      </svg>
+                    </Show>
+                  </span>
+                  <span class="ctx-label">{s.label}</span>
+                </button>
+              )}
+            </For>
           </div>
         )}
       </Show>

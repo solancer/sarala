@@ -38,7 +38,7 @@ import { autoCheckForUpdates } from "./updater";
 import {
   activeTabId, openTabs, removeTab, currentTabView, setTabViewProvider, cycleTab, setTabExternalChange,
   doc, theme, sourceMode, setSourceMode, sidebarOpen, setSidebarOpen,
-  fileName, setActive, fileTree, setFileTree, folderName, folderPath, THEMES, targetBlockIndex,
+  fileName, setActive, fileTree, setFileTree, setTreeTimes, folderName, folderPath, THEMES, targetBlockIndex,
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
   focusMode, typewriterMode, statusBarVisible, alwaysOnTop, zoom, tableFullWidth,
   mathAltDelimiters, mathFence, bumpMermaidEpoch, customScheme,
@@ -47,7 +47,7 @@ import {
 } from "./store";
 import {
   isTauri, isMac, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS,
-  onExternalChange, onTreeChange,
+  onExternalChange, onTreeChange, onTreeTouch,
 } from "./platform";
 import {
   executeCommand, openFile, openFolder, insertImageFromPath,
@@ -253,11 +253,23 @@ export default function App() {
       onTreeChange((root, tree) => { if (root === folderPath()) setFileTree(tree); }).then((u) => {
         untree = u;
       });
+      // A listed file was saved: patch its times (date sorts re-order on this).
+      let untouch: (() => void) | undefined;
+      onTreeTouch((root, files) => {
+        if (root !== folderPath()) return;
+        setTreeTimes((prev) => {
+          const next = new Map(prev);
+          for (const f of files) next.set(f.path, f);
+          return next;
+        });
+      }).then((u) => {
+        untouch = u;
+      });
 
       // Autosave shadows of dirty (saved) documents.
       startAutosave();
 
-      onCleanup(() => { disposed = true; unlisten?.(); undrop?.(); unclose?.(); unwatch?.(); untree?.(); unopen?.(); });
+      onCleanup(() => { disposed = true; unlisten?.(); undrop?.(); unclose?.(); unwatch?.(); untree?.(); untouch?.(); unopen?.(); });
     } else if (isMac) {
       // Browser dev on macOS has neither a native menu nor the in-app menubar,
       // so keep the minimal chord fallback there.

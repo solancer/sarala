@@ -2,7 +2,18 @@ export interface FileNode {
   name: string;
   path: string;
   is_dir: boolean;
+  /** Epoch ms, files only. Absent where the OS doesn't record it (creation
+   *  time on some Linux filesystems). */
+  modified?: number;
+  created?: number;
   children?: FileNode[];
+}
+
+/** Fresh times for a listed file that was saved, from the tree watcher. */
+export interface FileTimes {
+  path: string;
+  modified?: number | null;
+  created?: number | null;
 }
 
 export const isTauri =
@@ -182,6 +193,17 @@ export async function onTreeChange(
   const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
   return await getCurrentWebviewWindow().listen<{ root: string; tree: FileNode[] }>(
     "tree-changed", (e) => fn(e.payload.root, e.payload.tree),
+  );
+}
+
+/** Listen for listed files being saved (shape unchanged): just their new times. */
+export async function onTreeTouch(
+  fn: (root: string, files: FileTimes[]) => void,
+): Promise<() => void> {
+  if (!isTauri) return () => {};
+  const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+  return await getCurrentWebviewWindow().listen<{ root: string; files: FileTimes[] }>(
+    "tree-touched", (e) => fn(e.payload.root, e.payload.files),
   );
 }
 

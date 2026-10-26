@@ -625,6 +625,8 @@ body { font-family: var(--font-ui); }
 .side-clear-btn svg { flex: none; }
 .side-clear-btn.spinning svg { animation: settings-spin 600ms linear infinite; }
 @media (prefers-reduced-motion: reduce) { .side-clear-btn.spinning svg { animation: none; } }
+/* A date sort is on: tint the button so the non-name order isn't a mystery. */
+.side-sort-btn.on { color: var(--accent); }
 .side-recent, .side-tree { display: flex; flex-direction: column; gap: 0; }
 .side-divider { height: 1px; margin: 5px 8px; background: color-mix(in srgb, var(--ink-soft) 14%, transparent); }
 
@@ -2237,6 +2239,7 @@ body.tables-full .rendered table { width: 100%; }
 .ctx-item:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
 .ctx-item:disabled { color: var(--ink-soft); opacity: 0.5; cursor: default; }
 .ctx-ic { width: 16px; height: 16px; flex: none; }
+.ctx-check { color: var(--accent); }
 .ctx-label { flex: 1; }
 .ctx-kbd { margin-left: 16px; font-size: 11.5px; color: color-mix(in srgb, var(--ink-soft) 75%, var(--ink)); }
 .ctx-sep { height: 1px; margin: 5px 4px; background: var(--rule); }
