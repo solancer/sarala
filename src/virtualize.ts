@@ -16,12 +16,13 @@ import { doc } from "./store";
 export const WINDOW_MIN_BLOCKS = 400;
 /** Blocks rendered before the first visibility check, enough to fill a screen. */
 const INITIAL_BLOCKS = 60;
-/** How far beyond the viewport blocks stay rendered, as a share of its height. */
-const MARGIN = "150% 0px";
+/** How far beyond the viewport blocks stay rendered, in viewport heights. */
+const MARGIN = 1.5;
 
 const [holds, setHolds] = createSignal<ReadonlySet<string>>(new Set());
 
-// Without IntersectionObserver (jsdom in unit tests) every block renders.
+// Without layout (jsdom in unit tests, which also lacks IntersectionObserver)
+// every block renders.
 const supported = typeof IntersectionObserver !== "undefined";
 
 /** Whether off-screen blocks are currently placeholders. */
@@ -38,12 +39,15 @@ interface Watched {
   text: () => string;
   /** Whether the block renders its content (not a placeholder) right now. */
   shown: () => boolean;
+  /** Whether the block is within range of the viewport, as last set. */
+  near: boolean;
   setNear: (near: boolean) => void;
 }
 
 const watched = new Map<Element, Watched>();
-let observer: IntersectionObserver | null = null;
-let observerRoot: Element | null = null;
+/** The watched blocks currently marked near. */
+const nearBlocks = new Set<Element>();
+let root: HTMLElement | null = null;
 
 /** Measured heights by block id, valid while the block's text is unchanged.
  *  Kept across tab switches, which remount every block. */
@@ -90,23 +94,64 @@ function inUse(el: Element): boolean {
   return (!!sel && sel.rangeCount > 0 && sel.containsNode(el, true)) || el.contains(document.activeElement);
 }
 
-function onEntries(entries: IntersectionObserverEntry[]) {
-  // Read every measurement before changing anything, so layout runs once.
-  const changes: { w: Watched; near: boolean }[] = [];
-  for (const e of entries) {
-    const w = watched.get(e.target);
-    if (!w) continue;
-    const near = e.isIntersecting;
-    if (!near && w.shown() && windowing()) {
-      if (inUse(e.target)) continue;
-      remember(w, measure(e.target));
-    }
-    changes.push({ w, near });
+/*
+ * Which blocks are near the viewport, recomputed after a scroll or a change
+ * in the page, not observed: an IntersectionObserver on every block made
+ * WebKit recompute 12,000 intersections on each rendering update, including
+ * every blink of the caret, at a steady cost while the document sat idle.
+ * Here a bisection finds the first block in range and the rest are walked
+ * until one falls below it, so a pass touches only the blocks near the
+ * viewport.
+ */
+let updateFrame = 0;
+const scheduleUpdate = () => { if (!updateFrame) updateFrame = requestAnimationFrame(update); };
+
+function update() {
+  updateFrame = 0;
+  if (!root || !page) return;
+  const view = root.getBoundingClientRect();
+  const top = view.top - view.height * MARGIN;
+  const bottom = view.bottom + view.height * MARGIN;
+  const blocks = page.children;
+  let lo = 0;
+  let hi = blocks.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (blocks[mid].getBoundingClientRect().bottom > top) hi = mid;
+    else lo = mid + 1;
   }
-  batch(() => { for (const c of changes) c.w.setNear(c.near); });
+  const inRange = new Set<Element>();
+  for (let i = lo; i < blocks.length && blocks[i].getBoundingClientRect().top < bottom; i++) inRange.add(blocks[i]);
+  // Read every measurement before changing anything, so layout runs once.
+  const changes: [Element, Watched, boolean][] = [];
+  for (const el of inRange) {
+    const w = watched.get(el);
+    if (w && !w.near) changes.push([el, w, true]);
+  }
+  for (const el of nearBlocks) {
+    const w = watched.get(el);
+    if (!w || inRange.has(el)) continue;
+    if (w.shown() && windowing()) {
+      if (inUse(el)) continue;
+      remember(w, measure(el));
+    }
+    changes.push([el, w, false]);
+  }
+  if (!changes.length) return;
+  batch(() => {
+    for (const [el, w, near] of changes) {
+      w.near = near;
+      if (near) nearBlocks.add(el);
+      else nearBlocks.delete(el);
+      w.setNear(near);
+    }
+  });
   // Blocks above and below can change by amounts that cancel out, leaving
   // the page's height (and so the resize observer) unchanged.
   restoreAnchor();
+  // Rendered blocks have their real heights now, which can bring others
+  // into range or push them out.
+  scheduleUpdate();
 }
 
 /*
@@ -119,17 +164,17 @@ function onEntries(entries: IntersectionObserverEntry[]) {
  */
 let anchor: { el: Element; top: number } | null = null;
 let page: Element | null = null;
-const resizes = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => restoreAnchor());
+const resizes = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => { restoreAnchor(); scheduleUpdate(); });
 
 /** The first block reaching below the viewport's top edge, found by bisection. */
 function saveAnchor() {
   anchor = null;
-  if (!observerRoot || !page) return;
+  if (!root || !page) return;
   const on = windowing();
-  const style = (observerRoot as HTMLElement).style;
+  const style = root.style;
   if (style.overflowAnchor !== (on ? "none" : "")) style.overflowAnchor = on ? "none" : "";
   if (!on) return;
-  const viewTop = observerRoot.getBoundingClientRect().top;
+  const viewTop = root.getBoundingClientRect().top;
   const blocks = page.children;
   let lo = 0;
   let hi = blocks.length - 1;
@@ -143,24 +188,23 @@ function saveAnchor() {
 }
 
 function restoreAnchor() {
-  if (anchor && anchor.el.isConnected && observerRoot && windowing()) {
+  if (anchor && anchor.el.isConnected && root && windowing()) {
     const delta = anchor.el.getBoundingClientRect().top - anchor.top;
-    if (Math.abs(delta) >= 1) observerRoot.scrollTop += delta;
+    if (Math.abs(delta) >= 1) root.scrollTop += delta;
   }
   saveAnchor();
 }
 
+const onScroll = () => { saveAnchor(); scheduleUpdate(); };
+
 /** Track a block's distance from the viewport; returns the cleanup. */
 export function watchBlock(el: HTMLElement, w: Watched): () => void {
   if (!supported) return () => {};
-  const root = el.closest(".scroll");
-  if (!observer || observerRoot !== root) {
-    observer?.disconnect();
-    observerRoot?.removeEventListener("scroll", saveAnchor);
-    observerRoot = root;
-    observer = new IntersectionObserver(onEntries, { root, rootMargin: MARGIN });
-    for (const other of watched.keys()) observer.observe(other);
-    root?.addEventListener("scroll", saveAnchor, { passive: true });
+  const scroller = el.closest<HTMLElement>(".scroll");
+  if (scroller !== root) {
+    root?.removeEventListener("scroll", onScroll);
+    root = scroller;
+    root?.addEventListener("scroll", onScroll, { passive: true });
   }
   if (el.parentElement && el.parentElement !== page) {
     if (page) resizes?.unobserve(page);
@@ -168,10 +212,11 @@ export function watchBlock(el: HTMLElement, w: Watched): () => void {
     resizes?.observe(page);
   }
   watched.set(el, w);
-  observer.observe(el);
+  if (w.near) nearBlocks.add(el);
+  scheduleUpdate();
   return () => {
     watched.delete(el);
-    observer?.unobserve(el);
+    nearBlocks.delete(el);
   };
 }
 
@@ -190,6 +235,7 @@ export function holdAllBlocks(reason: string, on: boolean) {
     }
   }
   setHolds(next);
+  scheduleUpdate();
 }
 
 /** Print the editor with every block rendered. */
