@@ -3847,6 +3847,7 @@ dependencies = [
  "earshot",
  "encoding_rs",
  "font-kit",
+ "gtk",
  "notify",
  "notify-debouncer-mini",
  "objc2",
