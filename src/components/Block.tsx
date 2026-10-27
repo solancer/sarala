@@ -95,6 +95,14 @@ export default function Block(props: Props) {
   let renderedEl: HTMLDivElement | undefined;
   let pendingCaret: number | null = null;
   let composing = false;
+  // The caret before the edit the browser is applying. Undo snapshots are
+  // taken when the input reaches the store, by which point the browser has
+  // already moved the caret past the typed text.
+  let caretBeforeInput: number | null = null;
+  // Set once the block is disposed. Undo replaces every block, and Chromium
+  // reports the removal of the focused one as a blur.
+  let disposed = false;
+  onCleanup(() => (disposed = true));
   let lastRevealCaret = -1;
   const [panelKind, setPanelKind] = createSignal<string | null>(null);
   let panelEl: HTMLDivElement | undefined;
@@ -327,6 +335,7 @@ export default function Block(props: Props) {
       el.scrollIntoView({ block: "nearest" });
     },
     caretOffset: () => (el ? getCaretOffset(el) : 0),
+    caretBeforeEdit: () => caretBeforeInput ?? (el ? getCaretOffset(el) : 0),
     selectionOffsets: () => (el ? getSelectionOffsets(el) : { start: 0, end: 0 }),
   };
   createEffect(() => {
@@ -527,6 +536,7 @@ export default function Block(props: Props) {
     if (!el || composing) return;
     pendingCaret = getCaretOffset(el);
     props.onChange(el.textContent ?? "");
+    caretBeforeInput = null;
   };
 
   /**
@@ -562,7 +572,11 @@ export default function Block(props: Props) {
   };
 
   const onBeforeInput = (e: InputEvent) => {
-    if (!el || composing || e.isComposing || !selectionWithin()) return;
+    if (!el || composing || e.isComposing) return;
+    caretBeforeInput = getCaretOffset(el);
+    // Input the browser ends up not applying fires no input event: forget it.
+    setTimeout(() => { if (!composing) caretBeforeInput = null; });
+    if (!selectionWithin()) return;
     const kind = e.inputType;
     const { start, end } = getSelectionOffsets(el);
     if (start !== end && kind === "insertText" && e.data) {
@@ -1191,10 +1205,11 @@ export default function Block(props: Props) {
             // Keep the block active when focus leaves the page itself (native
             // menu click, app switch) or moves into this block's own chrome
             // (table toolbar inputs), so commands still have a target.
+            // A disposed block's activation belongs to the one replacing it.
             const to = e.relatedTarget as Node | null;
-            if (document.hasFocus() && !(to && rootEl?.contains(to))) props.onDeactivate();
+            if (!disposed && document.hasFocus() && !(to && rootEl?.contains(to))) props.onDeactivate();
           }}
-          onCompositionStart={() => (composing = true)}
+          onCompositionStart={() => { composing = true; caretBeforeInput = el ? getCaretOffset(el) : null; }}
           onCompositionEnd={() => { composing = false; onInput(); }}
         />
         </div>

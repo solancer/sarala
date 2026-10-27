@@ -65,6 +65,8 @@ await select(three, ["alpha", 4], ["gamma", 4]);
 await page.keyboard.press("Backspace");
 check(await text() === "alpha three", `Backspace across blocks deletes only the selection (${JSON.stringify(await text())})`);
 check(await page.evaluate(async () => (await import("/src/store.ts")).doc.activeIndex) === 0, "editing continues where the selection was");
+await page.keyboard.type("Q");
+check(await text() === "alphQa three", `typing after it goes where the selection was (${JSON.stringify(await text())})`);
 
 await select(three, ["alpha", 4], ["gamma", 4]);
 await page.keyboard.type("Z");
@@ -82,6 +84,13 @@ await page.evaluate(async () => (await import("/src/blockselect.ts")).selectAllD
 await page.waitForTimeout(150);
 await page.keyboard.press("Backspace");
 check(await text() === "", `Select All then Backspace clears the document (${JSON.stringify(await text())})`);
+// The document is empty now: Select All selects nothing in the source, and
+// typing has to start the document rather than vanish.
+await page.evaluate(async () => (await import("/src/blockselect.ts")).selectAllDocument());
+await page.waitForTimeout(150);
+await page.keyboard.press("Backspace");
+await page.keyboard.type("new");
+check(await text() === "new", `typing after Select All in an empty document starts it (${JSON.stringify(await text())})`);
 
 if (!isWebKit) {
   await page.evaluate(() => navigator.clipboard.writeText("PASTED"));
@@ -117,6 +126,30 @@ await page.evaluate(async () => {
 });
 await page.keyboard.press("Backspace");
 check(await text() === "one three", `a selection in the edited block is deleted once (${JSON.stringify(await text())})`);
+
+// Edits that replace the edited block keep the caret where the edit was, not
+// at the end of the new block.
+const editAt = async (md, offset) => {
+  await page.evaluate(async ({ md, offset }) => {
+    const store = await import("/src/store.ts");
+    store.loadDocument(md, null);
+    store.requestCaret(offset);
+    store.setActive(0);
+  }, { md, offset });
+  await page.waitForSelector(".source");
+  await page.waitForTimeout(100);
+};
+await editAt("Last paragraph.", 5);
+await page.keyboard.press("Enter");
+await page.keyboard.type("Y");
+check(await text() === "Last \n\nYparagraph.", `typing after Enter mid-paragraph starts the new block (${JSON.stringify(await text())})`);
+
+await editAt("alpha beta", 5);
+await page.keyboard.type("X");
+await page.keyboard.press(`${mod}+z`);
+await page.waitForTimeout(100);
+await page.keyboard.type("Y");
+check(await text() === "alphaY beta", `typing after undo goes where the caret was (${JSON.stringify(await text())})`);
 
 await browser.close();
 kill();

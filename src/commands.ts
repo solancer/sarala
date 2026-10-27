@@ -92,6 +92,8 @@ export interface BlockApi {
   insertAtCaret(text: string, caretWithin?: number): void;
   selectRange(start: number, end: number): void;
   caretOffset(): number;
+  /** The caret before the edit being applied, for undo; else where it is. */
+  caretBeforeEdit(): number;
   selectionOffsets(): { start: number; end: number };
 }
 
@@ -115,7 +117,7 @@ export function getActiveBlockApi(): BlockApi | null {
 }
 
 // Undo snapshots include the caret of the active block.
-setCaretProvider(() => (blockApi ? blockApi.caretOffset() : null));
+setCaretProvider(() => (blockApi ? blockApi.caretBeforeEdit() : null));
 
 const withBlock = (fn: (api: BlockApi) => void) => () => {
   if (blockApi) fn(blockApi);

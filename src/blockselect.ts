@@ -74,7 +74,9 @@ export function selectedSourceRange(): { start: SourcePoint; end: SourcePoint } 
   const start = sourcePoint(blocks, range.startContainer, range.startOffset, false);
   const end = sourcePoint(blocks, range.endContainer, range.endOffset, true);
   if (!start || !end) return null;
-  if (end.block < start.block || (end.block === start.block && end.offset <= start.offset)) return null;
+  // An empty range (Select All in an empty document) still edits at that
+  // point: the page can't take typing itself, so dropping it lost every key.
+  if (end.block < start.block || (end.block === start.block && end.offset < start.offset)) return null;
   return { start, end };
 }
 
