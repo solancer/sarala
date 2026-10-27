@@ -110,6 +110,16 @@ jobs:
           # Updater signing (minisign). Set these as repo secrets.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS code signing (Developer ID) and notarization. tauri-action
+          # imports the certificate into a temporary keychain, and
+          # APPLE_SIGNING_IDENTITY overrides the ad-hoc "-" in tauri.conf.json,
+          # which local builds keep. The other platforms ignore these.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # Voice typing's speech engine (ggml) would otherwise be tuned to this
           # runner's CPU and crash on older machines. Portable baseline: x86-64
           # with AVX2/FMA/F16C (2013+; the app checks at runtime and explains if
