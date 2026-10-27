@@ -1,0 +1,47 @@
+name: Notarize the macOS .dmg
+
+# Tauri notarizes Sarala.app but only signs the .dmg around it, and Gatekeeper
+# reports a downloaded, unnotarized .dmg as rejected. This notarizes the
+# released .dmg, staples the ticket to it and replaces the release asset.
+# release.yml calls it before the cask bump (stapling changes the checksum);
+# run it by hand to fix an existing release.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, e.g. v1.4.1
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  notarize:
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Download the .dmg
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "Sarala_${TAG#v}_universal.dmg" --clobber
+
+      - name: Notarize and staple
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          dmg="Sarala_${TAG#v}_universal.dmg"
+          xcrun stapler validate "$dmg" && { echo "Already notarized."; exit 0; }
+          xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" --wait --timeout 30m
+          xcrun stapler staple "$dmg"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
+          gh release upload "$TAG" "$dmg" --repo "$GITHUB_REPOSITORY" --clobber
