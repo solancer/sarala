@@ -88,13 +88,7 @@ brew install --cask --yes sarala
 >
 > If `brew install` fails with ``Calling `depends_on macos: :catalina` is disabled``, your tap holds an old copy of the cask: run `brew update` (or `brew untap solancer/sarala` and tap it again), then install.
 
-Or download the universal `.dmg` (Apple Silicon and Intel, macOS 10.15+) from the [latest release](https://github.com/solancer/sarala/releases/latest). Sarala is ad-hoc signed but not notarized by Apple, so macOS blocks the first launch. After dragging it into Applications, run this once:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Sarala.app
-```
-
-(Or open it, click **Done**, then **System Settings › Privacy & Security › Open Anyway**.) Sarala registers for `.md`, `.markdown` and `.mdown`, so **Open With › Sarala** works in Finder, including when it's already running.
+Or download the universal `.dmg` (Apple Silicon and Intel, macOS 10.15+) from the [latest release](https://github.com/solancer/sarala/releases/latest), open it and drag Sarala into Applications. It's signed and notarized by Apple, so it opens like any other app. Sarala registers for `.md`, `.markdown` and `.mdown`, so **Open With › Sarala** works in Finder, including when it's already running.
 
 ### Windows
 

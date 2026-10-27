@@ -44,7 +44,7 @@ CI rewrites this gist's `latest.json` on every release (see below).
 
 ### 3. GitHub Actions secrets
 
-The release workflow (`.github/workflows/release.yml`) needs three repo secrets
+The release workflow (`.github/workflows/release.yml`) needs these repo secrets
 (Settings ▸ Secrets and variables ▸ Actions):
 
 | Secret | Value |
@@ -52,6 +52,12 @@ The release workflow (`.github/workflows/release.yml`) needs three repo secrets
 | `TAURI_SIGNING_PRIVATE_KEY` | Contents of `~/.tauri/sarala.key` (the minisign private key). |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | The password you set when generating it. |
 | `GIST_TOKEN` | A GitHub PAT with the **`gist`** scope. The default `GITHUB_TOKEN` is repo-scoped and **cannot** edit a user-owned gist. |
+| `APPLE_CERTIFICATE` | The Developer ID Application certificate and its private key, exported from Keychain as `.p12`, base64 encoded. |
+| `APPLE_CERTIFICATE_PASSWORD` | The `.p12` export password. |
+| `APPLE_SIGNING_IDENTITY` | `Developer ID Application: Lenzo International Private Limited (6WUKC69WYX)` |
+| `APPLE_TEAM_ID` | `6WUKC69WYX` |
+| `APPLE_ID` | An Apple ID on that team, for notarization. |
+| `APPLE_PASSWORD` | An app-specific password for that Apple ID (account.apple.com ▸ Sign-In and Security). |
 
 > Building locally instead? Export the two `TAURI_SIGNING_*` values in your shell
 > before `pnpm tauri build` (see the manual fallback at the bottom).
@@ -215,19 +221,28 @@ Notes:
 - `signature` is the **contents** of the `.sig` file (a base64 blob), not a path
   or URL.
 
-## Code-signing caveat (macOS)
+## Code signing (macOS)
 
-The minisign signature above is **not** Apple code-signing. On macOS, Gatekeeper
-blocks an unsigned/un-notarized auto-update the same way it blocks a first
-install. For a real public release you need **both**:
+The minisign signature above only lets the updater trust a download. Gatekeeper
+needs the app itself signed with a Developer ID and notarized by Apple, which
+the macOS build does with the `APPLE_*` secrets. Local `pnpm tauri build`s stay
+ad-hoc signed (`"signingIdentity": "-"` in `tauri.conf.json`); the
+`APPLE_SIGNING_IDENTITY` variable overrides it in CI.
 
-1. The updater's minisign signature (above), and
-2. An Apple Developer ID **codesigned + notarized** `.app`.
+To test the Apple secrets without releasing, run the **macOS signing check**
+workflow (Actions tab, or it runs on PRs that touch the signing setup). It
+builds a signed, notarized app and checks it with `codesign`, `spctl` and
+`stapler`.
 
-Until the Apple Developer account is set up, auto-updates will install but
-Gatekeeper may refuse to launch the replaced app on other machines. Windows has
-an analogous (softer) SmartScreen story; an Authenticode cert removes the
-warning.
+The certificate expires on **26 November 2027**. Before then, the Account Holder
+creates a new Developer ID Application certificate from a fresh signing request
+(Keychain Access ▸ Certificate Assistant ▸ Request a Certificate From a
+Certificate Authority), and the new `.p12` replaces `APPLE_CERTIFICATE` and
+`APPLE_CERTIFICATE_PASSWORD`. Apps already shipped keep working after it
+expires. On a Mac without Xcode, `security find-identity -v -p codesigning`
+only lists the certificate once Apple's
+[Developer ID G2 intermediate](https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer)
+is in the keychain.
 
 ## Manual fallback (build locally, no CI)
 
