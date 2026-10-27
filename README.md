@@ -111,6 +111,15 @@ Download the installer (`.exe`) or `.msi` from the [latest release](https://gith
 
 All from the [latest release](https://github.com/solancer/sarala/releases/latest). Sarala opens `.md` files passed to it, so your file manager's **Open With** works. In-app updates cover the AppImage, `.deb` and `.rpm`; Snap and distribution packages update through their package manager.
 
+**Arch Linux, Omarchy, Manjaro, EndeavourOS:** install the `sarala-bin` package. It repackages the release `.deb`, so there's nothing to compile and no Node or Rust needed:
+
+```bash
+git clone --depth 1 https://github.com/solancer/sarala
+cd sarala/aur/sarala-bin && makepkg -si
+```
+
+The AppImage works there too. If it says **"Cannot mount AppImage"**, install FUSE with `sudo pacman -S fuse3`.
+
 ---
 
 ## What you get
