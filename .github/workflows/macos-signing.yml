@@ -1,0 +1,84 @@
+name: macOS signing check
+
+# Builds the macOS app the way release.yml does, signed and notarized, without
+# publishing anything, then checks it the way Gatekeeper will. Runs when the
+# signing setup changes, or by hand to test the Apple secrets before a release.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/macos-signing.yml
+      - .github/workflows/release.yml
+      - src-tauri/tauri.conf.json
+      - src-tauri/Entitlements.plist
+
+jobs:
+  sign:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fails in seconds on a wrong Apple ID, app-specific password or team,
+      # instead of after a 20-minute build.
+      - name: Check the notarization credentials
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: xcrun notarytool history --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" > /dev/null
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Same as release.yml; see the comments there.
+      - name: Link clang's runtime for ggml's Metal @available checks
+        run: echo "RUSTFLAGS=-C link-arg=$(clang -print-file-name=libclang_rt.osx.a)" >> "$GITHUB_ENV"
+
+      - name: Build, sign and notarize
+        uses: tauri-apps/tauri-action@v0
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TRANSCRIBE_CMAKE_ARGS: "-DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_AVX512=OFF -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15"
+        with:
+          args: --target universal-apple-darwin --bundles app,dmg
+
+      - name: Check the app as Gatekeeper will
+        run: |
+          bundle=src-tauri/target/universal-apple-darwin/release/bundle
+          app=$(ls -d "$bundle"/macos/*.app)
+          dmg=$(ls "$bundle"/dmg/*.dmg)
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dvv "$app" 2>&1 | grep -E '^(Authority|TeamIdentifier|Runtime)'
+          spctl --assess --type execute --verbose=4 "$app"
+          xcrun stapler validate "$app"
+          codesign --verify --verbose=2 "$dmg" || echo "::warning::the .dmg itself isn't signed (the app inside is)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sarala-macos-signed
+          path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          retention-days: 7
