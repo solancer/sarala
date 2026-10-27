@@ -127,8 +127,7 @@ release.
 
 ### 5. Homebrew cask (macOS)
 
-`Casks/sarala.rb` is a Homebrew cask served straight from this repo, so Mac users
-can install without an Apple Developer account or notarization:
+`Casks/sarala.rb` is a Homebrew cask served straight from this repo:
 
 ```sh
 brew tap solancer/sarala https://github.com/solancer/sarala
@@ -148,17 +147,12 @@ the README's copy:
   cask:` and waits for input, which reads as a hang when an unrelated tap-trust
   warning scrolls the prompt off screen.
 
-The universal `.dmg` is **ad-hoc signed** by Tauri's build (verified:
-`codesign` reports `flags=...(adhoc,linker-signed)`), which is enough to run on
-Apple Silicon. It is **not** Apple-notarized, so the cask's `postflight` strips
-`com.apple.quarantine` after install, and that attribute is what makes Gatekeeper
-demand notarization on first launch, so removing it lets the ad-hoc-signed app
-open with no extra flags. This is deliberately disallowed by the official
-`homebrew/cask` repo (which mandates notarization), but fine for our self-hosted
-tap. Users who'd rather keep quarantine can install with `--quarantine`.
+The `.dmg` and the app in it are signed and notarized (see Code signing below),
+so the cask installs them as they are, with nothing stripped.
 
 No setup needed: the `update-cask` job in `release.yml` bumps the cask's
-`version` + `sha256` to the new `.dmg` and commits it to `main` on every release.
+`version` + `sha256` to the new `.dmg` and commits it to `main` on every release,
+after `notarize-dmg` has stapled it.
 If `main` is ever branch-protected, that push needs a PAT with `contents:write`
 instead of the default `GITHUB_TOKEN`.
 
