@@ -534,8 +534,8 @@ export function insertDictation(text: string): string {
   const at = lastIndex >= 0 ? lastIndex + 1 : doc.blocks.length;
   const paragraphs = text.split(/\n{2,}/).filter((p) => p.trim());
   spliceMany([{ start: at, deleteCount: 0, texts: paragraphs }]);
-  setActive(at + paragraphs.length - 1);
   requestCaret(paragraphs[paragraphs.length - 1].length);
+  setActive(at + paragraphs.length - 1);
   remember({ kind: "blocks", at, texts: paragraphs });
   return paragraphs.join("\n\n");
 }
@@ -1324,12 +1324,14 @@ export function installVoiceShortcut(): () => void {
   // Field values change after keydown/input; read the caret once things settle.
   const track = () => queueMicrotask(() => trackCaret());
   // selectionchange arrives a moment later; focus can already have moved
-  // (pressing the mic button right after clicking into text). focusout runs
-  // while the caret is still in place.
+  // (pressing the mic button right after clicking into text). A capturing
+  // blur listener runs while the caret is still in place: before the block's
+  // own blur handler deactivates it and takes its source text out of the
+  // page, which happens before focusout.
   const leaving = (e: FocusEvent) => trackCaret(e.target as Element);
   document.addEventListener("selectionchange", track);
   document.addEventListener("input", track, true);
-  document.addEventListener("focusout", leaving, true);
+  document.addEventListener("blur", leaving, true);
   window.addEventListener("keydown", onKeyDown, true);
   window.addEventListener("keyup", onKeyUp, true);
   window.addEventListener("blur", onBlur);
@@ -1338,7 +1340,7 @@ export function installVoiceShortcut(): () => void {
   return () => {
     document.removeEventListener("selectionchange", track);
     document.removeEventListener("input", track, true);
-    document.removeEventListener("focusout", leaving, true);
+    document.removeEventListener("blur", leaving, true);
     window.removeEventListener("keydown", onKeyDown, true);
     window.removeEventListener("keyup", onKeyUp, true);
     window.removeEventListener("blur", onBlur);

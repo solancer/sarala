@@ -29,8 +29,14 @@ export default function Editor() {
     };
     /** Replace the selection with `insert`, leaving the caret after it. */
     const replace = (s: NonNullable<ReturnType<typeof selected>>, insert: string) => {
-      const cut = deleteSourceRange(s.text, s.start, s.end);
       window.getSelection()?.removeAllRanges();
+      if (s.start === s.end && !insert) {
+        // Nothing to delete: just start editing there, with no undo step.
+        requestCaret(s.start);
+        setActive(s.first);
+        return;
+      }
+      const cut = deleteSourceRange(s.text, s.start, s.end);
       replaceBlocks(s.first, s.last, cut.text.slice(0, cut.caret) + insert + cut.text.slice(cut.caret), cut.caret + insert.length);
     };
     // Dialogs and form fields (sidebar filter, find bar) keep their own keys.

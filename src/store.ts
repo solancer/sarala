@@ -365,6 +365,7 @@ export function cancelEditGroup() {
 }
 
 function applySnapshot(s: Snapshot) {
+  if (s.caret != null) requestCaret(s.caret);
   setState(
     produce((st) => {
       st.blocks = s.blocks.map((b) => ({ ...b }));
@@ -372,7 +373,6 @@ function applySnapshot(s: Snapshot) {
       st.dirty = true;
     })
   );
-  if (s.caret != null) requestCaret(s.caret);
   lastPushKey = null; // the next edit starts a fresh history entry
   editGroup = false;
 }
@@ -486,6 +486,10 @@ export function updateBlock(index: number, text: string) {
 }
 
 let caretRequest: number | null = null;
+/** Where the next block to activate places its caret. Request it before the
+ *  store update that activates the block: the block takes the request while
+ *  that update runs, and one made after it would be left for whichever block
+ *  activates next. */
 export function requestCaret(pos: number) {
   caretRequest = pos;
 }
@@ -540,6 +544,7 @@ export function mergeWithPrevious(index: number) {
 /** Finalize a block at the caret: `before` renders, `after` opens for editing. */
 export function splitBlock(index: number, before: string, after: string) {
   pushHistory();
+  requestCaret(0);
   setState(
     produce((s) => {
       s.blocks.splice(index, 1, mkBlock(before), mkBlock(after));
@@ -547,7 +552,6 @@ export function splitBlock(index: number, before: string, after: string) {
       s.dirty = true;
     })
   );
-  requestCaret(0);
 }
 
 export function insertBlockAfter(index: number, text = "") {
@@ -591,6 +595,7 @@ export function replaceBlocks(start: number, end: number, text: string, caret = 
   const hi = Math.min(state.blocks.length - 1, Math.max(start, end));
   if (lo > hi) return;
   pushHistory();
+  requestCaret(caret);
   setState(
     produce((s) => {
       s.blocks.splice(lo, hi - lo + 1, mkBlock(text));
@@ -599,7 +604,6 @@ export function replaceBlocks(start: number, end: number, text: string, caret = 
       s.dirty = true;
     })
   );
-  requestCaret(caret);
 }
 
 /** Replace `deleteCount` blocks at `start` with one block per entry of
