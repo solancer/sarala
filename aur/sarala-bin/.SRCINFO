@@ -1,6 +1,6 @@
 pkgbase = sarala-bin
 	pkgdesc = A seamless WYSIWYG Markdown editor
-	pkgver = 1.3.3
+	pkgver = 1.4.0
 	pkgrel = 1
 	url = https://github.com/solancer/sarala
 	arch = x86_64
@@ -14,7 +14,7 @@ pkgbase = sarala-bin
 	conflicts = sarala
 	options = !strip
 	options = !debug
-	source_x86_64 = https://github.com/solancer/sarala/releases/download/v1.3.3/Sarala_1.3.3_amd64.deb
-	sha256sums_x86_64 = 3f144b0f0f8c23f9cac61d179e169b458e8d4d11f4a7a4ed6ac6d3045385ef32
+	source_x86_64 = https://github.com/solancer/sarala/releases/download/v1.4.0/Sarala_1.4.0_amd64.deb
+	sha256sums_x86_64 = 7eb3839d126e5f5f38688b4f9486f5ccf97ac8e28c6ff3a6111f8ab9275e1757
 
 pkgname = sarala-bin
