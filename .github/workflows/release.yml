@@ -214,11 +214,20 @@ jobs:
             '{files: {"latest.json": {content: $content}}}' \
             | gh api -X PATCH "/gists/$GIST_ID" --input -
 
+  # Notarize the .dmg itself (Tauri only notarizes the app inside it) and
+  # replace the release asset with the stapled copy.
+  notarize-dmg:
+    needs: build
+    uses: ./.github/workflows/notarize-dmg.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit
+
   # Point the Homebrew cask (Casks/sarala.rb on main) at the just-released macOS
   # .dmg by bumping its version + sha256. Runs once, after every platform has
-  # uploaded, so the .dmg exists on the release.
+  # uploaded and the .dmg is notarized, since stapling changes its checksum.
   update-cask:
-    needs: build
+    needs: notarize-dmg
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
