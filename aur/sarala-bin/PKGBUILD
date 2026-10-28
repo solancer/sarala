@@ -2,7 +2,7 @@
 # Repackages the release .deb. Bump with aur/update.sh after each release.
 pkgname=sarala-bin
 _pkgname=sarala
-pkgver=1.4.1
+pkgver=1.4.2
 pkgrel=1
 pkgdesc="A seamless WYSIWYG Markdown editor"
 arch=('x86_64')
@@ -14,7 +14,7 @@ provides=("$_pkgname")
 conflicts=("$_pkgname")
 options=('!strip' '!debug')
 source_x86_64=("$url/releases/download/v$pkgver/Sarala_${pkgver}_amd64.deb")
-sha256sums_x86_64=('8217e67a0fc6fb9ca196d21fd674ce2269718c08d71ee8fa808ae640953f3584')
+sha256sums_x86_64=('24e33f3e1b832acfc0cbb3d4891d50a0963d33aff9a2a4ea6f6135711fee8f94')
 
 package() {
   bsdtar -xf data.tar.gz -C "$pkgdir"
