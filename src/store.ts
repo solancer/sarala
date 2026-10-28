@@ -791,6 +791,12 @@ export function openDocument(text: string, path: string | null, meta?: DocMeta):
     tab.view = emptyView();
     setTabRecords((tabs) => reuse ? tabs.map((entry) => entry.id === tab.id ? tab : entry) : [...tabs, tab]);
   });
+  // A new blank document is for typing: start editing its block, or the caret
+  // has nowhere to go and keys land on the page.
+  if (!path && !text) {
+    requestCaret(0);
+    setActive(0);
+  }
   return activeTabId();
 }
 /** Called only after the command layer has handled unsaved changes. */

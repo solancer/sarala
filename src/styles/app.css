@@ -899,6 +899,10 @@ body { font-family: var(--font-ui); }
    blink of the caret in a long document cost a steady slice of a core. */
 .block.placeholder { position: static; pointer-events: none; }
 .block.active { will-change: opacity; z-index: 1; }
+/* WebKit draws no caret in an empty contenteditable on its own layer, so an
+   empty block (a new document, the line after a heading) stays on the page's
+   layer. Its blink repaints are a single short line anyway. */
+.block.active.empty { will-change: auto; }
 
 
 /* Live source: same prose face as rendered text; markers dim, content
