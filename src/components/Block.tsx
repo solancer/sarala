@@ -1103,7 +1103,7 @@ export default function Block(props: Props) {
   };
 
   return (
-    <div class="block" classList={{ active: props.active, placeholder: !props.active && !shown() }} ref={rootEl}>
+    <div class="block" classList={{ active: props.active, empty: !props.text, placeholder: !props.active && !shown() }} ref={rootEl}>
       <Show when={props.active && parseTable(props.text)}>
         <TableToolbar text={props.text} />
         <TableRails text={props.text} />

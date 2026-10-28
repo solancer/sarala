@@ -42,6 +42,12 @@ try {
   assert.equal(await docTabs.getByRole("tab").count(), 1);
   await page.keyboard.press("Control+t");
   assert.equal(await docTabs.getByRole("tab").count(), 2, "new tab shortcut");
+  // A new document is ready for typing, and its empty block stays off its own
+  // compositing layer, where WKWebView draws no caret.
+  assert.deepEqual(await page.evaluate(() => {
+    const block = document.querySelector(".block.active");
+    return { focused: document.activeElement === block?.querySelector(".source"), layer: block && getComputedStyle(block).willChange };
+  }), { focused: true, layer: "auto" }, "new document starts editing, caret visible");
   await page.keyboard.press("Control+Tab");
   assert.match(await docTabs.locator('[role="tab"][aria-selected="true"]').textContent(), /A.md/);
   await page.locator(".document-tab", { hasText: "A.md" }).locator(".document-tab-close").click();
