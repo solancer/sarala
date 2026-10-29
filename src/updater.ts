@@ -130,8 +130,14 @@ async function runCheck(silent: boolean): Promise<void> {
     setAvailableUpdate({ version: update.version, notes: (update.body ?? "").trim() });
   } catch (err) {
     if (!silent) {
+      // A network failure reads as "error sending request for url (…)", which
+      // says nothing useful to the person; lead with what they can do.
+      const detail = err instanceof Error ? err.message : String(err);
+      const offline = /sending request|timed out|connect|dns|network/i.test(detail);
       await alertDialog(
-        `Update check failed: ${err instanceof Error ? err.message : String(err)}`,
+        offline
+          ? "Couldn't reach the update server. Check your internet connection and try again."
+          : `Update check failed: ${detail}`,
         "Update",
       );
     }
