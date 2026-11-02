@@ -5,7 +5,7 @@
  */
 import { createSignal } from "solid-js";
 import { getSetting, setSetting } from "../settings";
-import { isMac } from "../platform";
+import { isMac, isWeb } from "../platform";
 import type { AgentId } from "./types";
 
 /** Vite sets this; Node-bundled tests have no import.meta.env at all. */
@@ -105,7 +105,8 @@ export const bumpStatus = () => setStatusEpoch((n) => n + 1);
 
 /** Called from settings.ts once persisted settings are loaded. */
 export function hydrateAiSettings() {
-  setAiEnabledSig(getSetting("aiEnabled", false));
+  // Agent CLIs need a process to run in, which a browser can't give them.
+  setAiEnabledSig(!isWeb && getSetting("aiEnabled", false));
   const a = getSetting<string>("aiAgent", "claude-code");
   setAiAgentSig(AGENTS.some((x) => x.id === a) ? (a as AgentId) : "claude-code");
   setModels(getSetting<Partial<Record<AgentId, string>>>("aiModels", {}));

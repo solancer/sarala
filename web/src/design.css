@@ -1,0 +1,136 @@
+/*
+ * Sarala on the web: a readable page, a book typeface, and chrome that belongs
+ * to the page. Colours and the text size are the app's own, so the terracotta
+ * Sarala theme stays the default. One line in the accent colour, the thread,
+ * marks where you are: the open tab, the view, the block being edited.
+ *
+ * Nothing in this file reaches the desktop app.
+ */
+
+html:root {
+  --font-ui: "Hanken Grotesk Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius-control: 6px;
+  --radius-surface: 10px;
+  --radius-sheet: 18px;
+}
+
+.app.is-web {
+  --measure: 620px;
+  --gutter: 56px;
+  --thread: var(--accent);
+  --lift: 0 0 0 1px var(--rule), 0 14px 36px color-mix(in srgb, var(--ink) 16%, transparent);
+}
+
+.app.is-web[data-theme="sarala"] {
+  --font-prose: "Literata Variable", Georgia, "Noto Serif", serif;
+}
+
+/* ---------- the page ---------- */
+.app.is-web .page {
+  max-width: calc(var(--measure) * var(--editor-scale, 1) + 2 * var(--gutter));
+  padding: 32px var(--gutter) 45vh;
+}
+.app.is-web .rendered,
+.app.is-web .source:not(.code-block, .b-large, .b-h1, .b-h2, .b-h3, .b-h4, .b-h5, .b-h6) { line-height: 1.7; }
+.app.is-web .source { min-height: 1.7em; caret-color: var(--accent); }
+.app.is-web .source.b-large { line-height: 1.6; }
+
+.app.is-web .rendered h1, .app.is-web .rendered h2, .app.is-web .rendered h3, .app.is-web .rendered h4,
+.app.is-web .md-h1, .app.is-web .md-h2, .app.is-web .md-h3, .app.is-web .md-h4 {
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.015em;
+}
+/* Transparent, not removed: these borders are part of the block's height, and
+   the live and rendered views have to stay the same height. */
+.app.is-web .rendered h1, .app.is-web .rendered h2,
+.app.is-web .source.b-h1, .app.is-web .source.b-h2,
+.app.is-web .source .md-layout-h1, .app.is-web .source .md-layout-h2 { border-bottom-color: transparent; padding-bottom: 0; }
+
+.app.is-web .rendered ul, .app.is-web .rendered ol,
+.app.is-web .source.b-list, .app.is-web .source .md-list { line-height: 1.7; }
+.app.is-web .rendered a { border-bottom-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.app.is-web .rendered blockquote, .app.is-web .source .md-layout-quote { font-style: italic; color: var(--ink-soft); }
+.app.is-web .md-alert { background: transparent; border-left-width: 2px; }
+.app.is-web .rendered pre, .app.is-web .source.code-block { border-radius: var(--radius-control); }
+
+
+/* The thread in the margin: which block you're editing. */
+.app.is-web .block.active::before {
+  content: "";
+  position: absolute;
+  inset: 4px auto 4px -18px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--thread);
+}
+
+/* ---------- one surface: the bar belongs to the page ---------- */
+.app.is-web .topfloat.document-toolbar { background: var(--bg-page); box-shadow: none; height: 48px; padding: 0 16px; }
+.app.is-web .statusbar { background: var(--bg-page); border-top: 0; box-shadow: none; }
+.app.is-web .sidebar { border-right: 0; }
+
+.web-bar-btn { border-radius: var(--radius-control); font: var(--fw-medium) 13.5px/1 var(--font-ui); }
+.web-save-state, .web-save { font: 13px/1 var(--font-ui); color: var(--ink-soft); }
+.app.is-web .icon-btn, .app.is-web .topbar-search { border-radius: var(--radius-control); }
+.app.is-web .topbar-search { background: transparent; border: 0; box-shadow: none; }
+.web-export .web-bar-btn { border: 0; background: transparent; }
+.app.is-web .topfloat-sep { display: none; }
+
+/* Tabs are words on the page, with the thread under the open one. */
+.app.is-web .document-tabs { padding-top: 0; align-items: center; }
+.app.is-web .document-tab-list { height: 48px; }
+.app.is-web .document-tab { height: 48px; border: 0; border-radius: 0; background: transparent; }
+.app.is-web .document-tab::after { display: none; }
+.app.is-web .document-tab:hover { background: transparent; color: var(--ink); }
+.app.is-web .document-tab.selected { background: transparent; color: var(--ink); box-shadow: inset 0 -2px var(--thread); font-weight: var(--fw-medium); }
+.app.is-web .document-tab-new { border-radius: var(--radius-control); }
+
+/* Live and Source read the same way as the tabs. */
+.app.is-web .view-toggle { background: transparent; border: 0; padding: 0; gap: 2px; box-shadow: none; }
+.app.is-web .view-toggle button {
+  height: 48px; padding: 0 8px; border-radius: 0; background: transparent; box-shadow: none;
+  font: var(--fw-regular) 13.5px/1 var(--font-ui); color: var(--ink-soft);
+}
+.app.is-web .view-toggle button.on { color: var(--ink); font-weight: var(--fw-medium); box-shadow: inset 0 -2px var(--thread); }
+
+/* The status line. */
+.app.is-web .sb-dot { display: none; }
+.app.is-web .sb-stats { gap: 14px; }
+.app.is-web .sb-stat { gap: 3px; }
+.app.is-web .sb-stat b { font-weight: var(--fw-regular); color: inherit; }
+
+/* ---------- the sidebar: a list of documents, nothing else until you ask ---------- */
+.app.is-web .side-ws-glyph { display: none; }
+.app.is-web .side-ws-name { font: var(--fw-semibold) 14px/1.3 var(--font-prose); }
+.app.is-web .side-tab-ic { display: none; }
+.app.is-web .side-tabs { border-bottom: 0; gap: 2px; }
+.app.is-web .side-tab { font: var(--fw-regular) 13px/1 var(--font-ui); }
+.app.is-web .side-tab:hover { background: transparent; }
+.app.is-web .side-tab.on { font-weight: var(--fw-medium); }
+.app.is-web .side-tab.on::after { background: var(--thread); }
+.app.is-web .file-icon { display: none; }
+.app.is-web .tree-item { border-radius: var(--radius-control); font-size: 13.5px; }
+.app.is-web .side-clear-btn { opacity: 0.5; }
+
+/* ---------- surfaces that float ---------- */
+.app.is-web .menu-dropdown, .app.is-web .web-dropdown .menu-dropdown {
+  border: 0; border-radius: var(--radius-surface); background: var(--bg-page); box-shadow: var(--lift);
+}
+.app.is-web .menu-item { border-radius: var(--radius-control); font: var(--fw-regular) 13.5px/1 var(--font-ui); }
+.app.is-web .menu-ic { opacity: 0.6; }
+.app.is-web [role="dialog"], .app.is-web .palette { border: 0; border-radius: var(--radius-surface); background: var(--bg-page); box-shadow: var(--lift); }
+.web-sheet-summary { margin: 0 0 8px; padding: 0 8px; font: 13px/1.4 var(--font-ui); color: var(--ink-soft); }
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 720px) {
+  .app.is-web { --gutter: 22px; }
+  .app.is-web .page { padding-top: 16px; }
+  .app.is-web .block.active::before { left: -11px; }
+}
+@media (max-width: 640px) {
+  /* The document's counts are in the Menu here, which leaves its settings. */
+  .app.is-web .sb-stats { display: none; }
+  .app.is-web .statusbar { justify-content: flex-end; }
+  .app.is-web .status-right { display: inline-flex; }
+  .app.is-web .web-sheet.web-sheet { border-radius: var(--radius-sheet) 0 0 var(--radius-sheet); }
+}

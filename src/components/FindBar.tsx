@@ -1,7 +1,8 @@
-import { Show, createSignal, createEffect, createComputed } from "solid-js";
+import { Show, batch, createSignal, createEffect, createComputed } from "solid-js";
+import { unwrap } from "solid-js/store";
 import { doc, fullText, updateBlock, renderEpoch, activeTabId } from "../store";
-import { buildSearchRegex } from "../search";
-import { holdAllBlocks } from "../virtualize";
+import { buildSearchRegex, locateHit, type SearchOptions } from "../search";
+import { WINDOW_MIN_BLOCKS, holdAllBlocks, renderedEpoch, windowing } from "../virtualize";
 
 /**
  * Live find: every match in the document is highlighted (CSS Custom
@@ -24,9 +25,16 @@ const [useRegex, setUseRegex] = createSignal(false);
 const [caseSensitive, setCaseSensitive] = createSignal(false);
 const [wholeWord, setWholeWord] = createSignal(false);
 
+/** A folder-search hit to land on once its document is showing. */
+const [jump, setJump] = createSignal<{ path: string | null; hit: number } | null>(null);
+
 let focusInput: (() => void) | undefined;
-/** DOM ranges of all matches, refreshed by the highlight effect. */
+/** DOM ranges of all matches, refreshed by the highlight effect. In a windowed
+ *  document, only those in blocks that are rendered. */
 let domMatches: Range[] = [];
+/** A windowed document's matches, found in its source (see sourceMatches). */
+let sourceHits: { block: number; ordinal: number }[] = [];
+const MAX_MATCHES = 999;
 
 export function openFind(replace = false) {
   setWithReplace(replace);
@@ -34,15 +42,22 @@ export function openFind(replace = false) {
   queueMicrotask(() => focusInput?.());
 }
 
-/** Open the find bar pre-filled with a query (used by the folder-search panel). */
-export function openFindWith(q: string) {
-  setQuery(q);
-  setUseRegex(false);
-  setVisible(true);
+/** Open the find bar on a folder-search hit: the same search, at that match. */
+export function openFindWith(q: string, opts: SearchOptions, target: { path: string | null; hit: number }) {
+  batch(() => {
+    setQuery(q);
+    setUseRegex(opts.regex);
+    setCaseSensitive(opts.caseSensitive);
+    setWholeWord(opts.wholeWord);
+    setCursor(0);
+    setJump(target);
+    setVisible(true);
+  });
   queueMicrotask(() => focusInput?.());
 }
 
 export function closeFind() {
+  setJump(null);
   setVisible(false);
 }
 
@@ -62,7 +77,7 @@ function buildPattern(): RegExp | null {
 /** Find query matches across each block's DOM text (whatever view it shows). */
 function computeDomMatches(re: RegExp): Range[] {
   const out: Range[] = [];
-  for (const block of document.querySelectorAll(".page .block")) {
+  for (const block of document.querySelectorAll(".page .block:not(.placeholder)")) {
     // Full block text with a node map so matches can span inline elements.
     const nodes: { node: Text; start: number }[] = [];
     let text = "";
@@ -78,7 +93,7 @@ function computeDomMatches(re: RegExp): Range[] {
     };
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while (out.length < 999 && (m = re.exec(text))) {
+    while (out.length < MAX_MATCHES && (m = re.exec(text))) {
       if (m[0].length === 0) { re.lastIndex++; continue; } // skip empty matches
       const range = document.createRange();
       const s = at(m.index);
@@ -86,6 +101,27 @@ function computeDomMatches(re: RegExp): Range[] {
       range.setStart(s.node, s.offset);
       range.setEnd(e.node, e.offset);
       out.push(range);
+    }
+  }
+  return out;
+}
+
+/**
+ * Matches in a long document's source, so finding never renders the whole of
+ * it: placeholders have no text to search, and rendering 40,000 blocks to get
+ * some takes seconds. Text a render hides, like a link's URL, counts here.
+ */
+function sourceMatches(re: RegExp) {
+  const out: typeof sourceHits = [];
+  const blocks = unwrap(doc.blocks);
+  for (let block = 0; block < blocks.length; block++) {
+    re.lastIndex = 0;
+    let ordinal = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(blocks[block].text))) {
+      if (m[0].length === 0) { re.lastIndex++; continue; }
+      out.push({ block, ordinal: ordinal++ });
+      if (out.length >= MAX_MATCHES) return out;
     }
   }
   return out;
@@ -108,13 +144,18 @@ function replaceCurrent() {
   const n = matchCount();
   if (!re || !n) return;
   const idx = Math.min(cursor(), n - 1);
-  const range = domMatches[idx];
-  if (!range) return;
-  const blockIndex = blockIndexOf(range);
-  if (blockIndex < 0 || blockIndex >= doc.blocks.length) return;
-  // Ordinal of this match within its block → same ordinal in the source.
+  let blockIndex: number;
   let ordinal = 0;
-  for (let k = 0; k < idx; k++) if (blockIndexOf(domMatches[k]) === blockIndex) ordinal++;
+  if (sourceHits.length) {
+    ({ block: blockIndex, ordinal } = sourceHits[idx]);
+  } else {
+    const range = domMatches[idx];
+    if (!range) return;
+    blockIndex = blockIndexOf(range);
+    if (blockIndex < 0 || blockIndex >= doc.blocks.length) return;
+    // Ordinal of this match within its block → same ordinal in the source.
+    for (let k = 0; k < idx; k++) if (blockIndexOf(domMatches[k]) === blockIndex) ordinal++;
+  }
   const source = doc.blocks[blockIndex].text;
   re.lastIndex = 0;
   let m: RegExpExecArray | null;
@@ -164,24 +205,41 @@ export default function FindBar() {
   });
 
   // Matches are found in the rendered text, so a search renders every block
-  // of a long document while it is open. A computed runs before the effect
-  // below, so the blocks are in the DOM by the time it searches.
-  createComputed(() => holdAllBlocks("find", visible() && query().length > 0));
+  // while it is open, except in a windowed document, searched in its source
+  // instead (see sourceMatches). A computed runs before the effect below, so
+  // the blocks are in the DOM by the time it searches.
+  createComputed(() => holdAllBlocks("find", visible() && query().length > 0 && doc.blocks.length < WINDOW_MIN_BLOCKS));
+
+  // What the highlight effect last scrolled to: it also runs as blocks render
+  // during ordinary scrolling, which mustn't pull the view back to the match.
+  let revealed = "";
 
   // Paint all matches + the current one; track everything that changes the
   // DOM text (doc edits, block activation swaps, render-option flips).
   createEffect(() => {
+    if (!visible()) {
+      const closed = (window.CSS as typeof CSS & { highlights?: Map<string, unknown> }).highlights;
+      closed?.delete("sarala-find");
+      closed?.delete("sarala-find-current");
+      domMatches = [];
+      sourceHits = [];
+      setMatchCount(0);
+      setInvalid(false);
+      return;
+    }
     fullText();
     renderEpoch();
     activeTabId();
     void doc.activeIndex;
+    const long = windowing();
+    if (long) renderedEpoch();
     const q = query();
     // Read the option toggles so flipping any of them re-runs the search.
     void useRegex();
     void caseSensitive();
     void wholeWord();
     const re = buildPattern();
-    const idx = cursor();
+    let idx = cursor();
     const on = visible() && q.length > 0;
     setInvalid(on && useRegex() && re === null);
     const highlights = (window.CSS as typeof CSS & { highlights?: Map<string, unknown> }).highlights;
@@ -189,12 +247,39 @@ export default function FindBar() {
       highlights?.delete("sarala-find");
       highlights?.delete("sarala-find-current");
       domMatches = [];
+      sourceHits = [];
       setMatchCount(0);
       return;
     }
     domMatches = computeDomMatches(re);
-    setMatchCount(domMatches.length);
-    const current = domMatches[Math.min(idx, domMatches.length - 1)];
+    sourceHits = long ? sourceMatches(re) : [];
+    const total = long ? sourceHits.length : domMatches.length;
+    setMatchCount(total);
+    // A document opens after the search asked for it, so wait until it shows.
+    const target = jump();
+    if (target && target.path === doc.filePath && total) {
+      const at = locateHit(unwrap(doc.blocks).map((b) => b.text), target.hit, re);
+      if (at && long) idx = Math.max(sourceHits.findIndex((h) => h.block === at.block && h.ordinal >= at.ordinal), 0);
+      else if (at) {
+        const inBlock = domMatches.flatMap((range, i) => blockIndexOf(range) === at.block ? [i] : []);
+        idx = inBlock[Math.min(at.ordinal, inBlock.length - 1)] ?? idx;
+      }
+      setJump(null);
+      setCursor(idx);
+    }
+    let current: Range | undefined = domMatches[Math.min(idx, domMatches.length - 1)];
+    let scrollToCurrent = !!current;
+    if (long) {
+      const hit = sourceHits[Math.min(idx, sourceHits.length - 1)];
+      const block = hit && document.querySelector(".page")?.children[hit.block];
+      const inBlock = block ? domMatches.filter((range) => block.contains(range.startContainer)) : [];
+      current = hit && inBlock[Math.min(hit.ordinal, inBlock.length - 1)];
+      const key = `${q}\0${idx}`;
+      scrollToCurrent = !!current && revealed !== key;
+      if (current) revealed = key;
+      // Not rendered yet: bring its block near, and this effect runs again.
+      else if (block && revealed !== key) block.scrollIntoView({ block: "center", behavior: "instant" as ScrollBehavior });
+    }
     if (highlights && "Highlight" in window) {
       const H = (window as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
       highlights.set("sarala-find", new H(...domMatches));
@@ -202,7 +287,7 @@ export default function FindBar() {
       else highlights.delete("sarala-find-current");
     }
     // Keep the current match in view without activating anything.
-    if (current) {
+    if (current && scrollToCurrent) {
       const scroller = document.querySelector(".scroll");
       const rect = current.getBoundingClientRect();
       if (scroller && (rect.top < 80 || rect.bottom > scroller.clientHeight - 40)) {

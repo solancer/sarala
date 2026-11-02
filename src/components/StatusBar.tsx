@@ -4,6 +4,7 @@ import { THEME_LABELS } from "../menudata";
 import { togglePalette, isPaletteOpen } from "./PaletteSwitcher";
 import { openSettings, isSettingsOpen } from "./SettingsModal";
 import { executeCommand } from "../commands";
+import { isWeb } from "../platform";
 import { updatePhase, formatMegabytes, type UpdatePhase } from "../updater";
 
 /** Human name for the open file's format, from its extension.
@@ -38,6 +39,8 @@ export default function StatusBar() {
       : !doc.filePath
         ? "New file — not saved to disk yet"
         : "Unsaved changes";
+
+  const reopen = isWeb ? "Reopen with Encoding in the command palette" : "Edit ▸ Reopen with Encoding";
 
   // Current writing font — the chosen family, or the theme's default.
   const fontLabel = () => proseFont() ?? "Default";
@@ -85,8 +88,8 @@ export default function StatusBar() {
           classList={{ lossy: encodingLossy() }}
           title={
             encodingLossy()
-              ? "Some bytes didn't decode cleanly — try Edit ▸ Reopen with Encoding"
-              : "Text encoding — change via Edit ▸ Reopen with Encoding"
+              ? `Some bytes didn't decode cleanly — try ${reopen}`
+              : `Text encoding — change via ${reopen}`
           }
         >
           {formatLabel(doc.filePath)} · {doc.encoding}

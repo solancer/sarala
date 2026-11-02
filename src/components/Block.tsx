@@ -2,18 +2,18 @@ import { Show, createEffect, createMemo, createSignal, on, onCleanup, onMount, u
 import { complexBlockKind } from "../complexblocks";
 import { renderMarkdown, hasOpenFence } from "../markdown";
 import {
-  styleSource, stylePanelSource, hydrateInlinePreviews, hasSourceLayout, getCaretOffset, getSelectionOffsets, setCaret, setSelection,
+  styleSource, stylePanelSource, styleLines, patchLines, splicedLines, moveToLineEnd, isLargeBlock, hydrateInlinePreviews, hasSourceLayout, getCaretOffset, getSelectionOffsets, setCaret, setSelection,
   applyMarkerVisibility, mapRenderedPrefixToSource, concealedDeletion, deleteSelection,
 } from "../livesource";
-import { isTauri, pickImageFile } from "../platform";
+import { isTauri, web, pickImageFile, alertDialog } from "../platform";
 import {
   consumeCaretRequest, consumeSelectionRequest,
   spellcheckOn, smartPunctuation, renderEpoch, mermaidEpoch, mathFence, mathAltDelimiters,
-  setLiveCaretOffset, blockContextSig,
+  setLiveCaretOffset, blockContextSig, setFactsHold,
 } from "../store";
 import { renderMermaidIn } from "../mermaid";
 import { renderD2In } from "../d2";
-import { executeCommand, registerBlockApi, unregisterBlockApi, imageInsertRef, followLink, linkTargetAtCaret, type BlockApi } from "../commands";
+import { executeCommand, registerBlockApi, unregisterBlockApi, imageInsertRef, insertImageFromPath, followLink, linkTargetAtCaret, type BlockApi } from "../commands";
 import { parseTable, cellRanges } from "../tabletools";
 import { findImages } from "../images";
 import { pasteToInsert } from "../richpaste";
@@ -105,6 +105,15 @@ export default function Block(props: Props) {
   onCleanup(() => (disposed = true));
   let lastRevealCaret = -1;
   const [panelKind, setPanelKind] = createSignal<string | null>(null);
+  // Set when the block opens and kept until it closes: a block that shrinks past
+  // the limit mid-edit shouldn't change how it looks under the caret.
+  const [large, setLarge] = createSignal(false);
+  // The text the browser has already put on screen, so nothing needs redrawing.
+  let typedText: string | null = null;
+  createEffect(on(large, (open) => { const id = props.id; setFactsHold((held) => open ? id : held === id ? null : held); }, { defer: true }));
+  onCleanup(() => setFactsHold((held) => held === untrack(() => props.id) ? null : held));
+  // Where a click landed, to keep that line under the pointer as the block opens.
+  let clickY: number | null = null;
   let panelEl: HTMLDivElement | undefined;
   // "Mermaid diagram", "D2 diagram", "Equation", "Metadata"…
   const DIAGRAM_NAMES: Record<string, string> = { mermaid: "Mermaid", d2: "D2", sequence: "Sequence", flow: "Flowchart" };
@@ -132,7 +141,10 @@ export default function Block(props: Props) {
     }));
   }, { defer: true }));
   // Keep the editor mode stable while an opening delimiter is temporarily incomplete.
-  createEffect(on(() => props.active, active => setPanelKind(active ? complexBlockKind(props.text, { mathFence: mathFence(), alternateMath: mathAltDelimiters() }) : null)));
+  createEffect(on(() => props.active, active => {
+    setLarge(active && isLargeBlock(props.text));
+    setPanelKind(active && !large() ? complexBlockKind(props.text, { mathFence: mathFence(), alternateMath: mathAltDelimiters() }) : null);
+  }));
 
 
   // Everything this block's rendered HTML depends on: its text, the global
@@ -192,14 +204,14 @@ export default function Block(props: Props) {
     renderedEl = host;
     fillDiagrams(host);
   };
-  createEffect(on(renderKey, () => { if (renderedEl) fillDiagrams(renderedEl); }, { defer: true }));
+  createEffect(on(renderKey, () => { if (renderedEl && !large()) fillDiagrams(renderedEl); }, { defer: true }));
 
   const reveal = (caret: number) => {
     if (!el) return;
     lastRevealCaret = caret;
     // Surface the caret for the status bar's Ln/Col (active block only).
     if (props.active) setLiveCaretOffset(caret);
-    applyMarkerVisibility(el, props.text, caret);
+    if (!large()) applyMarkerVisibility(el, props.text, caret);
   };
 
   const isFence = () => /^\s*(`{3,}|~{3,})/.test(props.text) || props.text.startsWith("---\n");
@@ -240,6 +252,7 @@ export default function Block(props: Props) {
   // (same margins the rendered elements carry) — activation must not shift
   // the layout below.
   const blockType = () => {
+    if (large()) return "b-large";
     const t = props.text;
     if (isFence()) return "";
     if (hasSourceLayout(t)) return "b-layout";
@@ -251,6 +264,31 @@ export default function Block(props: Props) {
     return "b-p";
   };
 
+  /** The large-block counterpart of the effect below: nothing to do for typed
+   *  text, and a patch of the changed lines for an edit made in code. */
+  const showLarge = (text: string, opening: boolean) => {
+    if (!el) return;
+    if (text === typedText) {
+      typedText = null;
+      if (pendingCaret !== null) { lastRevealCaret = pendingCaret; setLiveCaretOffset(pendingCaret); }
+      pendingCaret = null;
+      return;
+    }
+    const selection = consumeSelectionRequest();
+    const caret = pendingCaret ?? consumeCaretRequest() ?? text.length;
+    pendingCaret = null;
+    if (opening) el.innerHTML = styleLines(text);
+    else patchLines(el, text);
+    el.focus({ preventScroll: true });
+    reveal(selection?.start ?? caret);
+    if (selection) setSelection(el, selection.start, selection.end);
+    else setCaret(el, caret);
+    const line = window.getSelection()?.anchorNode?.parentElement?.closest<HTMLElement>(".md-line");
+    if (opening && line && clickY !== null) el.closest(".scroll")?.scrollBy({ top: line.getBoundingClientRect().top - clickY, behavior: "instant" as ScrollBehavior });
+    else line?.scrollIntoView({ block: "nearest" });
+    clickY = null;
+  };
+
   // Re-style the live source whenever the text changes while active,
   // restoring the caret to where the user left it.
   createEffect(
@@ -258,6 +296,8 @@ export default function Block(props: Props) {
     // loaded render data changes (not on every global asset arrival).
     on([() => props.active, () => props.text, renderEpoch, panelKind, contextSig], ([active, text], previous) => {
       if (!active || !el || composing) return;
+      if (!large() && !panelKind() && isLargeBlock(text)) setLarge(true);
+      if (large()) return showLarge(text, !previous?.[0] || !el.querySelector(".md-line"));
       // Shiki can finish loading while a list is active. Refresh its code
       // colors without moving the user's caret or losing a text selection.
       const current = previous?.[0] && previous[1] === text && el.contains(window.getSelection()?.anchorNode ?? null)
@@ -399,6 +439,11 @@ export default function Block(props: Props) {
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (composing) return;
+    if (large() && e.key === "End" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      moveToLineEnd(e.shiftKey);
+      return;
+    }
     if (panelKind()) {
       if (e.key === "Escape") { e.preventDefault(); props.onDeactivate(); rootEl?.closest<HTMLElement>(".editor")?.focus({ preventScroll: true }); return; }
       if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) { e.preventDefault(); insertAtCaret("\n"); return; }
@@ -490,15 +535,29 @@ export default function Block(props: Props) {
     if (e.key === "Backspace" || e.key === "Delete") {
       const { start, end } = getSelectionOffsets(el!);
       if (e.key === "Backspace" && start === 0 && end === 0) { e.preventDefault(); props.onMergePrev(); return; }
+      // An item with nothing in it goes in one press, with its line, and the
+      // caret returns to the end of the line above.
+      if (e.key === "Backspace" && start === end && !large() && !isFence() && !e.altKey && !e.metaKey && !e.ctrlKey) {
+        const { start: lineStart, end: lineEnd, line } = currentLine(start);
+        if (lineStart > 0 && /^[ \t]*(?:(?:[-*+]|\d+[.)])(?:[ \t]+\[[ xX]\])?)?[ \t]*$/.test(line)) {
+          e.preventDefault();
+          const t = props.text;
+          commit(t.slice(0, lineStart - 1) + t.slice(lineEnd), lineStart - 1);
+          return;
+        }
+      }
       // Handled here as well as in beforeinput: WebKit sends no beforeinput
       // when the only text before the caret is hidden (the start of a
       // heading or list item), it just does nothing. Alt+Backspace (word
       // deletion) keeps its native behaviour unless text is selected.
-      if (e.altKey && start === end) return;
+      if (e.altKey && start === end && !large()) return;
       if (deleteInSource(e.key === "Backspace" ? -1 : 1)) e.preventDefault();
       return;
     }
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      // Between its lines the browser moves the caret correctly.
+      const box = large() ? window.getSelection()?.focusNode?.parentElement?.closest(".md-line") : null;
+      if (box && (e.key === "ArrowUp" ? box.previousElementSibling : box.nextElementSibling)) return;
       // Leave the block only from its first/last VISUAL line — wrapped
       // paragraphs have one source line but many visual lines, and the
       // browser must keep handling movement between those.
@@ -535,7 +594,9 @@ export default function Block(props: Props) {
   const onInput = () => {
     if (!el || composing) return;
     pendingCaret = getCaretOffset(el);
-    props.onChange(el.textContent ?? "");
+    const text = (large() ? splicedLines(el, props.text) : null) ?? el.textContent ?? "";
+    if (large()) typedText = text;
+    props.onChange(text);
     caretBeforeInput = null;
   };
 
@@ -559,6 +620,15 @@ export default function Block(props: Props) {
     if (!el || !selectionWithin()) return false;
     const t = props.text;
     const { start, end } = getSelectionOffsets(el);
+    if (large()) {
+      // Inside one line the browser is right, and keeps grapheme handling. It
+      // can't be trusted to join two line boxes, or to span several.
+      const newline = dir < 0 ? start - 1 : start;
+      if (start === end && t[newline] !== "\n") return false;
+      const [from, to] = start === end ? [newline, newline + 1] : [start, end];
+      commit(t.slice(0, from) + t.slice(to), from);
+      return true;
+    }
     if (start !== end) {
       const r = deleteSelection(el, t, start, end);
       commit(r.text, r.caret);
@@ -610,6 +680,13 @@ export default function Block(props: Props) {
     e.preventDefault();
     const cd = e.clipboardData;
     if (!cd) return;
+    // A screenshot on the clipboard. Rich text that merely includes an image
+    // still pastes as text, as it does everywhere else.
+    const image = web && !isFence() && !cd.getData("text/plain") ? [...cd.files].find((f) => f.type.startsWith("image/")) : null;
+    if (image) {
+      void web!.storeImage(image).then(insertImageFromPath).catch((error) => alertDialog(String(error)));
+      return;
+    }
     insertAtCaret(
       pasteToInsert({
         html: cd.getData("text/html"),
@@ -979,12 +1056,19 @@ export default function Block(props: Props) {
       const pre = range.cloneRange();
       pre.selectNodeContents(host);
       pre.setEnd(range.startContainer, range.startOffset);
-      const fragment = pre.cloneContents();
-      // KaTeX includes both MathML and visual text. Map the original formula
-      // once so clicks after an equation cannot drift past the intended word.
-      fragment.querySelectorAll<HTMLElement>("[data-math-source]").forEach(math => math.replaceWith(document.createTextNode(math.dataset.mathSource ?? "")));
-      caret = mapRenderedPrefixToSource(props.text, fragment.textContent ?? "");
+      // Cloning a block holding a whole document's nodes takes seconds, and
+      // only math needs the clone.
+      let prefix: string;
+      if (host.querySelector("[data-math-source]")) {
+        const fragment = pre.cloneContents();
+        // KaTeX includes both MathML and visual text. Map the original formula
+        // once so clicks after an equation cannot drift past the intended word.
+        fragment.querySelectorAll<HTMLElement>("[data-math-source]").forEach(math => math.replaceWith(document.createTextNode(math.dataset.mathSource ?? "")));
+        prefix = fragment.textContent ?? "";
+      } else prefix = pre.toString();
+      caret = mapRenderedPrefixToSource(props.text, prefix);
     }
+    clickY = y;
     props.onActivate(caret);
   };
 
@@ -1104,7 +1188,7 @@ export default function Block(props: Props) {
 
   return (
     <div class="block" classList={{ active: props.active, empty: !props.text, placeholder: !props.active && !shown() }} ref={rootEl}>
-      <Show when={props.active && parseTable(props.text)}>
+      <Show when={props.active && !large() && parseTable(props.text)}>
         <TableToolbar text={props.text} />
         <TableRails text={props.text} />
         <TableReorder text={props.text} onMove={commit} />
@@ -1178,6 +1262,9 @@ export default function Block(props: Props) {
         </Show>
         <div ref={panelEl} class="source-container" classList={{ "block-source-panel": !!panelKind() }} role={panelKind() ? "region" : undefined} aria-label={panelKind() ? `${panelTitle()} source editor` : undefined}>
           {imageToolUI()}
+          <Show when={large()}>
+            <div class="large-block-note" role="status">This block is long, so it edits as Markdown. It renders again when you click away.</div>
+          </Show>
           <Show when={panelKind()}>
             <div class="block-source-panel-header">
               <span>{panelTitle()}</span>
@@ -1188,10 +1275,10 @@ export default function Block(props: Props) {
         <div
           ref={el}
           class={`source ${blockType()}`}
-          classList={{ "code-block": isFence() || !!panelKind() }}
+          classList={{ "code-block": !large() && (isFence() || !!panelKind()) }}
           contentEditable={true}
           role="textbox" aria-multiline="true" aria-label={panelKind() ? `Edit ${panelKind()?.toLowerCase()} source` : "Edit Markdown block"}
-          spellcheck={spellcheckOn()}
+          spellcheck={spellcheckOn() && !large()}
           onMouseDown={onSourceMouseDown}
           onMouseOver={onSourceMouseOver}
           onMouseOut={onSourceMouseOut}

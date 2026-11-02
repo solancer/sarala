@@ -805,6 +805,9 @@ body { font-family: var(--font-ui); }
    under the toggles rather than overflowing. */
 .search-toggles { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: 5px 0 2px; }
 .search-summary { margin-left: auto; font: var(--fw-regular) 11px var(--font-ui); color: color-mix(in srgb, var(--ink-soft) 65%, var(--ink)); }
+.search-blocked { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 4px; font: var(--fw-regular) 12px var(--font-ui); color: var(--ink-soft); }
+.search-blocked span { min-width: 0; overflow-wrap: anywhere; }
+.search-blocked button { flex: none; }
 .search-empty { padding: 8px 4px; font: var(--fw-regular) 12px var(--font-ui); color: var(--ink-soft); }
 
 .search-file { margin-top: 6px; }
@@ -3564,7 +3567,10 @@ body.tables-full .rendered table { width: 100%; }
 .source .md-layout-literal { display: block; white-space: pre-wrap; }
 .source .md-list { display: block; margin: 0.35em 0; line-height: 2.06; }
 .source .md-list-item { display: list-item; list-style: none; position: relative; padding-left: 1.5em; }
-.source .md-list-item:has(> .md-tight:empty) { min-height: 2.06em; }
+/* An item with nothing typed yet has only its marker, which is out of flow. A
+   new one in mid-list holds a space token rather than an empty paragraph. */
+.source .md-list-item:has(> .md-tight:empty),
+.source .md-list-item:not(:has(> :not(.md-pre, .md-layout-space))) { min-height: 2.06em; min-height: 1lh; }
 .source .md-list-item > .md-pre {
   position: absolute; left: 0; top: 0; width: 1.5em;
   white-space: pre; text-align: right; padding-right: 0.4em;
@@ -3791,6 +3797,12 @@ input::placeholder, textarea::placeholder { color: var(--ink-soft); opacity: 1; 
 
 /* Complex blocks retain their preview; the source editor does not affect page geometry. */
 .source-container { display: contents; }
+.source.b-large { font: var(--fw-regular) 13px/1.6 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.large-block-note {
+  position: sticky; top: 8px; z-index: 2; width: fit-content; max-width: 100%; margin: 0 0 8px; padding: 4px 10px;
+  border-radius: 6px; background: var(--bg-panel); box-shadow: 0 0 0 1px var(--rule);
+  font: var(--fw-regular) 12px/1.4 var(--font-ui); color: var(--ink-soft);
+}
 /* Complex blocks (diagrams, equations, metadata, footnotes, HTML) edit in a
    card anchored under their preview. The preview stays exactly where it was,
    so the page never shifts; the card floats over what follows and is sized to

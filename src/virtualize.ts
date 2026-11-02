@@ -25,6 +25,9 @@ const [holds, setHolds] = createSignal<ReadonlySet<string>>(new Set());
 // every block renders.
 const supported = typeof IntersectionObserver !== "undefined";
 
+/** Bumped when blocks turn into placeholders or back, for find's highlights. */
+export const [renderedEpoch, setRenderedEpoch] = createSignal(0);
+
 /** Whether off-screen blocks are currently placeholders. */
 export const windowing = () => supported && holds().size === 0 && doc.blocks.length >= WINDOW_MIN_BLOCKS;
 
@@ -145,6 +148,7 @@ function update() {
       else nearBlocks.delete(el);
       w.setNear(near);
     }
+    setRenderedEpoch((n) => n + 1);
   });
   // Blocks above and below can change by amounts that cancel out, leaving
   // the page's height (and so the resize observer) unchanged.

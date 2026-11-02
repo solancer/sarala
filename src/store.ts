@@ -211,6 +211,8 @@ export const bumpMermaidEpoch = () => setMermaidEpoch((n) => n + 1);
  *  document on every keystroke added up. */
 const blockTexts = createMemo(() => state.blocks.map((b) => b.text));
 export const fullText = createMemo(() => joinBlocks(blockTexts()));
+/** The very long block being edited, whose facts wait until it closes. */
+export const [factsHold, setFactsHold] = createSignal<number | null>(null);
 /**
  * Document-wide render context, rebuilt once per document change (per-block
  * facts are cached by text, so this is a cheap O(blocks) pass). Blocks read
@@ -219,7 +221,7 @@ export const fullText = createMemo(() => joinBlocks(blockTexts()));
 export const renderContext = createMemo(() => {
   renderEpoch();
   blockTexts(); // tracks every block; the raw objects below read faster
-  return buildRenderContext(unwrap(state.blocks), state.filePath, String(assetEpoch()));
+  return buildRenderContext(unwrap(state.blocks), state.filePath, String(assetEpoch()), factsHold());
 });
 /**
  * One block's render signature (its slice of the document context), as its
@@ -257,7 +259,20 @@ export const outline = createMemo(() => renderContext().outline, [], { equals: s
 setTocProvider(() => outline());
 // eslint-disable-next-line solid/reactivity -- read inside Block's keyed render
 setRenderContextProvider(() => renderContext());
-export const stats = createMemo(() => countBlockWords(blockTexts()));
+// Counting takes a pass over every character. Past this size it waits for a
+// pause in typing, so the figure can lag a moment but a key never does.
+const COUNT_AT_ONCE = 200_000;
+const [statsNow, setStats] = createSignal({ words: 0, chars: 0 });
+let statsTimer: ReturnType<typeof setTimeout> | undefined;
+createComputed(() => {
+  const texts = blockTexts();
+  clearTimeout(statsTimer);
+  let size = 0;
+  for (const text of texts) size += text.length;
+  if (size < COUNT_AT_ONCE) setStats(countBlockWords(texts));
+  else statsTimer = setTimeout(() => setStats(countBlockWords(texts)), 300);
+});
+export const stats = statsNow;
 /** Estimated reading time in whole minutes (200 wpm), never below 1. */
 export const readTime = createMemo(() => Math.max(1, Math.ceil(stats().words / 200)));
 
@@ -267,6 +282,14 @@ export const readTime = createMemo(() => Math.max(1, Math.ceil(stats().words / 2
 // blocks with "\n\n", so each earlier block adds its own newlines + 2.
 export const [liveCaretOffset, setLiveCaretOffset] = createSignal(0);
 export const [sourceCaret, setSourceCaret] = createSignal({ line: 1, col: 1 });
+const newlineCounts = new WeakMap<Block, { text: string; lines: number }>();
+const newlinesIn = (block: Block) => {
+  const known = newlineCounts.get(block);
+  if (known?.text === block.text) return known.lines;
+  const lines = countNewlines(block.text);
+  newlineCounts.set(block, { text: block.text, lines });
+  return lines;
+};
 const countNewlines = (s: string) => {
   let n = 0;
   for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) n++;
@@ -276,9 +299,11 @@ export const caretLineCol = createMemo(() => {
   if (sourceMode()) return sourceCaret();
   const i = state.activeIndex;
   if (i < 0) return { line: 1, col: 1 };
+  void blockTexts();
+  const blocks = unwrap(state.blocks);
   let line = 1;
-  for (let k = 0; k < i; k++) line += countNewlines(state.blocks[k]?.text ?? "") + 2;
-  const bt = state.blocks[i]?.text ?? "";
+  for (let k = 0; k < i; k++) line += newlinesIn(blocks[k]) + 2;
+  const bt = blocks[i]?.text ?? "";
   const o = Math.min(liveCaretOffset(), bt.length);
   const before = bt.slice(0, o);
   line += countNewlines(before);

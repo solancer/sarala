@@ -1,6 +1,6 @@
 import { doc, updateBlock, insertBlockAfter, imageUploadUrl } from "./store";
 import {
-  isTauri, revealInDir, copyFileTo, renameFile, deleteFile,
+  isTauri, isWeb, revealInDir, copyFileTo, renameFile, deleteFile,
   pickFolder, pickSavePath, confirmDialog, alertDialog,
 } from "./platform";
 import { imageFsPath, resolveImageSrc, docDir, type ImageRef } from "./images";
@@ -36,7 +36,7 @@ function rewrite(t: ImageTarget, replacement: string) {
 }
 
 async function localPathOrWarn(t: ImageTarget): Promise<string | null> {
-  if (!isTauri) {
+  if (!isTauri && !isWeb) {
     await alertDialog("Image file actions are only available in the desktop app.");
     return null;
   }
@@ -122,7 +122,7 @@ function setFrontMatterKey(key: string, value: string) {
  * resolver (images.ts) already honours.
  */
 export async function setImageRootPath() {
-  if (!isTauri) {
+  if (!isTauri && !isWeb) {
     await alertDialog("Setting an image root path is only available in the desktop app.");
     return;
   }

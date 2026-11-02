@@ -1,6 +1,6 @@
 import { createSignal } from "solid-js";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { isTauri, isFlatpak, isMac, alertDialog, relaunchApp, canSelfUpdate } from "./platform";
+import { isTauri, web, isFlatpak, isMac, alertDialog, relaunchApp, canSelfUpdate } from "./platform";
 
 /**
  * Auto-updater flow. On launch the app silently checks the updater endpoint (a
@@ -79,6 +79,7 @@ export async function autoCheckForUpdates(): Promise<void> {
 }
 
 async function runCheck(silent: boolean): Promise<void> {
+  if (web) return web.checkForUpdates(silent);
   if (!isTauri) {
     if (!silent) await alertDialog("Updates are only available in the desktop app.", "Update");
     return;

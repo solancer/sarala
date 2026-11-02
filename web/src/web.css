@@ -1,0 +1,138 @@
+/* Only what the web build adds. The app's own stylesheet does the rest. */
+.web-path-dialog { width: min(440px, calc(100vw - 32px)); }
+.web-path-fields { display: grid; gap: 14px; margin-bottom: 20px; }
+.web-path-fields label { display: grid; gap: 6px; font: var(--fw-medium) 13px/1.4 var(--font-ui); color: var(--ink-soft); }
+.web-path-fields input, .web-path-fields select {
+  width: 100%; box-sizing: border-box; padding: 8px 10px;
+  border: 1px solid var(--rule); border-radius: 8px;
+  background: var(--bg-page); color: var(--ink); font: 14px/1.4 var(--font-ui);
+}
+.web-path-fields input:focus-visible, .web-path-fields select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.web-path-actions { flex-wrap: wrap; }
+.web-path-device { margin-right: auto; }
+
+.web-reconnect {
+  position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); z-index: 50;
+  display: flex; align-items: center; gap: 14px; max-width: calc(100vw - 32px);
+  padding: 8px 8px 8px 16px; border: 1px solid var(--rule); border-radius: 10px;
+  background: var(--bg-panel); color: var(--ink); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  font: 13px/1.4 var(--font-ui);
+}
+
+.web-storage { display: grid; gap: 10px; font: 13px/1.5 var(--font-ui); color: var(--ink-soft); }
+.web-storage p { margin: 0; }
+.web-storage h3 { margin: 10px 0 0; font: var(--fw-semibold) 13px/1.4 var(--font-ui); color: var(--ink); }
+.web-storage ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.web-storage li { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--ink); }
+.web-storage-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---------- the document bar: the toolbar is the app's only bar ---------- */
+.app.is-web .sb-saved { display: none; }
+.web-dropdown { position: relative; flex: none; }
+/* Room for one whole tab beside the New Tab button. */
+.app.is-web .document-tabs { min-width: 140px; }
+.web-bar-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px;
+  border: 0; border-radius: 7px; background: transparent; color: var(--ink);
+  font: var(--fw-medium) 13px/1 var(--font-ui); cursor: pointer;
+}
+.web-bar-btn svg { width: 16px; height: 16px; }
+.web-bar-btn:hover, .web-bar-btn[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
+.web-bar-btn:focus-visible, .web-save:focus-visible, .web-docname:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.web-export .web-bar-btn { border: 1px solid var(--rule); margin-left: 4px; }
+.web-dropdown > .menu-dropdown { top: 100%; }
+.web-export > .menu-dropdown { left: auto; right: 0; }
+.web-dropdown .menu-dropdown { max-height: calc(100vh - 16px); box-sizing: border-box; overflow-y: auto; }
+.web-dropdown > .menu-dropdown { max-height: calc(100vh - 60px); overflow: visible; }
+.web-dropdown .menu-sep { height: 1px; margin: 4px 8px; background: var(--rule); }
+.web-history { display: inline-flex; flex: none; gap: 2px; }
+.web-history svg { width: 17px; height: 17px; }
+.web-save {
+  flex: none; margin: 0 6px; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--ink-soft); font: 12.5px/1.2 var(--font-ui); white-space: nowrap; cursor: default;
+}
+.web-save.dirty { color: var(--accent); cursor: pointer; }
+.web-save.dirty:hover { background: var(--accent-soft); }
+.web-docname { display: none; }
+.document-tab { position: relative; }
+.document-tab-rename {
+  position: absolute; inset: 3px 4px; z-index: 2; box-sizing: border-box; min-width: 0; padding: 0 6px;
+  border: 1px solid var(--accent); border-radius: 5px; background: var(--bg-page); color: var(--ink);
+  font: 13px/1 var(--font-ui); outline: none;
+}
+
+/* A narrow bar gives up the least needed things first, in this order. It's the
+   bar that counts, not the window: an open sidebar takes 240px of the window. */
+@container document-header (max-width: 1500px) {
+  .app.is-web .topbar-search-label { display: none; }
+  .app.is-web .topbar-search { min-width: 0; }
+}
+@container document-header (max-width: 1100px) { .web-export .web-bar-label, .app.is-web .topbar-search .kbd { display: none; } }
+@container document-header (max-width: 960px) { .web-history { display: none; } }
+@container document-header (max-width: 800px) { .web-save { display: none; } }
+@container document-header (max-width: 590px) { .app.is-web .view-toggle { display: none; } }
+@container document-header (max-width: 450px) { .app.is-web .document-header-actions .topbar-toggle:not(.voice-top) { display: none; } }
+
+/* ---------- the touch sheet ---------- */
+.web-sheet-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.32); display: flex; justify-content: flex-end; }
+.web-sheet[role="dialog"] {
+  max-width: none; max-height: none; overflow: hidden;
+  display: flex; flex-direction: column; width: min(420px, 100%); height: 100%; box-sizing: border-box;
+  padding-bottom: env(safe-area-inset-bottom); background: var(--bg-page); color: var(--ink); font-family: var(--font-ui); outline: none;
+}
+.web-sheet-head { flex: none; display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--rule); }
+.web-sheet-head h2 { flex: 1; margin: 0; text-align: center; font: var(--fw-semibold) 16px/1.3 var(--font-ui); }
+.web-sheet-icon, .web-sheet-gap { flex: none; width: 44px; height: 44px; }
+.web-sheet-icon { display: grid; place-items: center; border: 0; border-radius: 10px; background: transparent; color: var(--ink); }
+.web-sheet-icon svg { width: 22px; height: 22px; }
+.web-sheet-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 6px 8px 16px; }
+.web-sheet-body h3 { margin: 12px 12px 4px; font: var(--fw-semibold) 12px/1.4 var(--font-ui); color: var(--ink-soft); }
+.web-sheet-body hr { margin: 6px 12px; border: 0; border-top: 1px solid var(--rule); }
+.web-sheet-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 0 12px;
+  border: 0; border-radius: 10px; background: transparent; color: var(--ink); font: 15px/1.3 var(--font-ui); text-align: left;
+}
+.web-sheet-row:active:not(:disabled), .web-sheet-row[aria-current] { background: var(--accent-soft); }
+.web-sheet-row:disabled { opacity: 0.45; }
+.web-sheet-ic { flex: none; width: 20px; height: 20px; color: var(--ink-soft); }
+.web-sheet-ic svg, .web-sheet-end svg { width: 20px; height: 20px; }
+.web-sheet-end { margin-left: auto; color: var(--ink-soft); }
+
+/* ---------- the bar above a phone's keyboard ---------- */
+.web-keybar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; display: flex; height: 48px;
+  background: var(--bg-panel); border-top: 1px solid var(--rule);
+}
+.web-keybar[hidden] { display: none; }
+.web-keybar-scroll { flex: 1; min-width: 0; display: flex; overflow-x: auto; scrollbar-width: none; }
+.web-keybar button { flex: none; display: grid; place-items: center; width: 48px; height: 48px; border: 0; background: transparent; color: var(--ink); }
+.web-keybar svg { width: 20px; height: 20px; }
+.web-keybar-more { border-left: 1px solid var(--rule) !important; }
+
+/* A phone has no room for a permanent sidebar beside the page. */
+@media (max-width: 640px) {
+  .app.is-web { overflow: hidden; }
+  .app.is-web .sidebar:not(.collapsed) { position: fixed; z-index: 40; top: 0; bottom: 0; left: 0; box-shadow: 0 0 32px rgba(0, 0, 0, 0.3); }
+  .app.is-web .topbar-search-label, .app.is-web .topbar-search .kbd, .app.is-web .topfloat-sep { display: none; }
+  .app.is-web .document-tabs, .app.is-web .view-toggle, .web-export, .web-history, .web-save,
+  .app.is-web .document-header-actions .topbar-toggle:not(.voice-top) { display: none; }
+  .web-menu { order: 10; }
+  .web-bar-btn { width: 44px; height: 44px; justify-content: center; padding: 0; }
+  .web-bar-btn svg { width: 22px; height: 22px; }
+  .web-menu .web-bar-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .app.is-web .document-header-actions { margin-left: auto; }
+  .app.is-web .topbar-toggle, .app.is-web .topbar-search { min-width: 44px; min-height: 44px; }
+  .app.is-web .topbar-search { justify-content: center; padding: 0; border: 0; background: transparent; }
+  .app.is-web .topbar-search svg { width: 20px; height: 20px; }
+  .web-docname {
+    flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; height: 44px; padding: 0 4px;
+    border: 0; background: transparent; color: var(--ink); font: var(--fw-semibold) 14px/44px var(--font-ui); text-align: left;
+  }
+  .web-docname-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .web-docname-state { flex: none; font: 12px/44px var(--font-ui); color: var(--ink-soft); }
+  .web-docname-state.dirty { color: var(--accent); }
+  .web-keybar-on .statusbar { display: none; }
+  .web-keybar-on .scroll { padding-bottom: 56px; }
+  .app.is-web .statusbar { overflow: hidden; }
+  .app.is-web .status-right { display: none; }
+}

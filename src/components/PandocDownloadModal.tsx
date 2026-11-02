@@ -1,6 +1,6 @@
 import ModalFrame from "./ModalFrame";
 import { Show, createSignal, onCleanup } from "solid-js";
-import { hasPandoc, downloadPandoc, isTauri } from "../platform";
+import { hasPandoc, downloadPandoc, isTauri, web } from "../platform";
 
 // Phases mirror the `pandoc-download` events emitted by the Rust command.
 type Phase =
@@ -61,7 +61,12 @@ async function startDownload() {
   }
 
   try {
-    await downloadPandoc();
+    if (web) {
+      await web.downloadPandoc((p, value) => {
+        setPhase(p);
+        if (value !== null) setPercent(value);
+      });
+    } else await downloadPandoc();
     setPhase("done");
     setPercent(100);
     // Let the success state read for a beat, then continue the export.
@@ -92,7 +97,7 @@ export async function ensurePandoc(): Promise<boolean> {
 
 const STEP_LABEL: Record<Phase, string> = {
   confirm: "",
-  query: "Contacting GitHub…",
+  query: web ? "Connecting…" : "Contacting GitHub…",
   download: "Downloading Pandoc…",
   extract: "Extracting…",
   install: "Installing…",
@@ -154,8 +159,10 @@ export default function PandocDownloadModal() {
 
           <Show when={phase() === "confirm"}>
             <p class="pandoc-dl-text">
-              DOCX, EPUB and other rich exports use <strong>Pandoc</strong>. It isn't installed
-              yet — download it now? About 30&nbsp;MB, one-time, kept in the app's data folder.
+              DOCX, EPUB and other rich exports use <strong>Pandoc</strong>. {web
+                ? "It runs in this browser, so your documents aren't uploaded. Download it now? About 16 MB, one-time."
+                : <>It isn't installed
+              yet — download it now? About 30&nbsp;MB, one-time, kept in the app's data folder.</>}
             </p>
           </Show>
 
@@ -171,7 +178,7 @@ export default function PandocDownloadModal() {
 
           <Show when={phase() === "error"}>
             <p class="pandoc-dl-text err" role="alert">{errorMsg()}</p>
-            <p class="pandoc-dl-hint">You can also install Pandoc yourself from pandoc.org.</p>
+            <Show when={!web}><p class="pandoc-dl-hint">You can also install Pandoc yourself from pandoc.org.</p></Show>
           </Show>
 
           <div class="pandoc-dl-actions">

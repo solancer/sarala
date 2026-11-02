@@ -12,3 +12,11 @@ flatpak/.gen.log
 flatpak/.flatpak-builder/
 flatpak/build-dir/
 flatpak/repo/
+
+# Web build: generated output and the compiled encoding module
+web/dist/
+web/public/wasm/
+web/wasm/target/
+web/public/pandoc/
+web/public/ort/
+web/public/licenses/

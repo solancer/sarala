@@ -1,0 +1,26 @@
+# Text encoding detection and conversion for the web build. Mirrors decode_bytes
+# and encode_contents in src-tauri/src/main.rs, with the same two crates, so a
+# legacy file opens and saves the same way in the browser and on the desktop.
+[package]
+name = "sarala-encoding"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+encoding_rs = "0.8"
+chardetng = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# Standalone: not a member of any workspace above it.
+[workspace]

@@ -488,6 +488,78 @@ export function stylePanelSource(src: string): string {
   return esc(src);
 }
 
+/**
+ * A block this long edits as plain lines while active. Styling it whole costs
+ * a full parse and layout per keystroke, and that cost has no upper bound: one
+ * table or list can hold an entire document. Each line is its own span, so an
+ * edit touches one line, and textContent stays byte-identical to the source.
+ * They stay inline: Chrome and WebKit send ArrowUp to the top of a stack of
+ * block-level lines that end in a newline.
+ */
+export const LARGE_BLOCK = 20_000;
+export const isLargeBlock = (src: string) => src.length >= LARGE_BLOCK;
+
+const lineHtml = (line: string, last: boolean) => `<span class="md-line">${esc(line)}${last ? "" : "\n"}</span>`;
+
+export function styleLines(src: string): string {
+  const lines = src.split("\n");
+  return lines.map((line, i) => lineHtml(line, i === lines.length - 1)).join("");
+}
+
+const newlines = (s: string) => {
+  let n = 0;
+  for (let i = s.indexOf("\n"); i !== -1; i = s.indexOf("\n", i + 1)) n++;
+  return n;
+};
+
+/**
+ * End, in lines that end in a newline. The start of a line is also the point
+ * just past the previous line's newline, and from there the browser's End
+ * stays put, so the next thing typed would land at the start of the line.
+ */
+export function moveToLineEnd(extend: boolean) {
+  const sel = window.getSelection();
+  const node = sel?.focusNode;
+  if (!sel || !node) return;
+  const offset = sel.focusOffset;
+  sel.modify(extend ? "extend" : "move", "forward", "lineboundary");
+  if (sel.focusNode !== node || sel.focusOffset !== offset || node.nodeType !== Node.TEXT_NODE) return;
+  const text = node as Text;
+  const end = text.data.endsWith("\n") ? text.length - 1 : text.length;
+  if (extend) sel.extend(text, end);
+  else sel.collapse(text, end);
+}
+
+/** Bring a styleLines host up to `next`, touching only the lines that changed. */
+export function patchLines(el: HTMLElement, next: string) {
+  const prev = el.textContent ?? "";
+  if (prev === next) return;
+  const count = newlines(prev) + 1;
+  // A native edit can merge lines. The text is still right, the boxes aren't.
+  if (el.childNodes.length !== count || el.childElementCount !== count) {
+    el.innerHTML = styleLines(next);
+    return;
+  }
+  const shorter = Math.min(prev.length, next.length);
+  let head = 0;
+  while (head < shorter && prev[head] === next[head]) head++;
+  let tail = 0;
+  while (tail < shorter - head && prev[prev.length - 1 - tail] === next[next.length - 1 - tail]) tail++;
+
+  const first = newlines(prev.slice(0, head));
+  const last = first + newlines(prev.slice(head, prev.length - tail));
+  const start = head === 0 ? 0 : prev.lastIndexOf("\n", head - 1) + 1;
+  const found = next.indexOf("\n", next.length - tail);
+  const end = found === -1 ? next.length : found;
+
+  const after = el.children[last + 1] ?? null;
+  for (let i = last; i >= first; i--) el.children[i].remove();
+  const fresh = next.slice(start, end).split("\n");
+  const template = document.createElement("template");
+  template.innerHTML = fresh.map((line, i) => lineHtml(line, i === fresh.length - 1 && found === -1)).join("");
+  el.insertBefore(template.content, after);
+}
+
 export function styleSource(src: string): string {
   const tokens = layoutTokens(src);
   // Keep specialized fence/table editing; structured layout keeps
@@ -731,8 +803,50 @@ export function deleteSourceRange(source: string, start: number, end: number): {
 
 /* ---------- caret utilities for contenteditable ---------- */
 
+/** An offset into a styleLines host, from the lengths of the lines before it:
+ *  measuring a range across 20,000 lines costs a layout-sized pause per key.
+ *  Null when the lines aren't each one text node, as after a native merge. */
+function lineOffset(el: HTMLElement, node: Node, offset: number): number | null {
+  const line = node.nodeType === Node.TEXT_NODE ? node.parentElement : node as HTMLElement;
+  if (!line || line.parentElement !== el || line.childNodes.length > 1) return null;
+  let total = node === line ? (offset ? (line.firstChild as Text | null)?.length ?? 0 : 0) : offset;
+  for (let prev = line.previousElementSibling; prev; prev = prev.previousElementSibling) {
+    if (prev.childNodes.length > 1) return null;
+    total += (prev.firstChild as Text | null)?.length ?? 0;
+  }
+  return total;
+}
+
+/** The whole text of a styleLines host after an edit inside one line, spliced
+ *  from the previous text. Null when anything suggests more than that changed,
+ *  which the caller answers by reading the DOM. */
+export function splicedLines(el: HTMLElement, prev: string): string | null {
+  const node = window.getSelection()?.anchorNode;
+  const line = node?.nodeType === Node.TEXT_NODE ? node.parentElement : node as HTMLElement | null | undefined;
+  if (!line || line.parentElement !== el || line.childNodes.length !== 1) return null;
+  const start = lineOffset(el, line, 0);
+  if (start === null) return null;
+  const old = prev.indexOf("\n", start);
+  const text = (line.firstChild as Text).data;
+  const next = prev.slice(0, start) + text + (old === -1 ? "" : prev.slice(old + 1));
+  if (line.nextElementSibling ? !text.endsWith("\n") : text.includes("\n")) return null;
+  if (text.indexOf("\n") !== text.length - 1 && line.nextElementSibling) return null;
+  let total = 0;
+  for (let child = el.firstChild; child; child = child.nextSibling) {
+    if (child.childNodes.length > 1) return null;
+    total += (child.firstChild as Text | null)?.length ?? 0;
+  }
+  return total === next.length ? next : null;
+}
+
 export function getSelectionOffsets(el: HTMLElement): { start: number; end: number } {
   const sel = window.getSelection();
+  if (sel?.rangeCount && el.firstElementChild?.classList.contains("md-line") && el.contains(sel.anchorNode)) {
+    const range = sel.getRangeAt(0);
+    const start = lineOffset(el, range.startContainer, range.startOffset);
+    const end = range.collapsed ? start : lineOffset(el, range.endContainer, range.endOffset);
+    if (start !== null && end !== null) return { start, end };
+  }
   const len = el.textContent?.length ?? 0;
   if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) return { start: len, end: len };
   const range = sel.getRangeAt(0);
@@ -821,24 +935,27 @@ export function mapRenderedPrefixToSource(source: string, renderedPrefix: string
   let i = 0;
   let stalled = 0;
   for (let j = 0; j < renderedPrefix.length && i < source.length; ) {
-    const entity = /^&(?:#\d+|#x[\da-f]+|[a-z][a-z0-9]+);/i.exec(source.slice(i));
-    const emojiMatch = emojiShortcode().exec(source.slice(i));
+    // Each pattern can only match at its own first character, and within a
+    // short distance. Slicing the rest of the source for every character made
+    // a click near the end of a 1 MB block take seconds.
+    const entity = source[i] === "&" ? /^&(?:#\d+|#x[\da-f]+|[a-z][a-z0-9]+);/i.exec(source.slice(i, i + 40)) : null;
+    const emojiMatch = source[i] === ":" ? emojiShortcode().exec(source.slice(i, i + 80)) : null;
     const emoji = emojiMatch?.index === 0 ? emojiMatch : null;
     let replacement = "", length = 0;
     if (entity) {
       const el = document.createElement("textarea"); el.innerHTML = entity[0];
       replacement = el.value; length = entity[0].length;
     } else if (emoji) { replacement = emojiFor(emoji[1]) ?? ""; length = emoji[0].length; }
-    if (replacement && renderedPrefix.slice(j).startsWith(replacement)) {
+    if (replacement && renderedPrefix.startsWith(replacement, j)) {
       i += length; j += replacement.length; stalled = 0; continue;
     }
     // Callout titles are generated labels ("Note"), not literal source
     // ("[!NOTE]"). Consume them as a unit so a body click cannot run past the
     // intended word while searching for the title's differently-cased text.
-    const alert = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i.exec(source.slice(i));
+    const alert = source[i] === "[" ? /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i.exec(source.slice(i, i + 12)) : null;
     if (alert) {
       const label = alert[1][0].toUpperCase() + alert[1].slice(1).toLowerCase();
-      const rest = renderedPrefix.slice(j);
+      const rest = renderedPrefix.slice(j, j + label.length);
       if (rest.startsWith(label) || label.startsWith(rest)) {
         i += alert[0].length;
         j += Math.min(rest.length, label.length);

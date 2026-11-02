@@ -16,6 +16,7 @@ import ModalFrame from "./ModalFrame";
  */
 
 import { For, Show, createEffect, createMemo, createSignal, untrack, type JSX } from "solid-js";
+import { web } from "../platform";
 import {
   proseFont, setProseFont, monoFont, setMonoFont,
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, finalNewline,
@@ -65,6 +66,11 @@ export function openSettings(section?: string) {
   requestAnimationFrame(() =>
     document.querySelector<HTMLElement>('.settings .set-rail-item[aria-current="page"]')?.focus({ preventScroll: true }),
   );
+  // A browser asks permission to list fonts, so that waits for the Fonts page.
+  if (!web) loadFonts();
+}
+
+function loadFonts() {
   if (!loaded) {
     loaded = true;
     setLoading(true);
@@ -108,7 +114,19 @@ interface Section {
 
 const cmd = (id: string) => () => executeCommand(id);
 
-const SECTIONS = (): Section[] => [
+const SECTIONS = (): Section[] => {
+  const all = ALL_SECTIONS();
+  // Web sessions persist on their own (web/src/session.ts), so autosave has no
+  // setting there; the menu drops it through WebPlatform.hidden.
+  return web
+    ? [...all.filter((s) => s.id !== "ai").map((s) => ({ ...s, rows: s.rows.filter((r) => r.id !== "autosave") })), {
+      id: "storage", label: "Storage",
+      rows: [{ kind: "node", id: "web_storage", label: "This browser", node: () => web!.storagePanel() as JSX.Element }],
+    }]
+    : all;
+};
+
+const ALL_SECTIONS = (): Section[] => [
   {
     id: "appearance",
     label: "Appearance",
@@ -449,7 +467,7 @@ function Toggle(props: { on: boolean; onClick: () => void; label: string }) {
  *  command palette use the same glyphs). */
 const SECTION_ICONS: Record<string, string> = {
   appearance: "palette", editor: "pencil", markdown: "markdown", files: "folder",
-  images: "image", fonts: "type", ai: "sparkle", voice: "mic",
+  images: "image", fonts: "type", ai: "sparkle", voice: "mic", storage: "save",
 };
 function SectionIcon(props: { id: string; class: string }) {
   let el!: SVGSVGElement;
@@ -522,6 +540,8 @@ export default function SettingsModal() {
   const [target, setTarget] = createSignal<"prose" | "mono">("prose");
   const [fontQuery, setFontQuery] = createSignal("");
   const [query, setQuery] = createSignal("");
+
+  createEffect(() => { if (web && visible() && section() === "fonts") loadFonts(); });
 
   const current = () => (target() === "prose" ? proseFont() : monoFont());
 

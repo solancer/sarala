@@ -4,7 +4,7 @@
  */
 import { createSignal } from "solid-js";
 import { getSetting, setSetting } from "../settings";
-import { isMac } from "../platform";
+import { isMac, isWeb } from "../platform";
 import { canonicalShortcut, shortcutLabel as labelFor } from "./text";
 
 export interface ShortcutOption {
@@ -79,12 +79,17 @@ export const PAUSE_SECONDS = [
 
 /** The model suggested first: Parakeet streams and is the most accurate
  *  English model; everyone else gets multilingual Whisper. */
-export const recommendedModel = () =>
-  (typeof navigator !== "undefined" && /^en\b/i.test(navigator.language ?? "en")) ? "parakeet-en" : "whisper-small";
+export const recommendedModel = (): string => recommendedFor(
+  typeof navigator !== "undefined" && /^en\b/i.test(navigator.language ?? "en") ? "en" : "other",
+);
 
 /** The model to suggest for a spoken language ("auto" goes by the locale). */
-export const recommendedFor = (lang: string) =>
-  lang === "auto" ? recommendedModel() : lang === "en" ? "parakeet-en" : "whisper-small";
+export const recommendedFor = (lang: string): string => {
+  if (lang === "auto") return recommendedModel();
+  // The web build has its own, smaller models (web/src/voice/backend.ts).
+  if (isWeb) return lang === "en" ? "moonshine-base" : "whisper-base";
+  return lang === "en" ? "parakeet-en" : "whisper-small";
+};
 
 export const IDLE_OPTIONS = [
   { value: "0", label: "After each use" },

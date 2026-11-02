@@ -52,6 +52,8 @@ export const ICONS: Record<string, string> = {
   codeBlock: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M10 9.5 8 12l2 2.5M14 9.5l2 2.5-2 2.5"/>',
   diagram: '<rect x="3" y="3" width="7" height="5" rx="1"/><rect x="14" y="16" width="7" height="5" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/><path d="M6.5 8v8M17.5 16V12H6.5"/>',
   alert: '<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  upload: '<path d="M12 15V4m-4 4 4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
   footnote: '<path d="M4 5h11M4 10h11M4 15h7"/><path d="M17 13h3l-3 4h3"/>',
   toc: '<path d="M4 6h1M4 12h1M4 18h1M9 6h11M9 12h11M9 18h11"/>',
   frontMatter: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M7 13h6M7 16h10"/>',
@@ -61,6 +63,9 @@ export const ICONS: Record<string, string> = {
 // shows; items not listed here render a blank (reserved) icon slot so labels
 // stay aligned. `exec:*` keys cover the native clipboard items (no command id).
 export const MENU_ICONS: Record<string, string> = {
+  // The web Menu's submenus.
+  "menu.export": "download", "menu.edit": "pencil", "menu.blocks": "paragraph",
+  "menu.format": "bold", "menu.view": "eye", "web.backup": "download", "help.about": "info",
   // File
   "file.new": "file",
   "file.new_window": "window",
@@ -73,7 +78,7 @@ export const MENU_ICONS: Record<string, string> = {
   "file.rename": "pencil",
   "file.delete": "trash",
   "file.revert.last_saved": "undo",
-  "file.import": "download",
+  "file.import": "upload",
   "file.export.html": "download",
   "file.export.html_plain": "download",
   "file.export.pdf": "download",

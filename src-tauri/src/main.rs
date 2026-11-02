@@ -1625,6 +1625,22 @@ mod tests {
     }
 
     #[test]
+    fn search_rejects_a_pattern_the_engine_cannot_compile() {
+        // Valid in the JavaScript find bar, but `regex` has no look-behind. The
+        // panel tells these apart from "No matches" by this prefix.
+        let error = search_in_folder(
+            std::env::temp_dir().to_string_lossy().to_string(),
+            "(?<=a)b".to_string(),
+            true,
+            false,
+            false,
+        )
+        .err()
+        .expect("look-behind should not compile");
+        assert!(error.starts_with("Invalid pattern"), "got: {error}");
+    }
+
+    #[test]
     fn utf8_round_trips() {
         let bytes = encode_contents("héllo — café", None, false).unwrap();
         assert_eq!(bytes, "héllo — café".as_bytes());

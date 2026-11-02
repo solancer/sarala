@@ -1,6 +1,7 @@
-import { For, createEffect, createSignal, onCleanup } from "solid-js";
+import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import { activeTabId, openTabs, openDocument, switchTab, moveTab } from "../store";
-import { closeTab } from "../commands";
+import { closeTab, executeCommand, renameCurrentTo } from "../commands";
+import { isWeb } from "../platform";
 import { tabDragPosition } from "../tabdrag";
 
 export default function DocumentTabs() {
@@ -10,6 +11,15 @@ export default function DocumentTabs() {
     const tabs = openTabs();
     const index = tabs.findIndex((tab) => tab.id === id);
     if (index >= 0) setAnnouncement(`${tabs[index].name}, tab ${index + 1} of ${tabs.length}`);
+  };
+  // On the web the name is edited where it sits. A draft has no file to rename
+  // yet, so naming it means saving it.
+  const [renaming, setRenaming] = createSignal<number | null>(null);
+  let renameCancelled = false;
+  const startRename = (id: number, saved: boolean) => {
+    if (!isWeb || id !== activeTabId()) return;
+    if (saved) setRenaming(id);
+    else executeCommand("file.save");
   };
   const [dragging, setDragging] = createSignal<number | null>(null);
   const [dropIndex, setDropIndex] = createSignal(-1);
@@ -82,10 +92,19 @@ export default function DocumentTabs() {
     }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180);
   };
   onCleanup(() => { cancelAnimationFrame(frame); clearTimeout(settleTimer); });
+  const revealActive = () => {
+    if (dragging() === null) list?.querySelector<HTMLElement>(`[data-tab-id="${activeTabId()}"]`)
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  };
   createEffect(() => {
-    const id = activeTabId();
-    queueMicrotask(() => list?.querySelector<HTMLElement>(`[data-tab-id="${id}"]`)
-      ?.scrollIntoView({ block: "nearest", inline: "nearest" }));
+    activeTabId();
+    queueMicrotask(revealActive);
+  });
+  // The strip narrows when its neighbours grow, as a longer save state does.
+  onMount(() => {
+    const observer = new ResizeObserver(revealActive);
+    observer.observe(list!);
+    onCleanup(() => observer.disconnect());
   });
   const navigate = (e: KeyboardEvent, id: number) => {
     const tabs = openTabs();
@@ -96,6 +115,11 @@ export default function DocumentTabs() {
     if (e.key === "Delete") {
       e.preventDefault();
       void closeTab(id);
+      return;
+    }
+    if (e.key === "F2") {
+      e.preventDefault();
+      startRename(id, !!tabs[index].filePath);
       return;
     }
     if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
@@ -162,11 +186,33 @@ export default function DocumentTabs() {
               onPointerCancel={() => finishDrag(false)}
               onLostPointerCapture={() => finishDrag(false)}
               onClick={() => { if (!suppressClick) switchTab(tab.id); suppressClick = false; }}
+              onDblClick={() => startRename(tab.id, !!tab.filePath)}
               onKeyDown={(e) => { if (e.key === "Escape") finishDrag(false); else navigate(e, tab.id); }}
             >
               <span class="document-tab-name">{tab.name}</span>
               <span class="document-tab-dirty" classList={{ dirty: tab.dirty }} aria-label={tab.dirty ? "Unsaved changes" : undefined} />
             </button>
+            <Show when={renaming() === tab.id}>
+              <input class="document-tab-rename" aria-label={`Rename ${tab.name}`} value={tab.name}
+                spellcheck={false} autocomplete="off"
+                ref={(el) => queueMicrotask(() => {
+                  el.focus();
+                  el.setSelectionRange(0, Math.max(tab.name.lastIndexOf("."), 0) || tab.name.length);
+                })}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.isComposing) return;
+                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === "Escape") { renameCancelled = true; e.currentTarget.blur(); }
+                }}
+                onBlur={(e) => {
+                  const name = e.currentTarget.value;
+                  setRenaming(null);
+                  if (!renameCancelled) void renameCurrentTo(name);
+                  renameCancelled = false;
+                }}
+              />
+            </Show>
             <button class="document-tab-close" tabIndex={-1} aria-hidden="true" title={`Close ${tab.name} (Delete)`}
               onMouseDown={(e) => e.preventDefault()} onClick={() => void closeTab(tab.id)}>
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" /></svg>
@@ -174,7 +220,7 @@ export default function DocumentTabs() {
           </div>
         )}</For>
       </div>
-      <button class="document-tab-new" title="New tab (Cmd/Ctrl+T)" aria-label="New tab"
+      <button class="document-tab-new" title={isWeb ? "New tab" : "New tab (Cmd/Ctrl+T)"} aria-label="New tab"
         onMouseDown={(e) => e.preventDefault()} onClick={() => openDocument("", null)}>
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
       </button>
