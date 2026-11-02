@@ -3,6 +3,10 @@
 The web app has its own version, apart from the desktop app. Each section here
 becomes the notes of a `web-vX.Y.Z` release.
 
+## 0.1.2
+
+- Inter is the default typeface. It comes with the app, so it looks the same on every device.
+
 ## 0.1.1
 
 Fixes for phones and touch screens.

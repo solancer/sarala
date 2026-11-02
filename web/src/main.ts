@@ -7,9 +7,6 @@ import { installWebPlatform } from "../../src/platform";
 import { setVoiceBackend } from "../../src/voice/transport";
 import { platform } from "./platform";
 import { webVoiceBackend } from "./voice/backend";
-import "@fontsource-variable/literata/opsz.css";
-import "@fontsource-variable/literata/opsz-italic.css";
-import "@fontsource-variable/hanken-grotesk/wght.css";
 import "./web.css";
 import "./design.css";
 
