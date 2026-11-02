@@ -94,6 +94,7 @@ html:root {
 .app.is-web .view-toggle button.on { color: var(--ink); font-weight: var(--fw-medium); box-shadow: inset 0 -2px var(--thread); }
 
 /* The status line. */
+.app.is-web .sb-fmt { white-space: nowrap; }
 .app.is-web .sb-dot { display: none; }
 .app.is-web .sb-stats { gap: 14px; }
 .app.is-web .sb-stat { gap: 3px; }
@@ -122,6 +123,19 @@ html:root {
 .web-sheet-summary { margin: 0 0 8px; padding: 0 8px; font: 13px/1.4 var(--font-ui); color: var(--ink-soft); }
 
 /* ---------- narrow screens ---------- */
+/* iOS zooms the page in on any focused field under 16px. */
+@media (hover: none) {
+  .app.is-web input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]), .app.is-web select, .app.is-web textarea { font-size: 16px; }
+  .web-sheet-icon:focus-visible { outline: none; }
+
+  /* Everything a thumb has to hit, in either orientation. */
+  .app.is-web .side-icon-btn { width: 44px; height: 44px; }
+  .app.is-web .side-tab, .app.is-web .tree-item { min-height: 44px; }
+  .app.is-web .side-clear-btn { min-width: 44px; min-height: 44px; }
+  .app.is-web .side-filter { min-height: 44px; box-sizing: border-box; }
+  .app.is-web .palette-dot { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
+  .app.is-web .palette > button:not(.palette-dot) { min-height: 40px; }
+}
 @media (max-width: 720px) {
   .app.is-web { --gutter: 22px; }
   .app.is-web .page { padding-top: 16px; }
@@ -132,5 +146,15 @@ html:root {
   .app.is-web .sb-stats { display: none; }
   .app.is-web .statusbar { justify-content: flex-end; }
   .app.is-web .status-right { display: inline-flex; }
+  .app.is-web .statusbar { height: 44px; min-height: 44px; padding-block: 0; }
+  .app.is-web .status-right > button { min-height: 40px; }
+
+  .app.is-web .sidebar:not(.collapsed) { width: min(300px, 84vw); }
+  .web-drawer-scrim { position: fixed; inset: 0; z-index: 39; border: 0; padding: 0; background: rgba(0, 0, 0, 0.32); }
+
+  /* Fills the width, or its first themes would sit off the screen. */
+  .app.is-web .palette { position: fixed; left: 8px; right: 8px; bottom: 52px; width: auto; max-width: none; transform: none; flex-wrap: wrap; justify-content: flex-start; gap: 4px; padding: 8px; }
   .app.is-web .web-sheet.web-sheet { border-radius: var(--radius-sheet) 0 0 var(--radius-sheet); }
 }
+/* The smallest phones: the name matters more than a state that hasn't changed. */
+@media (max-width: 360px) { .web-docname-state:not(.dirty) { display: none; } }

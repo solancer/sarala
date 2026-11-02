@@ -13,7 +13,7 @@ import ModalFrame from "../../../src/components/ModalFrame";
 import { MenuList } from "../../../src/components/MenuBar";
 import { MENU_ICONS, ICONS } from "../../../src/menuicons";
 import { blockTargetsEnabled, BLOCK_TARGETED_IDS, findLeaf, type MenuLeaf, type MenuNode } from "../../../src/menudata";
-import { activeTabId, doc, fileName, openTabs, readTime, setSidebarOpen, sourceMode, stats, switchTab } from "../../../src/store";
+import { activeTabId, doc, fileName, openTabs, readTime, setSidebarOpen, sidebarOpen, sourceMode, stats, switchTab } from "../../../src/store";
 
 /** Commands from the tree, in this order; "-" is a separator. */
 const pick = (...ids: string[]): MenuNode[] => ids.flatMap((id): MenuNode[] => {
@@ -205,6 +205,9 @@ function Sheet() {
           <Show when={sheet()!.length === 1}>
             <p class="web-sheet-summary">{stats().words} words, {readTime()} min read</p>
           </Show>
+          <Show when={sheet()!.length > 1 && !blockTargetsEnabled() && view().items.some((n) => "id" in n && /^(format|paragraph)\./.test(n.id ?? ""))}>
+            <p class="web-sheet-summary">Tap a paragraph first, then come back here.</p>
+          </Show>
           <Show when={sheet()!.length === 1 && openTabs().length > 1}>
             <h3>Open documents</h3>
             <For each={openTabs()}>{(tab) => (
@@ -319,6 +322,10 @@ function Root() {
   createEffect(on(() => doc.filePath, () => { if (phone()) setSidebarOpen(false); }, { defer: true }));
   return (
     <>
+      {/* The drawer covers its own toggle on a phone, so tapping off it closes it. */}
+      <Show when={phone() && sidebarOpen()}>
+        <button class="web-drawer-scrim" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)} />
+      </Show>
       <Show when={sheet()}><Sheet /></Show>
       <KeyBar />
     </>
