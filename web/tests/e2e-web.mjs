@@ -635,6 +635,29 @@ check((await themed.evaluate(() => getComputedStyle(document.querySelector(".ren
 check(await themed.locator(".status-right").isVisible() && (await themed.locator(".status-right").evaluate((el) => getComputedStyle(el).opacity)) === "1", "the document's settings stay visible, on a phone too");
 await themeContext.close();
 
+const touchContext = await browser.newContext({ viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+const touch = await open(touchContext);
+await settle(touch, 800);
+check(!(await touch.evaluate(() => document.documentElement.scrollWidth > innerWidth)), "a small phone has no sideways scroll");
+await touch.locator(".web-menu .web-bar-btn").tap();
+await touch.locator(".web-sheet-row").filter({ hasText: "Format" }).first().tap();
+await settle(touch, 200);
+check(/Tap a paragraph first/.test(await touch.locator(".web-sheet").innerText()), "Format says why its rows are grey");
+await touch.getByRole("button", { name: "Close" }).tap();
+await settle(touch, 200);
+await touch.locator(".topbar-toggle").first().tap();
+await settle(touch, 300);
+const thumbTargets = await touch.evaluate(() => [...document.querySelectorAll(".sidebar button, .side-filter")].filter((el) => { const r = el.getBoundingClientRect(); return r.height && r.height < 40; }).map((el) => el.className));
+check(!thumbTargets.length, "the sidebar's controls fit a thumb", thumbTargets.join());
+await touch.touchscreen.tap(310, 300);
+await settle(touch, 350);
+check(!(await touch.locator(".web-drawer-scrim").count()), "tapping off the sidebar closes it");
+await touch.locator(".status-right button").nth(1).tap();
+await settle(touch, 300);
+const swatches = await touch.evaluate(() => [...document.querySelectorAll(".palette-dot")].every((el) => { const r = el.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.height >= 40; }));
+check(swatches, "the theme swatches fit on screen and a thumb");
+await touchContext.close();
+
 section("the tab strip");
 const stripContext = await browser.newContext({ viewport: { width: 1280, height: 800 } });
 const strip = await open(stripContext);

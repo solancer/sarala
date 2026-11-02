@@ -24,7 +24,8 @@ const { DOWNLOADS, LIBRARY } = vfs;
 
 // A tab never hands these to the page. An installed app's window does.
 const accelWorks = (accel: string) =>
-  !/^(Shift\+)?Ctrl\+[NTW]$/.test(accel) || matchMedia("(display-mode: standalone)").matches;
+  !matchMedia("(hover: none)").matches
+  && (!/^(Shift\+)?Ctrl\+[NTW]$/.test(accel) || matchMedia("(display-mode: standalone)").matches);
 
 // `voice` alone is the Edit submenu. Its commands stay in the palette and Settings.
 const HIDDEN = /^(ai\.|voice$|edit\.autosave|window\.(minimize|maximize)$|view\.always_on_top$)/;
