@@ -586,7 +586,8 @@ const design = await open(designContext);
 await settle(design, 1000);
 const column = await design.locator(".block").first().boundingBox();
 check(column.width <= 700, "the text column keeps a readable measure", String(column.width));
-check((await design.evaluate(() => getComputedStyle(document.querySelector(".rendered p")).fontFamily)).includes("Literata"), "prose is set in the book face");
+check((await design.evaluate(() => getComputedStyle(document.querySelector(".rendered p")).fontFamily)).startsWith('Inter'), "Inter is the default face");
+check(await design.evaluate(() => document.fonts.check("400 16px Inter") && [...document.fonts].some((f) => f.family.replace(/"/g, "") === "Inter" && f.status === "loaded")), "Inter comes from the app, not the system");
 const stayStill = async (selector, label) => {
   const target = design.locator(selector).first();
   const below = () => design.locator(".block").last().evaluate((el) => el.getBoundingClientRect().top + document.querySelector(".scroll").scrollTop);

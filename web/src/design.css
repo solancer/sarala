@@ -1,14 +1,13 @@
 /*
- * Sarala on the web: a readable page, a book typeface, and chrome that belongs
- * to the page. Colours and the text size are the app's own, so the terracotta
- * Sarala theme stays the default. One line in the accent colour, the thread,
+ * Sarala on the web: a readable page and chrome that belongs to the page.
+ * Colours, type and text size are the app's own, so the terracotta theme and
+ * the bundled Inter stay the defaults. One line in the accent colour, the thread,
  * marks where you are: the open tab, the view, the block being edited.
  *
  * Nothing in this file reaches the desktop app.
  */
 
 html:root {
-  --font-ui: "Hanken Grotesk Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
   --radius-control: 6px;
   --radius-surface: 10px;
   --radius-sheet: 18px;
@@ -19,10 +18,6 @@ html:root {
   --gutter: 56px;
   --thread: var(--accent);
   --lift: 0 0 0 1px var(--rule), 0 14px 36px color-mix(in srgb, var(--ink) 16%, transparent);
-}
-
-.app.is-web[data-theme="sarala"] {
-  --font-prose: "Literata Variable", Georgia, "Noto Serif", serif;
 }
 
 /* ---------- the page ---------- */
@@ -102,7 +97,7 @@ html:root {
 
 /* ---------- the sidebar: a list of documents, nothing else until you ask ---------- */
 .app.is-web .side-ws-glyph { display: none; }
-.app.is-web .side-ws-name { font: var(--fw-semibold) 14px/1.3 var(--font-prose); }
+.app.is-web .side-ws-name { font: var(--fw-semibold) 14px/1.3 var(--font-ui); }
 .app.is-web .side-tab-ic { display: none; }
 .app.is-web .side-tabs { border-bottom: 0; gap: 2px; }
 .app.is-web .side-tab { font: var(--fw-regular) 13px/1 var(--font-ui); }
