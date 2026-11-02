@@ -1,4 +1,5 @@
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { accelWorks, isMac, isWeb } from "../platform";
 import { MENUS, BLOCK_TARGETED_IDS, blockTargetsEnabled, type MenuNode, type MenuLeaf } from "../menudata";
 import { executeCommand } from "../commands";
 import { recentFiles, exportPresets } from "../settings";
@@ -14,6 +15,8 @@ const ACCEL_SYMBOLS: Record<string, string> = {
   Comma: ",", Slash: "/", Backquote: "`", Up: "↑", Down: "↓", Enter: "↵",
 };
 function fmtAccel(accel: string): string {
+  // This menubar reaches a Mac only in the web build, where Cmd works for Ctrl.
+  if (isMac) return accel.split("+").map((t) => ({ Ctrl: "⌘", Shift: "⇧", Alt: "⌥" }[t] ?? ACCEL_SYMBOLS[t] ?? t)).join("");
   return accel.split("+").map((t) => ACCEL_SYMBOLS[t] ?? t).join("+");
 }
 
@@ -66,12 +69,18 @@ function MenuIcon(props: { k?: string }) {
 }
 
 /** A single dropdown level: separators, leaves, and (recursive) submenus. */
-function MenuList(props: { items: MenuNode[] }) {
+export function MenuList(props: { items: MenuNode[] }) {
   // Flatten dynamic slots into real nodes for this render pass.
   const nodes = (): (MenuNode | MenuLeaf)[] =>
     props.items.flatMap((n) => ("dynamic" in n ? expandDynamic(n.dynamic) : [n]));
   return (
-    <div class="menu-dropdown">
+    <div class="menu-dropdown" ref={(el) => {
+      // A long submenu low in a tall menu would run off the page.
+      if (isWeb) queueMicrotask(() => {
+        const over = el.getBoundingClientRect().bottom - window.innerHeight + 8;
+        if (over > 0) el.style.transform = `translateY(${-over}px)`;
+      });
+    }}>
       <For each={nodes()}>
         {(n) => {
           if ("sep" in n) return <div class="menu-sep" />;
@@ -89,7 +98,7 @@ function MenuList(props: { items: MenuNode[] }) {
                 <Show when={n.checked?.()} fallback={<MenuIcon k={iconKey(n)} />}>✓</Show>
               </span>
               <span class="menu-label">{n.label}</span>
-              <Show when={n.accel}>
+              <Show when={n.accel && accelWorks(n.accel)}>
                 <span class="menu-accel">{fmtAccel(n.accel!)}</span>
               </Show>
             </button>

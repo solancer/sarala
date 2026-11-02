@@ -78,6 +78,7 @@ export function setImageResolver(fn: (src: string) => string) {
 // Syntax-highlight a code block to HTML (Shiki). Injected by highlighter.ts;
 // returns null until Shiki has loaded, falling back to plain escaped code.
 let codeHighlighter: (code: string, lang: string) => string | null = () => null;
+const MAX_HIGHLIGHTED_CODE = 200_000;
 let codePreparer: (md: string) => Promise<void> = async () => {};
 export function setCodeHighlighter(fn: (code: string, lang: string) => string | null, prepare?: (md: string) => Promise<void>) {
   codeHighlighter = fn;
@@ -196,7 +197,9 @@ function blockUses(text: string): BlockFacts["uses"] {
     toc: /\[TOC\]|\[\[_TOC_\]\]/i.test(text),
     // Lazily loaded render data (grammars, KaTeX, emoji).
     assets: text.includes("```") || text.includes("~~~") || text.includes("$") || text.startsWith("---\n")
-      || text.includes("\\(") || text.includes("\\[") || emojiShortcode().test(text),
+      || text.includes("\\(") || text.includes("\\[") || emojiShortcode().test(text)
+      // On the web, image bytes also arrive after the render (WebPlatform.imageUrl).
+      || text.includes("![") || /<img\b/i.test(text),
     // Image srcs resolve against the document's folder and its front matter's
     // image-root-url / typora-root-url (images.ts).
     images: text.includes("![") || /<img\b/i.test(text),
@@ -233,6 +236,28 @@ function blockStart(src: string, re: RegExp): number | undefined {
   const blank = src.indexOf("\n\n");
   return (blank < 0 ? src : src.slice(0, blank + 1)).match(re)?.index;
 }
+
+/**
+ * `marked.walkTokens`, without collecting callback results it would build by
+ * concatenating arrays. That is quadratic in the token count, 2.6 seconds on a
+ * 20,000-item list, and nothing here reads the results. No extension in this
+ * file declares `childTokens`, so the generic branch is only `token.tokens`.
+ */
+function walk(tokens: Token[], visit: (token: Token) => void) {
+  for (const token of tokens) {
+    visit(token);
+    if (token.type === "table") {
+      const table = token as Tokens.Table;
+      for (const cell of table.header) walk(cell.tokens, visit);
+      for (const row of table.rows) for (const cell of row) walk(cell.tokens, visit);
+    } else if (token.type === "list") walk((token as Tokens.List).items, visit);
+    else if ((token as Tokens.Generic).tokens) walk((token as Tokens.Generic).tokens!, visit);
+  }
+}
+const applyExtensions = (tokens: Token[]) => {
+  const extensions = marked.defaults.walkTokens;
+  if (extensions) walk(tokens, (token) => { void extensions.call(marked, token); });
+};
 
 /** Documents shorter than this are lexed in one piece. */
 const PIECE_CHARS = 8192;
@@ -339,7 +364,7 @@ function blockFacts(text: string): BlockFacts {
   const tokens = lexDocument(text);
   const facts: BlockFacts = { links: tokens.links, math: [], footnoteDefs: [], footnoteRefs: [], headingBases: [], headings: [], uses: blockUses(text) };
   for (const token of tokens) if (token.type === "heading") facts.headings.push({ level: token.depth, text: token.text });
-  marked.walkTokens(tokens, token => {
+  walk(tokens, token => {
     if (token.type === "blockMath" || (mathFence && token.type === "code" && token.lang === "math")) facts.math.push(String(token.text ?? ""));
     else if (token.type === "footnoteDef") facts.footnoteDefs.push([String(token.id), String(token.text)]);
     else if (token.type === "footnoteRef") facts.footnoteRefs.push(escapeAttr(String(token.text)));
@@ -361,7 +386,7 @@ const continuesFootnote = (text: string) => /^(?: {4}|\t)\S/.test(text);
  * out the same, so this skips rebuilding it (and re-serializing its keys)
  * for every block on every keystroke.
  */
-function reuseContext(blocks: readonly { id: number | string; text: string }[], key: string): RenderContext | null {
+function reuseContext(blocks: readonly { id: number | string; text: string }[], key: string, held: number | string | null): RenderContext | null {
   const last = lastBuild;
   if (!last || last.key !== key || last.ids.length !== blocks.length) return null;
   if (factsCache.size > 2 * blocks.length + 5000) return null; // let a rebuild prune it
@@ -370,6 +395,9 @@ function reuseContext(blocks: readonly { id: number | string; text: string }[], 
     const { id, text } = blocks[i];
     if (id !== last.ids[i]) return null;
     if (text === last.texts[i]) continue;
+    // A very long block being typed in keeps its facts until it closes. Its
+    // recorded text stays old, so the first build after that finds the change.
+    if (id === held) continue;
     // Front matter feeds image paths; continuation paragraphs feed footnotes.
     if ((i === 0 && (text.startsWith("---\n") || last.texts[0].startsWith("---\n"))) || continuesFootnote(text) || continuesFootnote(last.texts[i])) return null;
     const facts = blockFacts(text);
@@ -382,9 +410,9 @@ function reuseContext(blocks: readonly { id: number | string; text: string }[], 
 
 /** Everything a block render needs from the rest of the document. `codeKey`
  *  changes when syntax grammars finish loading. */
-export function buildRenderContext(blocks: readonly { id: number | string; text: string }[], docPath: string | null = null, assetKey = ""): RenderContext {
+export function buildRenderContext(blocks: readonly { id: number | string; text: string }[], docPath: string | null = null, assetKey = "", held: number | string | null = null): RenderContext {
   const key = `${optionsKey()}\0${docPath ?? ""}\0${assetKey}`;
-  const reused = reuseContext(blocks, key);
+  const reused = reuseContext(blocks, key, held);
   if (reused) return reused;
   const all = blocks.map(b => blockFacts(b.text));
   // Bound the cache by pruning it to this document's texts (the slack covers
@@ -468,7 +496,7 @@ export function inlineSourceTokens(source: string) {
   const lexer = new Lexer(marked.defaults);
   lexer.tokens.links = contextProvider?.().links ?? lexer.tokens.links;
   const tokens = lexer.inlineTokens(source);
-  if (marked.defaults.walkTokens) marked.walkTokens(tokens, marked.defaults.walkTokens);
+  applyExtensions(tokens);
   return tokens;
 }
 
@@ -716,7 +744,8 @@ marked.use({
       if (lang === "math" && mathFence) {
         return stashMath(token.text, true);
       }
-      const hl = codeHighlighter(token.text, lang);
+      // Colouring a code block this long means hundreds of thousands of spans.
+      const hl = token.text.length <= MAX_HIGHLIGHTED_CODE ? codeHighlighter(token.text, lang) : null;
       if (hl) {
         shikiStash.push(hl);
         return `<div data-shiki="${shikiStash.length - 1}"></div>`;
@@ -923,8 +952,8 @@ export function renderMarkdown(md: string, blockKey?: string): string {
   const lexer = new Lexer(marked.defaults);
   lexer.tokens.links = context.links;
   const tokens = lexDocument(src, lexer);
-  if (marked.defaults.walkTokens) marked.walkTokens(tokens, marked.defaults.walkTokens);
-  marked.walkTokens(tokens, token => {
+  applyExtensions(tokens);
+  walk(tokens, token => {
     if (token.type === "paragraph" && /^(?:\[TOC\]|\[\[_TOC_\]\])$/i.test(token.text.trim())) {
       const t = token as Tokens.Generic;
       t.type = "html"; t.text = toc(); t.tokens = undefined;

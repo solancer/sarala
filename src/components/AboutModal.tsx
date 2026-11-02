@@ -1,6 +1,6 @@
 import ModalFrame from "./ModalFrame";
 import { Show, createSignal } from "solid-js";
-import { openExternal, isTauri } from "../platform";
+import { openExternal, isTauri, web } from "../platform";
 import appIcon from "../../src-tauri/icons/128x128.png";
 
 const WEBSITE_URL = "https://sarala.solancer.com";
@@ -12,7 +12,7 @@ const AUTHOR_URL = "https://solancer.com";
 const FALLBACK_VERSION = "0.2.3";
 
 const [visible, setVisible] = createSignal(false);
-const [version, setVersion] = createSignal(FALLBACK_VERSION);
+const [version, setVersion] = createSignal(web?.version ?? FALLBACK_VERSION);
 
 export function openAbout() {
   setVisible(true);

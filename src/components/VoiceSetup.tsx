@@ -13,6 +13,7 @@
  */
 import { For, Match, Show, Switch, createEffect, createSignal, on, onCleanup } from "solid-js";
 import ModalFrame from "./ModalFrame";
+import { isWeb } from "../platform";
 import { MicIcon, VoiceButton } from "./VoiceHud";
 import {
   COMMAND_KEYS, LANGUAGES, PAUSE_OPTIONS, commandKeyLabel, recommendedFor, setVoiceCommandKey, setVoiceEnabled, setVoiceLanguage,
@@ -418,7 +419,7 @@ export default function VoiceSetup() {
                 <Match when={mic() === "ask" || mic() === "asking"}>
                   <h3 class="voice-step-title" tabIndex={-1} ref={heading}>Sarala needs to hear you</h3>
                   <p class="voice-step-sub">
-                    Your computer asks once whether Sarala may use the microphone. Sarala only listens while you dictate,
+                    {isWeb ? "Your browser" : "Your computer"} asks once whether Sarala may use the microphone. Sarala only listens while you dictate,
                     and what you say never leaves this computer.
                   </p>
                   <div class="voice-setup-actions">
@@ -431,7 +432,9 @@ export default function VoiceSetup() {
                 <Match when={mic() === "denied"}>
                   <h3 class="voice-step-title" tabIndex={-1} ref={heading}>Microphone access is off</h3>
                   <p class="voice-step-sub">
-                    {platformInfo()?.os === "windows"
+                    {isWeb
+                      ? "Allow the microphone in your browser's site settings (usually the icon beside the address), then try again."
+                      : platformInfo()?.os === "windows"
                       ? "In Windows Settings > Privacy & security > Microphone, turn on “Microphone access” and “Let desktop apps access your microphone”, then try again."
                       : "In System Settings > Privacy & Security > Microphone, turn on Sarala, then try again."}
                   </p>

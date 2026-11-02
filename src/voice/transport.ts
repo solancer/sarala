@@ -132,6 +132,8 @@ const unsupported: Backend = {
 };
 
 let backend: Promise<Backend> | null = null;
+/** The web build brings its own pipeline (web/src/voice/). */
+export function setVoiceBackend(b: Backend) { backend = Promise.resolve(b); }
 export function voiceBackend(): Promise<Backend> {
   backend ??= isTauri
     ? Promise.resolve(tauriBackend())

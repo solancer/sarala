@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "types": ["vite/client"], "lib": ["ES2022", "DOM", "DOM.Iterable", "DOM.AsyncIterable", "WebWorker"] },
+  "include": ["src", "../src/types.d.ts", "../src/katex-contrib.d.ts"]
+}

@@ -1,11 +1,11 @@
 import ModalFrame from "./ModalFrame";
 import { For, Show, createMemo, createSignal, createEffect } from "solid-js";
 import { commandPaletteVisible, setCommandPaletteVisible, THEMES, theme } from "../store";
-import { executeCommand } from "../commands";
-import { MENUS, THEME_LABELS, type MenuNode, type MenuLeaf } from "../menudata";
+import { executeCommand, returnToEditing } from "../commands";
+import { BLOCK_TARGETED_IDS, MENUS, THEME_LABELS, blockTargetsEnabled, flatCommands, type MenuNode, type MenuLeaf } from "../menudata";
 import { DOTS } from "./PaletteSwitcher";
-import { isMac } from "../platform";
-import { ICONS } from "../menuicons";
+import { accelWorks, isMac, web } from "../platform";
+import { ICONS, MENU_ICONS } from "../menuicons";
 
 interface Cmd {
   group: string;
@@ -78,7 +78,12 @@ const BASE: Cmd[] = [
   { group: "Themes", id: "themes.custom", label: "Custom Theme (base16)…", icon: "pencil" },
 ];
 const COMMANDS: Cmd[] = [
-  ...BASE,
+  ...BASE.filter((c) => !web?.hidden(c.id)),
+  ...Object.entries(web?.menuItems ?? {}).flatMap(([group, items]) => items.map((item) => ({ ...item, group, icon: "download" }))),
+  // No menu bar in a browser, so every command must be findable from here.
+  ...(web ? flatCommands() : [])
+    .filter((c) => !BASE.some((b) => b.id === c.id) && !web?.menuItems[c.group]?.some((i) => i.id === c.id))
+    .map((c) => ({ ...c, icon: MENU_ICONS[c.id] ?? "file" })),
   ...THEMES.map((id) => ({
     group: "Themes",
     id: `themes.set.${id}`,
@@ -86,6 +91,26 @@ const COMMANDS: Cmd[] = [
     theme: id,
   })),
 ];
+
+/** Other words people use for a command. */
+const ALIASES: Record<string, string> = {
+  "file.save_as": "duplicate copy", "file.rename": "move", "file.delete": "remove trash",
+  "file.print": "pdf", "file.export.pdf": "print", "web.download_markdown": "export md",
+  "web.backup": "export zip", "web.restore": "import zip", "edit.find": "search", "edit.replace": "find", "view.search": "find in files folder library",
+  "paragraph.heading.0": "normal text", "themes.picker": "appearance dark light colour color",
+  "app.settings": "preferences options", "format.image.insert": "picture photo",
+};
+
+/** How well a command matches: its name first, then a word in it, then the
+ *  rest. Stable, so equal matches keep their usual order. */
+function rank(c: Cmd, q: string): number {
+  const label = c.label.toLowerCase();
+  if (label.startsWith(q)) return 0;
+  if (label.includes(` ${q}`)) return 1;
+  if (label.includes(q)) return 2;
+  if (ALIASES[c.id]?.includes(q)) return 3;
+  return c.group.toLowerCase().includes(q) ? 4 : 5;
+}
 
 // id → accelerator (raw menudata form) so key hints stay in sync with the menu.
 const ACCELS: Record<string, string> = (() => {
@@ -105,7 +130,7 @@ const ACCELS: Record<string, string> = (() => {
 /** Format a menudata accelerator for display (⌘⇧K on mac, Ctrl+Shift+K elsewhere). */
 function formatAccel(id: string): string {
   const raw = ACCELS[id];
-  if (!raw) return "";
+  if (!raw || !accelWorks(raw)) return "";
   const mod: Record<string, string> = isMac
     ? { Ctrl: "⌘", Shift: "⇧", Alt: "⌥", CmdOrCtrl: "⌘" }
     : { Ctrl: "Ctrl", Shift: "Shift", Alt: "Alt", CmdOrCtrl: "Ctrl" };
@@ -144,6 +169,7 @@ export default function CommandPalette() {
     if (!commandPaletteVisible()) return [];
     const q = query().toLowerCase().trim();
     if (!q) return COMMANDS;
+    if (web) return COMMANDS.map((c) => ({ c, score: rank(c, q) })).filter((m) => m.score < 5).sort((a, b) => a.score - b.score).map((m) => m.c);
     return COMMANDS.filter(
       (c) => c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q),
     );
@@ -158,10 +184,15 @@ export default function CommandPalette() {
   });
 
   const close = () => setCommandPaletteVisible(false);
+  const blocked = (c: Cmd) => !!web && BLOCK_TARGETED_IDS.has(c.id) && !blockTargetsEnabled();
   const run = (c: Cmd | undefined) => {
-    if (!c) return;
+    if (!c || blocked(c)) return;
     close();
-    executeCommand(c.id);
+    // The palette took focus from the block these commands act on.
+    if (web && /^(format|paragraph)\./.test(c.id)) {
+      returnToEditing();
+      requestAnimationFrame(() => executeCommand(c.id));
+    } else executeCommand(c.id);
   };
 
   const scrollToCursor = () => {
@@ -223,7 +254,7 @@ export default function CommandPalette() {
                     </Show>
                     <div
                       class="cmd-row" role="option" id={`command-option-${i()}`} aria-selected={i() === cursor()}
-                      classList={{ sel: i() === cursor() }}
+                      classList={{ sel: i() === cursor(), disabled: blocked(c) }} aria-disabled={blocked(c) || undefined}
                       onMouseDown={(e) => e.preventDefault()} onClick={() => run(c)}
                       onMouseMove={() => setCursor(i())}
                     >

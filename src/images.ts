@@ -1,6 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { doc } from "./store";
-import { isTauri } from "./platform";
+import { isTauri, web } from "./platform";
 import { setImageResolver } from "./markdown";
 import { parseImgAttrs } from "./imageattrs";
 
@@ -45,7 +45,7 @@ const isAbsolute = (p: string) => /^([A-Za-z]:[\\/]|\/)/.test(p);
 // A leading-slash path that points at a real filesystem location (a system
 // root dir), as opposed to a root-relative link like /images/x.png. Used so an
 // image root doesn't double-join an absolute path such as /Users/x/pic.png.
-const FS_ABS_ROOT = /^\/(?:Users|home|root|Applications|Library|System|Volumes|private|tmp|var|opt|usr|bin|sbin|etc|mnt|media|dev|srv)\//;
+const FS_ABS_ROOT = /^\/(?:Users|home|root|Applications|Library|Folders|Files|System|Volumes|private|tmp|var|opt|usr|bin|sbin|etc|mnt|media|dev|srv)\//;
 
 /* ---------- image occurrences in block source ---------- */
 
@@ -145,13 +145,13 @@ export function resolveImagePath(src: string, ctx: ResolveCtx): string {
 
 /** Live resolver: gathers doc dir + front matter + Tauri's convertFileSrc. */
 export function resolveImageSrc(src: string): string {
-  if (!isTauri) return src;
+  if (!isTauri && !web) return src;
   return resolveImagePath(src, {
     dir: docDir(),
     rootUrl: (currentFrontMatter()["image-root-url"] ?? currentFrontMatter()["typora-root-url"]),
     convert: (p) => {
       try {
-        return convertFileSrc(p);
+        return web ? web.imageUrl(p) : convertFileSrc(p);
       } catch {
         return src;
       }

@@ -1,0 +1,110 @@
+name: Web release
+
+# The web app versions and ships on its own, apart from the desktop app. Cut a
+# release with `pnpm release:web X.Y.Z`, then push the tag it prints. Desktop
+# tags are `vX.Y.Z`; `web-v*` doesn't match that workflow's `v*`, or this one
+# match it.
+on:
+  push:
+    tags:
+      - "web-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing web tag to publish again, such as web-v0.1.0
+        required: true
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4 # version comes from package.json "packageManager"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Add the Rust WebAssembly target
+        run: rustup target add wasm32-unknown-unknown
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check the tag matches the web version
+        run: |
+          version=$(node -p "require('./web/package.json').version")
+          test "$TAG" = "web-v$version" || { echo "$TAG does not match web/package.json $version"; exit 1; }
+
+      - run: pnpm typecheck
+      - run: pnpm --filter sarala-web typecheck
+      - run: pnpm test
+      - run: pnpm build:web
+
+      - name: Package the build
+        run: cd web/dist && zip -qr "../../sarala-web-${TAG#web-v}.zip" .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sarala-web
+          path: sarala-web-*.zip
+          if-no-files-found: error
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  release:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sarala-web
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=${TAG#web-v}
+          awk -v v="## $version" '$0 == v { on = 1; next } /^## / { on = 0 } on' web/CHANGELOG.md > notes.md
+          test -s notes.md || { echo "web/CHANGELOG.md has no section for $version"; exit 1; }
+          # Never "latest": that belongs to the desktop app, which Homebrew, the
+          # AUR package and download links follow.
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" sarala-web-*.zip --clobber
+          else
+            gh release create "$TAG" sarala-web-*.zip --verify-tag --latest=false \
+              --title "Sarala for the web $version" --notes-file notes.md
+          fi

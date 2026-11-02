@@ -2,13 +2,13 @@
  * Live-app check of caret-scoped marker reveal: real Vite dev server, real
  * Chromium, real Solid effects and selectionchange listeners.
  *
- *   node tests/e2e-reveal.mjs   (starts its own server on :1421)
+ *   node tests/e2e-reveal.mjs   (starts its own server on :1423)
  */
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { chromium } from "playwright";
 
-const PORT = 1421;
+const PORT = 1423;
 const server = spawn("npx", ["vite", "--port", String(PORT)], { stdio: "pipe" });
 const kill = () => { try { server.kill("SIGTERM"); } catch { /* gone */ } };
 process.on("exit", kill);

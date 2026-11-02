@@ -1,5 +1,5 @@
 import { For, Show, createSignal, createEffect, createMemo, on, onCleanup, onMount, type JSX } from "solid-js";
-import { isMac, isTauri, type FileNode, type FileTimes } from "../platform";
+import { isMac, isTauri, isWeb, type FileNode, type FileTimes } from "../platform";
 import {
   outline, doc, folderPath, sidebarOpen, sidebarTab, setSidebarTab,
   sidebarWidth, setSidebarWidth, clampSidebar,
@@ -608,7 +608,7 @@ export default function Sidebar(props: Props) {
         </span>
         <button
           class="side-icon-btn"
-          title={props.folderName ? "Open a different folder…" : "Open folder…"}
+          title={isWeb ? "Add a folder from this device…" : props.folderName ? "Open a different folder…" : "Open folder…"}
           aria-label="Open folder"
           onClick={() => props.onOpenFolder()}
         >
@@ -623,7 +623,7 @@ export default function Sidebar(props: Props) {
       <div class="side-tabs" role="tablist" aria-label="Sidebar views">
         <Tab id="files" icon={() => <TabFilesIcon />} label="Files" />
         <Tab id="outline" icon={() => <TabOutlineIcon />} label="Outline" />
-        <Tab id="search" icon={() => <TabSearchIcon />} label="Find" />
+        <Tab id="search" icon={() => <TabSearchIcon />} label="Search" />
       </div>
 
       {/* ===== tab body ===== */}
@@ -711,7 +711,7 @@ export default function Sidebar(props: Props) {
             <span role="heading" aria-level={2}>All files</span>
             {/* The tree updates itself via the Rust watcher; this is the fallback
                 for where OS watching is unavailable (e.g. inotify limits). */}
-            <Show when={isTauri && folderPath()}>
+            <Show when={(isTauri || isWeb) && folderPath()}>
               <button
                 class="side-clear-btn"
                 classList={{ spinning: refreshing() }}
@@ -818,8 +818,8 @@ export default function Sidebar(props: Props) {
               when={props.tree.length > 0}
               fallback={
                 <div class="sidebar-empty">
-                  <p>No folder open.</p>
-                  <button class="ghost-btn" onClick={props.onOpenFolder}>Open folder…</button>
+                  <p>{isWeb ? "Nothing saved yet." : "No folder open."}</p>
+                  <button class="ghost-btn" onClick={props.onOpenFolder}>{isWeb ? "Add a folder…" : "Open folder…"}</button>
                 </div>
               }
             >
@@ -981,12 +981,14 @@ export default function Sidebar(props: Props) {
             >
               <span class="ctx-label">Copy path</span>
             </button>
-            <button
-              class="ctx-item" role="menuitem" tabIndex={-1}
-              onMouseDown={(e) => { e.preventDefault(); void revealPath(m().path); setPinMenu(null); }}
-            >
-              <span class="ctx-label">Reveal in file manager</span>
-            </button>
+            <Show when={!isWeb}>
+              <button
+                class="ctx-item" role="menuitem" tabIndex={-1}
+                onMouseDown={(e) => { e.preventDefault(); void revealPath(m().path); setPinMenu(null); }}
+              >
+                <span class="ctx-label">Reveal in file manager</span>
+              </button>
+            </Show>
             <Show when={!m().isDir}>
               <div class="ctx-sep" role="separator" />
               <button

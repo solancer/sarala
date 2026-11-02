@@ -16,6 +16,7 @@ import {
   targetBlockIndex, doc,
 } from "./store";
 import { aiPanelOpen } from "./ai/config";
+import { web } from "./platform";
 
 export interface MenuLeaf {
   /** Command id routed through executeCommand(); omitted for exec/submenu-only nodes. */
@@ -90,7 +91,7 @@ const themeItems: MenuNode[] = THEMES.map((id) => ({
   checked: () => theme() === id,
 }));
 
-export const MENUS: TopMenu[] = [
+const ALL_MENUS: TopMenu[] = [
   {
     label: "File",
     items: [
@@ -397,7 +398,7 @@ export const MENUS: TopMenu[] = [
       { id: "view.outline", label: "Outline", accel: "Ctrl+Alt+1" },
       { id: "view.file_tree", label: "File Tree", accel: "Ctrl+Alt+3" },
       { sep: true },
-      { id: "view.search", label: "Search", accel: "Shift+Ctrl+F" },
+      { id: "view.search", label: web ? "Search All Documents…" : "Search in Folder…", accel: "Shift+Ctrl+F" },
       { sep: true },
       { id: "ai.toggle_panel", label: "AI Assistant", type: "check", checked: () => aiPanelOpen() },
       { id: "ai.ask_selection", label: "Ask AI About Selection", accel: "Shift+Ctrl+I" },
@@ -430,6 +431,66 @@ export const MENUS: TopMenu[] = [
     ],
   },
 ];
+
+/** The tree a browser shows: its own items added, what can't work there gone,
+ *  and no submenu or separator left stranded by the removals. */
+function forWeb(menus: TopMenu[]): TopMenu[] {
+  const prune = (items: MenuNode[]): MenuNode[] => {
+    const kept: MenuNode[] = [];
+    for (const n of items) {
+      if ("sep" in n) { if (kept.length && !("sep" in kept[kept.length - 1])) kept.push(n); continue; }
+      if ("dynamic" in n) { kept.push(n); continue; }
+      if (n.id && web!.hidden(n.id)) continue;
+      if (n.items) {
+        const sub = prune(n.items);
+        if (sub.length) kept.push({ ...n, items: sub });
+      // Ctrl and plus or minus are the browser's zoom; people depend on it.
+      } else kept.push(n.accel && /^Ctrl\+(Equal|Minus)$/.test(n.accel) ? { ...n, accel: undefined } : n);
+    }
+    if (kept.length && "sep" in kept[kept.length - 1]) kept.pop();
+    return kept;
+  };
+  return menus.map((m) => {
+    const extra = web!.menuItems[m.label] ?? [];
+    return { ...m, items: prune([...m.items, ...(extra.length ? [{ sep: true as const }, ...extra] : [])]) };
+  }).filter((m) => m.items.length);
+}
+
+/** Every command the app knows. On web nothing draws this tree as a bar: the
+ *  document Menu picks from it, and shortcuts and the palette are built from it. */
+export const MENUS: TopMenu[] = web ? forWeb(ALL_MENUS) : ALL_MENUS;
+
+/** A command in the tree by id, with its checkmark, shortcut and enabled state. */
+export function findLeaf(id: string): MenuLeaf | undefined {
+  const walk = (items: MenuNode[]): MenuLeaf | undefined => {
+    for (const n of items) {
+      if ("sep" in n || "dynamic" in n) continue;
+      if (n.id === id) return n;
+      const inner = n.items && walk(n.items);
+      if (inner) return inner;
+    }
+  };
+  for (const m of MENUS) {
+    const found = walk(m.items);
+    if (found) return found;
+  }
+}
+
+/** Every command as a flat list for the palette. A submenu's name goes in front
+ *  of its items ("Export: RTF"); themes have their own rows there, the
+ *  clipboard belongs to the browser, and items never enabled are skipped. */
+export function flatCommands(): { group: string; id: string; label: string }[] {
+  const out: { group: string; id: string; label: string }[] = [];
+  const walk = (group: string, items: MenuNode[], prefix: string) => {
+    for (const n of items) {
+      if ("sep" in n || "dynamic" in n || n.exec) continue;
+      if (n.items) walk(group, n.items, `${n.label}: `);
+      else if (n.id && (!n.enabled || n.enabled())) out.push({ group, id: n.id, label: prefix + n.label });
+    }
+  };
+  for (const m of MENUS) if (m.label !== "Themes") walk(m.label, m.items, "");
+  return out;
+}
 
 /** Every accelerator-bound command in the tree, for the shortcut engine.
  *  `exec` items are skipped — the webview owns Cut/Copy/Paste/Select-All keys. */

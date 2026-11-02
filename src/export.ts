@@ -241,6 +241,9 @@ export function pandocFlagsFor(format: string, refDoc?: string): string[] {
   if (format === "docx" || format === "odt") {
     flags.push("--standalone");
     if (refDoc) flags.push(`--reference-doc=${refDoc}`);
+  } else if (format === "rtf") {
+    // Without it Pandoc writes a fragment with no {\\rtf1 header, not a document.
+    flags.push("--standalone");
   } else if (format === "epub") {
     flags.push("--standalone", "--toc", "--epub-chapter-level=2", "--split-level=2");
   } else if (format === "latex") {

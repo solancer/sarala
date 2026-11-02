@@ -822,7 +822,7 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .item(&mi(
             app,
             "view.search",
-            "Search",
+            "Search in Folder…",
             Some("Shift+CmdOrCtrl+F"),
         )?)
         .separator()

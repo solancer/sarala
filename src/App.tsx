@@ -1,4 +1,4 @@
-import { Show, createEffect, onMount, onCleanup, untrack } from "solid-js";
+import { Show, createEffect, onMount, onCleanup, untrack, type JSX } from "solid-js";
 import { connectFileOpen } from "./fileopen";
 import Editor from "./components/Editor";
 import DocumentTabs from "./components/DocumentTabs";
@@ -46,7 +46,7 @@ import {
   finalNewline, autosaveInterval,
 } from "./store";
 import {
-  isTauri, isMac, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS,
+  isTauri, isWeb, web, isMac, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS,
   onExternalChange, onTreeChange, onTreeTouch,
 } from "./platform";
 import {
@@ -95,7 +95,8 @@ export default function App() {
     if (k === "e" && e.shiftKey) { e.preventDefault(); executeCommand("file.export.html"); }
     if (k === "p" && e.shiftKey) { e.preventDefault(); executeCommand("file.open_quickly"); }
     if (k === "f" && e.altKey) { e.preventDefault(); executeCommand("edit.replace"); }
-    else if (k === "f" && !e.shiftKey) { e.preventDefault(); executeCommand("edit.find"); }
+    else if (k === "f" && e.shiftKey) { e.preventDefault(); executeCommand("view.search"); }
+    else if (k === "f") { e.preventDefault(); executeCommand("edit.find"); }
     if (k === "g") { e.preventDefault(); executeCommand("edit.find_next"); }
     if (k === "v" && e.shiftKey) { e.preventDefault(); executeCommand("edit.paste_plain"); }
   };
@@ -114,7 +115,8 @@ export default function App() {
       }
     };
     const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (!isTauri && openTabs().some((tab) => tab.dirty)) { e.preventDefault(); e.returnValue = ""; }
+      // The web build keeps every open document across a reload (web/src/session.ts).
+      if (!isTauri && !isWeb && openTabs().some((tab) => tab.dirty)) { e.preventDefault(); e.returnValue = ""; }
     };
     window.addEventListener("keydown", tabKeys, true);
     window.addEventListener("beforeunload", beforeUnload);
@@ -151,7 +153,7 @@ export default function App() {
     onCleanup(() => window.removeEventListener("keydown", onPaletteKey));
     // Keyboard accelerators for the in-app menu (Linux/Windows/browser). macOS
     // gets them from its native menu, so it's excluded to avoid double-firing.
-    if (!isMac) {
+    if (!isMac || isWeb) {
       const handleMenuKey = makeMenuKeyHandler();
       const onMenuKey = (e: KeyboardEvent) => { if (!document.querySelector('[aria-modal="true"]')) handleMenuKey(e); };
       window.addEventListener("keydown", onMenuKey);
@@ -271,6 +273,11 @@ export default function App() {
       startAutosave();
 
       onCleanup(() => { disposed = true; unlisten?.(); undrop?.(); unclose?.(); unwatch?.(); untree?.(); untouch?.(); unopen?.(); });
+    } else if (web) {
+      const external = onExternalChange((path, deleted) => setTabExternalChange(path, deleted));
+      const tree = onTreeChange((root, next) => { if (root === folderPath()) setFileTree(next); });
+      onCleanup(() => { void external.then((stop) => stop()); void tree.then((stop) => stop()); });
+      web.start();
     } else if (isMac) {
       // Browser dev on macOS has neither a native menu nor the in-app menubar,
       // so keep the minimal chord fallback there.
@@ -391,11 +398,12 @@ export default function App() {
     <div
       class="app"
       data-theme={theme()}
-      classList={{ "focus-mode": focusMode(), "tables-full": tableFullWidth(), "is-tauri": isTauri, "is-mac": isMac }}
+      classList={{ "focus-mode": focusMode(), "tables-full": tableFullWidth(), "is-tauri": isTauri, "is-web": isWeb, "is-mac": isMac }}
       style={{ "--zoom": `${zoom()}%`, "--editor-scale": zoom() / 100 }}
     >
-      {/* In-app menubar strip, replacing the OS menu bar (not on macOS). */}
-      <Show when={!isMac}>
+      {/* In-app menubar strip, replacing the OS menu bar (not on macOS). A
+          browser has its own, so the web build uses the document bar instead. */}
+      <Show when={!isMac && !isWeb}>
         <MenuBar />
       </Show>
       <div class="body">
@@ -414,6 +422,7 @@ export default function App() {
           <h1 class="sr-only">{fileName()}</h1>
           <header class="topfloat document-toolbar" aria-label="Documents and controls" data-tauri-drag-region="deep">
             {isTauri && isMac && <span class="topbar-traffic" aria-hidden="true" />}
+            {web?.toolbar?.("start") as JSX.Element}
             <button
               class="topbar-toggle icon-btn"
               title="Toggle sidebar (Shift+Cmd/Ctrl+L)"
@@ -425,7 +434,9 @@ export default function App() {
               </svg>
             </button>
             <DocumentTabs />
+            {web?.toolbar?.("afterTabs") as JSX.Element}
             <div class="document-header-actions">
+            {web?.toolbar?.("actions") as JSX.Element}
             <button
               class="topbar-search"
               title="Command palette (Cmd/Ctrl+K)" aria-label="Search commands"
@@ -459,6 +470,7 @@ export default function App() {
               <button aria-pressed={!sourceMode()} classList={{ on: !sourceMode() }} onClick={() => showSource(false)}>Live</button>
               <button aria-pressed={sourceMode()} classList={{ on: sourceMode() }} onClick={() => showSource(true)}>Source</button>
             </div>
+            {web?.toolbar?.("end") as JSX.Element}
             </div>
           </header>
           <FindBar />
@@ -488,7 +500,7 @@ export default function App() {
         <AiEditorMarks />
         {/* Focus mode quiets the rail (ai.css) instead of removing it:
             removing it widened the main area and shifted the whole top bar. */}
-        <Show when={aiRailVisible()}>
+        <Show when={aiRailVisible() && !isWeb}>
           <AiRail />
         </Show>
       </div>
@@ -506,6 +518,8 @@ export default function App() {
       <VoiceCommands />
       <UpdateModal />
       <ExportHtmlDialog />
+      {web?.overlays() as JSX.Element}
+      {web?.toolbar?.("root") as JSX.Element}
     </div>
   );
 }

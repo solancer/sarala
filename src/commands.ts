@@ -5,7 +5,7 @@ import {
   theme, setTheme, THEMES, setFileTree, setFolderName,
   folderPath, setFolderPath, setQuickOpenVisible, setCommandPaletteVisible,
   moveBlock, removeBlock, updateBlock, insertBlockAfter, appendBlock,
-  targetBlockIndex, requestCaret, requestSelection, undo, redo, setCaretProvider,
+  targetBlockIndex, requestCaret, requestSelection, setActive, undo, redo, setCaretProvider,
   spellcheckOn, setSpellcheckOn, smartPunctuation, setSmartPunctuation,
   preserveBreaks, setPreserveBreaks, lineEnding, setLineEnding,
   finalNewline, setFinalNewline, setAutosaveInterval,
@@ -25,7 +25,7 @@ import { linkAt, linkDestination, removeLink, type LinkTarget } from "./links";
 import { applyBlockKind, type BlockKind } from "./blocktype";
 import { fontEmbedCss } from "./fonts";
 import {
-  isTauri, pickFolder, pickMarkdownFile, pickSavePath, pickImportFile,
+  isTauri, isWeb, web, pickFolder, pickMarkdownFile, pickSavePath, pickExportPath, pickImportFile,
   readFileEncoded, reopenWithEncoding, writeTextFile, type EncodedDoc,
   watchFile, clearShadow, watchTree, openExternal,
   confirmDialog, alertDialog, renameFile, deleteFile, openNewWindow,
@@ -56,7 +56,7 @@ import {
   buildExportHtml, pageCss, readExportOverrides, pandocFlagsFor, resolveOutputPath,
   EXPORT_PRINT_CSS, PDF_PRINT_CSS, type ExportPreset, type ExportFormat,
 } from "./export";
-import { docDir, currentFrontMatter, docBaseName, stripFrontMatter } from "./images";
+import { docDir, currentFrontMatter, docBaseName, findImages, imageFsPath, stripFrontMatter } from "./images";
 import { setImageRootPath } from "./imageactions";
 // The app stylesheet as a string (bundled at build time), so exports embed it
 // reliably — a runtime fetch of a side-effect-imported CSS file is fragile in
@@ -64,6 +64,7 @@ import { setImageRootPath } from "./imageactions";
 import appCssText from "./styles/app.css?inline";
 import { askHtmlOutline } from "./components/ExportHtmlDialog";
 import { openFind, findNext } from "./components/FindBar";
+import { focusSearch } from "./components/SearchPanel";
 import { openTableDialog } from "./components/TableDialog";
 import { openAbout } from "./components/AboutModal";
 import { ensurePandoc } from "./components/PandocDownloadModal";
@@ -96,6 +97,20 @@ export interface BlockApi {
   caretBeforeEdit(): number;
   selectionOffsets(): { start: number; end: number };
 }
+
+/** Note where editing is, before something takes focus from the block. The
+ *  function it returns puts the block and selection back. */
+export function holdEditing(): () => void {
+  const block = doc.activeIndex;
+  const { start, end } = blockApi?.selectionOffsets() ?? { start: 0, end: 0 };
+  return () => {
+    if (block < 0 || block >= doc.blocks.length) return;
+    requestSelection(start, end);
+    setActive(block);
+  };
+}
+/** Back to where editing was when the palette opened. */
+export let returnToEditing = () => {};
 
 /** A focused plain text field (not the editor), where edit commands belong to it. */
 function focusedTextField(): HTMLInputElement | HTMLTextAreaElement | null {
@@ -135,6 +150,11 @@ export async function refreshTree() {
 }
 
 export async function openFolder() {
+  // The web workspace is one tree: an added folder joins it, nothing is replaced.
+  if (web) {
+    if (await web.addFolder()) await refreshTree();
+    return;
+  }
   const path = await pickFolder();
   if (!path) return;
   setFolderPath(path);
@@ -274,7 +294,7 @@ async function saveTab(as = false) {
   const initial = getTabDocument(id)!;
   const name = initial.filePath ? fileName0(initial.filePath) : "Untitled.md";
   const path = as || !initial.filePath ? await pickSavePath(name) : initial.filePath;
-  if (!path && isTauri) return;
+  if (!path && (isTauri || isWeb)) return;
   const document = getTabDocument(id);
   if (!document) return;
   const duplicate = path ? findTabByPath(path) : undefined;
@@ -297,13 +317,29 @@ async function saveAs() { await saveTab(true); }
 
 async function renameCurrent() {
   const from = doc.filePath;
+  if (!from && isWeb) return saveTab();
   if (!from) {
     await alertDialog("Save the document before renaming it.");
     return;
   }
   // The native save dialog doubles as the rename/move prompt: it returns the
   // new path and warns on overwrite. wry has no window.prompt().
-  const to = await pickSavePath(fileName());
+  const to = await pickSavePath(fileName(), "Rename or move");
+  await moveCurrent(from, to);
+}
+
+/** A new name typed on the tab: same folder, and never over another file. */
+export async function renameCurrentTo(name: string) {
+  const from = doc.filePath;
+  const cleaned = name.trim().replace(/[\\/]/g, "-");
+  if (!from || !cleaned) return;
+  const to = from.slice(0, from.lastIndexOf("/") + 1) + (/\.[a-z0-9]+$/i.test(cleaned) ? cleaned : `${cleaned}.md`);
+  if (to === from) return;
+  if (await pathExists(to)) { await alertDialog(`${cleaned} already exists in this folder.`); return; }
+  await moveCurrent(from, to);
+}
+
+async function moveCurrent(from: string, to: string | null) {
   if (!to || to === from) return;
   if (findTabByPath(to) !== undefined) { await alertDialog("That file is already open in another tab."); return; }
   try {
@@ -389,9 +425,11 @@ async function renderBody(md: string): Promise<string> {
   // Front matter is document metadata, never part of the rendered body.
   const body = stripFrontMatter(md);
   await prepareRender(body); // grammars, KaTeX and emoji load lazily; exports need them now
+  await web?.preloadImages(findImages(body).map((image) => imageFsPath(image.src)).filter((p) => p !== null));
   div.innerHTML = renderMarkdown(body);
   await renderMermaidIn(div);
   await renderD2In(div);
+  await web?.inlineImages(div);
   return div.innerHTML;
 }
 
@@ -470,7 +508,7 @@ async function runExport(
   if (!pf) return null;
   if (!(await ensurePandoc())) return null;
   try {
-    await pandocExport(fullText(), out, pf, [...pandocFlagsFor(pf), ...pandocFlags]);
+    await pandocExport(fullText(), out, pf, [...pandocFlagsFor(pf), ...pandocFlags], docDir());
     return out;
   } catch (e) {
     await alertDialog(`Pandoc export failed:\n${String(e)}`);
@@ -487,7 +525,7 @@ async function doExport(format: ExportFormat, id: string, presetPath: string | n
     if (choice === null) return; // cancelled
     outline = choice;
   }
-  const out = presetPath ?? (await pickSavePath(`${exportBaseName()}.${EXT[format]}`));
+  const out = presetPath ?? (await pickExportPath(`${exportBaseName()}.${EXT[format]}`));
   if (!out && isTauri) return;
   const written = await runExport(format, out ?? `${exportBaseName()}.${EXT[format]}`, [], outline);
   if (written) await setLastExport({ id, path: written });
@@ -508,12 +546,14 @@ export async function runPreset(preset: ExportPreset) {
   if (preset.outputPath) {
     out = resolveOutputPath(preset.outputPath, { dir, name: base, ext });
   } else {
-    out = await pickSavePath(`${base}.${ext}`);
+    out = await pickExportPath(`${base}.${ext}`);
     if (!out) return;
   }
   const written = await runExport(preset.format, out, preset.pandocFlags ?? []);
   if (!written) return;
   await setLastExport({ id: `preset:${preset.name}`, path: written, presetName: preset.name });
+  // A browser can't reveal a download, open it or run a command on it.
+  if (isWeb) return;
 
   switch (preset.after) {
     case "reveal":
@@ -993,7 +1033,7 @@ export async function followLink(href: string) {
 
 /** Rename/move a file from the tree. Retargets the editor if it was open. */
 export async function renamePath(path: string) {
-  const to = await pickSavePath(path.replace(/\\/g, "/").split("/").pop() ?? "");
+  const to = await pickSavePath(isWeb ? path : path.replace(/\\/g, "/").split("/").pop() ?? "", "Rename or move");
   if (!to || to === path) return;
   if (findTabByPath(to) !== undefined) { await alertDialog("That file is already open in another tab."); return; }
   try {
@@ -1170,7 +1210,10 @@ const registry: Record<string, Command> = {
   "file.new_window": () => openNewWindow(),
   "file.open": () => openFile(),
   "file.open_quickly": () => { setQuickOpenVisible(true); },
-  "menu.command_palette": () => { setCommandPaletteVisible(true); },
+  "menu.command_palette": () => {
+    returnToEditing = holdEditing();
+    setCommandPaletteVisible(true);
+  },
   "file.open_folder": openFolder,
   "file.open_recent.clear": () => clearRecentFiles(),
   "file.close": () => closeTab(),
@@ -1321,7 +1364,7 @@ const registry: Record<string, Command> = {
   "view.sidebar": () => { setSidebarOpen(!sidebarOpen()); },
   "view.file_tree": () => { setSidebarOpen(true); setSidebarTab("files"); },
   "view.outline": () => { setSidebarOpen(true); setSidebarTab("outline"); },
-  "view.search": () => { openFind(false); },
+  "view.search": () => { setSidebarOpen(true); setSidebarTab("search"); focusSearch(); },
   "view.focus_mode": () => { setFocusMode(!focusMode()); },
   "view.typewriter_mode": () => { setTypewriterMode(!typewriterMode()); },
   "view.status_bar": () => {
@@ -1396,6 +1439,11 @@ for (const [id, format] of Object.entries(EXPORT_MENU)) {
 }
 
 export function executeCommand(id: string) {
+  if (web) {
+    if (web.hidden(id)) return;
+    const extra = web.commands[id];
+    if (extra) { void extra(); return; }
+  }
   if (id.startsWith("edit.encoding.")) {
     void reopenEncoding(id.slice("edit.encoding.".length));
     return;

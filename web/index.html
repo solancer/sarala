@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Documents live on this origin, so this is what stands between a hostile
+         Markdown file and everything else stored here, should a sanitizer bug
+         ever let markup through. connect-src stays open for remote images read
+         by exports, the speech models and the user's own image upload URL. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src * data: blob:; media-src * data: blob:; font-src 'self' data:; connect-src 'self' https: data: blob:; worker-src 'self' blob:; frame-src 'self' https: blob:; object-src 'none'; base-uri 'none'; form-action 'none'" />
+    <title>Sarala</title>
+    <meta name="description" content="A WYSIWYG Markdown editor that runs in your browser. Your documents stay on your device." />
+    <meta name="theme-color" content="#faf6ef" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

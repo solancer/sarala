@@ -1,4 +1,4 @@
-import { isTauri } from "./platform";
+import { isTauri, web } from "./platform";
 
 /**
  * System-font support. The webview can't enumerate installed fonts (WKWebView
@@ -19,6 +19,7 @@ let cachedFamilies: string[] | null = null;
 /** Installed font families (cached for the session). Empty in browser mode. */
 export async function listSystemFonts(): Promise<string[]> {
   if (cachedFamilies) return cachedFamilies;
+  if (web) return (cachedFamilies = await web.listFonts());
   if (!isTauri) return [];
   const { invoke } = await import("@tauri-apps/api/core");
   cachedFamilies = await invoke<string[]>("list_system_fonts").catch(() => []);
@@ -49,6 +50,7 @@ interface FontFace {
 }
 
 async function facesFor(family: string): Promise<FontFace[]> {
+  if (web) return web.fontFaces(family);
   if (!isTauri) return [];
   const { invoke } = await import("@tauri-apps/api/core");
   return await invoke<FontFace[]>("font_faces_b64", { family }).catch(() => []);

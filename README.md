@@ -74,6 +74,10 @@ Hold a shortcut and talk. An open speech model on your computer turns it into te
 
 ## Install
 
+### In your browser
+
+Sarala also runs as a web app, with no install and no account. Your documents stay in your browser, or in folders on your device in Chrome and Edge. It works offline and can be installed as an app. See [web/README.md](web/README.md) for what's included and how it differs from the desktop app.
+
 ### macOS
 
 With [Homebrew](https://brew.sh) (no security prompt, and `brew upgrade --cask sarala` keeps it current):
@@ -198,6 +202,12 @@ pnpm tauri build    # installers in src-tauri/target/release/bundle
 ```
 
 `pnpm dev` runs the frontend standalone in a browser, which is handy for UI work, but file dialogs and the file tree are desktop-only.
+
+To run the web version instead, with hot reload on port 1421 (needs `rustup target add wasm32-unknown-unknown`):
+
+```bash
+pnpm dev:web
+```
 
 ---
 
