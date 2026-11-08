@@ -67,6 +67,44 @@ const paragraph=mountBlock(ordinary,"A **bold** paragraph");paragraph.setActive(
 check(!ordinary.querySelector(".block-source-panel"),"ordinary text keeps inline editing");
 check(ordinary.querySelector(".source").textContent===paragraph.text(),"inline editing preserves source");
 paragraph.dispose();ordinary.remove();
+// Enter in a list: put the caret at a source offset, press Enter, read the source.
+const enterAt=async(source,offset)=>{
+ const h=document.createElement("div");document.body.append(h);
+ const b=mountBlock(h,source);b.setActive(true);await flush();
+ const src=h.querySelector(".source");
+ const walker=document.createTreeWalker(src,NodeFilter.SHOW_TEXT);let node,left=offset;
+ while((node=walker.nextNode())&&left>node.data.length)left-=node.data.length;
+ const r=document.createRange();r.setStart(node,left);r.collapse(true);
+ window.getSelection().removeAllRanges();window.getSelection().addRange(r);
+ src.dispatchEvent(new window.KeyboardEvent("keydown",{key:"Enter",bubbles:true,cancelable:true}));await flush();
+ const out=b.text();b.dispose();h.remove();return out;
+};
+// Enter in a list item that has an indented heading and paragraph under it.
+const L="1.  01\n    \n    ### Data\n    \n    Vib.\n    \n2.  02\n    \n    ### Opaque\n    \n    Engineers.\n    \n3.  03\n    \n    ### Hard\n    \n    A model.";
+// After "02" (the item goes on below): a new empty line inside item 2, right
+// there. Nothing moves and no number is added.
+const afterItem=await enterAt(L,L.indexOf("02")+2);
+check(afterItem===L.replace("2.  02","2.  02\n    \n    "),
+ "Enter after an item's first line adds an empty line inside the item");
+// Enter on that empty line: item 3 after item 2's content; the line goes.
+const nextItem=await enterAt(afterItem,afterItem.indexOf("2.  02\n    \n    ")+"2.  02\n    \n    ".length);
+check(nextItem==="1.  01\n    \n    ### Data\n    \n    Vib.\n    \n2.  02\n    \n    ### Opaque\n    \n    Engineers.\n\n3.  \n    \n4.  03\n    \n    ### Hard\n    \n    A model.",
+ "Enter on an empty line inside an item adds the next item after the item's content");
+// An existing empty item that holds content: Enter gives it back.
+check(await enterAt("1.  a\n2.  \n    ### H","1.  a\n2.  ".length)==="1.  a\n    ### H",
+ "Enter on an empty item that holds content removes it");
+// After the heading inside an item: a new paragraph in the item, no split.
+check(await enterAt(L,L.indexOf("### Hard")+8)===L.replace("### Hard","### Hard\n    \n    "),
+ "Enter at the end of a heading inside an item stays in the item");
+check(await enterAt(L,L.indexOf("Vib.")+4)===L.replace("Vib.","Vib.\n    \n    "),
+ "Enter at the end of a paragraph inside an item starts a new paragraph there");
+// On an empty line inside an item: the next item starts there.
+check(await enterAt("1.  a\n    \n    b","1.  a\n    ".length)==="1.  a\n    \n    b\n\n2.  ",
+ "Enter on the blank line between an item's paragraphs keeps them apart and adds the next item after them");
+check(await enterAt("1. a\n2. b","1. a".length)==="1. a\n2. \n3. b","Enter on a one-line item still inserts right after it");
+check(await enterAt("- a\n- b","- a".length)==="- a\n- \n- b","bullet items are unchanged");
+check(await enterAt("1. a\n\n2. b","1. a".length)==="1. a\n2. \n\n3. b","loose lists renumber across blank lines");
+check(await enterAt("9.  a\n10. b","9.  a".length)==="9.  a\n10. \n11. b","a wider number keeps the content column");
 const tableHost=document.createElement("div");document.body.append(tableHost);
 const table=mountTable(tableHost,"| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |");
 const source=document.createElement("div");source.className="source";source.innerHTML='<div class="md-table">'+[0,1,2].map(()=>'<div class="md-trow"><span class="md-tcell">A</span><span class="md-tcell">B</span></div>').join("")+"</div>";tableHost.append(source);

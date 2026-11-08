@@ -20,3 +20,6 @@ web/wasm/target/
 web/public/pandoc/
 web/public/ort/
 web/public/licenses/
+
+# AppImage emoji font, fetched by scripts/fetch-emoji-font.sh
+src-tauri/linux/fonts/

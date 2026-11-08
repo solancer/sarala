@@ -50,12 +50,15 @@ import {
   onExternalChange, onTreeChange, onTreeTouch,
 } from "./platform";
 import {
-  executeCommand, openFile, openFolder, insertImageFromPath,
+  executeCommand, openFile, openFolder, insertImageFromPath, confirmCloseDirty,
 } from "./commands";
 import { BLOCK_TARGETED_IDS } from "./menudata";
 import { makeMenuKeyHandler } from "./shortcuts";
 import { showSource } from "./viewswitch";
-import { startAutosave, findRecoverable, restoreSession, shadowBaseName, discardShadows, discardShadowFor } from "./autosave";
+import { startAutosave, findRecoverable, restoreSession, shadowBaseName, declineShadows, discardShadowFor } from "./autosave";
+
+/** sessionStorage flag: the startup recovery prompt has run in this session. */
+const RECOVERY_ASKED = "sarala.recoveryAsked";
 
 export default function App() {
   let editorEl: HTMLDivElement | undefined;
@@ -196,10 +199,10 @@ export default function App() {
           const dirty = openTabs().filter((tab) => tab.dirty);
           if (!dirty.length) return;
           event.preventDefault();
-          if (await confirmDialog(`Close the window and discard unsaved changes to ${dirty.map((tab) => tab.name).join(", ")}?`)) {
-            // Deliberately discarding — drop the autosave shadow so the next
-            // launch doesn't offer to "recover" these changes. (A crash skips
-            // this handler, so genuine crash recovery still works.)
+          if (await confirmCloseDirty(dirty.map((tab) => tab.id), "window")) {
+            // Saved or deliberately discarded: drop the autosave shadow so the
+            // next launch doesn't offer to "recover" these changes. (A crash
+            // skips this handler, so genuine crash recovery still works.)
             for (const tab of dirty) removeTab(tab.id);
             await Promise.all(dirty.map((tab) => discardShadowFor(tab.filePath)));
             await win.destroy();
@@ -209,7 +212,15 @@ export default function App() {
         // Crash recovery runs once, in the initial window (new windows carry a
         // "main-<ts>" label), so user-opened windows don't re-prompt.
         if (win.label === "main") {
-          const cands = await findRecoverable();
+          // Once per app session, not once per page load: a reload of the
+          // webview must not open a second prompt over the first (the first,
+          // orphaned by the reload, then ignores its buttons).
+          let asked = false;
+          try {
+            asked = sessionStorage.getItem(RECOVERY_ASKED) === "1";
+            sessionStorage.setItem(RECOVERY_ASKED, "1");
+          } catch { /* storage unavailable: ask, as before */ }
+          const cands = asked ? [] : await findRecoverable();
           if (cands.length) {
             const newest = cands[0];
             const extra = cands.length > 1
@@ -218,10 +229,11 @@ export default function App() {
             const ok = await confirmDialog(
               `Unsaved changes from a previous session were found for ${shadowBaseName(newest.path)}${extra}. Restore them now?`,
             );
-            // Restore the newest and keep the rest for per-file recovery; on
-            // decline, discard every candidate so this never re-prompts.
+            // Restore the newest and keep the rest for per-file recovery. On
+            // decline, keep them all but marked declined, so this prompt
+            // doesn't return while opening the file still offers recovery.
             if (ok) await restoreSession(newest);
-            else await discardShadows(cands);
+            else await declineShadows(cands);
           }
 
           // Once per launch (main window only, after any recovery prompt),

@@ -84,13 +84,23 @@ async function tick(): Promise<void> {
   } finally { ticking = false; }
 }
 
+/** How long a declined shadow is kept before it is cleaned up. */
+const DECLINED_KEEP_MS = 14 * 24 * 60 * 60 * 1000;
+
 /** Shadows whose content differs from the file currently on disk (i.e. real
- *  unsaved work from a previous session). Stale shadows that match disk are
- *  cleaned up as a side effect. Newest first. */
+ *  unsaved work from a previous session), for the startup prompt. Stale
+ *  shadows that match disk are cleaned up as a side effect, and so are ones
+ *  declined over two weeks ago; more recently declined ones are skipped (the
+ *  prompt already asked) but kept for recovery when their file is opened.
+ *  Newest first. */
 export async function findRecoverable(): Promise<ShadowSession[]> {
   const shadows = await listShadows();
   const out: ShadowSession[] = [];
   for (const s of shadows) {
+    if (s.declinedAt) {
+      if (Date.now() - s.declinedAt > DECLINED_KEEP_MS) await clearShadow(keyForPath(s.path));
+      continue;
+    }
     try {
       const ed = await readFileEncoded(s.path);
       if (normalizeForCompare(ed.content) !== normalizeForCompare(s.content)) out.push(s);
@@ -112,10 +122,13 @@ export async function shadowFor(path: string, diskContent: string): Promise<Shad
   return s && normalizeForCompare(s.content) !== normalizeForCompare(diskContent) ? s : null;
 }
 
-/** Delete the given sessions' shadows — used when the user declines recovery so
- *  the prompt doesn't reappear on every launch. */
-export async function discardShadows(sessions: ShadowSession[]): Promise<void> {
-  for (const s of sessions) await clearShadow(keyForPath(s.path));
+/** The user said "No" to restoring these. Mark them declined instead of
+ *  deleting them: the startup prompt won't ask again, but the work survives a
+ *  wrong click and is offered again when its file is opened. Saving the file
+ *  clears it as usual; otherwise it is cleaned up after two weeks. */
+export async function declineShadows(sessions: ShadowSession[]): Promise<void> {
+  const now = Date.now();
+  for (const s of sessions) await writeShadow(keyForPath(s.path), { ...s, declinedAt: s.declinedAt ?? now });
 }
 
 /** Drop the shadow for one path. Called on a *deliberate* close/discard so the

@@ -20,7 +20,7 @@ import { web } from "../platform";
 import {
   proseFont, setProseFont, monoFont, setMonoFont,
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, finalNewline,
-  autosaveInterval, copyImageToAssets, copyImagesToFolder, tableFullWidth,
+  autosaveInterval, closePrompt, setClosePrompt, copyImageToAssets, copyImagesToFolder, tableFullWidth,
   mathAltDelimiters, mathFence, emojiEnabled, highlightEnabled, subSupEnabled,
   autolinkEnabled, focusMode, typewriterMode, statusBarVisible, zoom, theme,
   setCopyImagesToFolder, customScheme, htmlEmbeds, setHtmlEmbedsSig, mathAutoNumber, setMathAutoNumberSig, physicsEnabled, setPhysicsEnabledSig, imageUploadUrl, setImageUploadUrl, bumpRenderEpoch,
@@ -267,6 +267,20 @@ const ALL_SECTIONS = (): Section[] => [
           { value: "30", label: "Every 30 seconds" },
         ],
         run: (v) => executeCommand(`edit.autosave.${v}`),
+      },
+      {
+        kind: "select", id: "close_prompt", label: "When closing unsaved",
+        desc: "What the close prompt asks.",
+        get: closePrompt,
+        options: [
+          { value: "discard", label: "Close without saving?" },
+          { value: "save", label: "Save changes?" },
+        ],
+        run: (v) => {
+          const value = v === "save" ? "save" : "discard";
+          setClosePrompt(value);
+          void setSetting("closePrompt", value);
+        },
       },
       {
         advanced: true, kind: "select", id: "line_ending", label: "Line endings",

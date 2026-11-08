@@ -1064,6 +1064,20 @@ body { font-family: var(--font-ui); }
   box-sizing: border-box;
 }
 .rendered li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.3em; }
+/* Numbers likewise: the native marker sat 3 to 5px left of the live view's
+   number (a right-aligned 1.5em box, .md-olnum), so the numbers jumped when
+   a list was clicked into. Same box here; counter(list-item) follows start=
+   and value= like the native marker does. */
+.rendered ol:not(.footnotes) { list-style: none; }
+.rendered ol:not(.footnotes) > li:not(:has(> input[type="checkbox"]))::before {
+  content: counter(list-item) ".";
+  float: left;
+  width: 1.5em;
+  margin-left: -1.5em;
+  text-align: right;
+  padding-right: 0.4em;
+  box-sizing: border-box;
+}
 .rendered input[type="checkbox"] {
   appearance: none;
   width: 13px;
@@ -1199,8 +1213,12 @@ body { font-family: var(--font-ui); }
 /* Font (typography) icon — size it so the glyph actually shows next to the name. */
 .sb-font svg { width: 15px; height: 15px; flex: none; }
 .status-right button.on { color: var(--accent); background: var(--accent-soft); }
-/* Right-side status buttons keep their intrinsic width (don't shrink/clip). */
-.status-right > button { flex: none; }
+/* Right-side status items keep their intrinsic width (don't shrink/clip).
+   The readouts too: "Markdown · UTF-8" used to shrink when the caret's
+   "Ln, Col" grew, wrap onto two lines and make the whole bar taller. */
+.status-right > button,
+.status-right > .sb-saved,
+.status-right > .sb-fmt { flex: none; white-space: nowrap; }
 /* Font name shares the theme-name treatment; only truncate long family names. */
 .sb-font .sb-font-name {
   flex: none;

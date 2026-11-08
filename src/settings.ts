@@ -2,7 +2,7 @@ import { createSignal } from "solid-js";
 import { isTauri } from "./platform";
 import {
   setSpellcheckOn, setSmartPunctuation, setPreserveBreaks, setLineEnding,
-  setFinalNewline, setAutosaveInterval,
+  setFinalNewline, setAutosaveInterval, setClosePrompt,
   setCopyImageToAssets, setCopyImagesToFolder, setTableFullWidth, bumpRenderEpoch,
   setTheme, setZoom, clampZoom, THEMES, type ThemeId,
   setSidebarWidth, clampSidebar, setStatusBarVisible,
@@ -123,6 +123,7 @@ function hydrateStore() {
   setLineEnding(getSetting<"lf" | "crlf">("lineEnding", "lf"));
   setFinalNewline(getSetting<"ensure" | "preserve" | "trim">("finalNewline", "ensure"));
   setAutosaveInterval(getSetting("autosaveInterval", 5));
+  setClosePrompt(getSetting<"discard" | "save">("closePrompt", "discard") === "save" ? "save" : "discard");
   setCopyImageToAssets(getSetting("copyImageToAssets", false));
   setCopyImagesToFolder(getSetting("copyImagesToFolder", "assets"));
   setTableFullWidth(getSetting("tableFullWidth", false));

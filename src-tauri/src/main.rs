@@ -1,6 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod ai;
+// Pure std, so its tests run on every OS; only Linux calls it.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+mod appimage_fonts;
 mod file_open;
 mod menu;
 mod voice;
@@ -610,7 +613,39 @@ fn new_window(app: AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// File name that switches on portable settings (issue #40): when a file with
+/// this name sits next to the app, settings are read from and written to it
+/// instead of the per-user config folder.
+const PORTABLE_SETTINGS: &str = "sarala-settings.json";
+
+/// The folder a user thinks of as "where Sarala is": next to `Sarala.exe` on
+/// Windows, next to the `.AppImage` file (not its temporary mount), and next to
+/// `Sarala.app` on macOS (not `Sarala.app/Contents/MacOS`).
+fn app_location() -> Option<PathBuf> {
+    if let Some(appimage) = std::env::var_os("APPIMAGE") {
+        return PathBuf::from(appimage).parent().map(Path::to_path_buf);
+    }
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    if cfg!(target_os = "macos") {
+        if let Some(bundle) = dir
+            .ancestors()
+            .find(|a| a.extension().is_some_and(|e| e == "app"))
+        {
+            return bundle.parent().map(Path::to_path_buf);
+        }
+    }
+    Some(dir.to_path_buf())
+}
+
+/// `<app location>/sarala-settings.json` if it exists, else
+/// `<config dir>/settings.json`.
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Some(portable) = app_location().map(|d| d.join(PORTABLE_SETTINGS)) {
+        if portable.is_file() {
+            return Ok(portable);
+        }
+    }
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir.join("settings.json"))
@@ -620,6 +655,8 @@ fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
 fn load_settings(app: AppHandle) -> Result<serde_json::Value, String> {
     let path = settings_path(&app)?;
     match fs::read_to_string(&path) {
+        // A freshly created, empty portable file means "start from defaults".
+        Ok(text) if text.trim().is_empty() => Ok(serde_json::json!({})),
         Ok(text) => serde_json::from_str(&text).map_err(|e| e.to_string()),
         Err(_) => Ok(serde_json::json!({})),
     }
@@ -629,7 +666,10 @@ fn load_settings(app: AppHandle) -> Result<serde_json::Value, String> {
 fn save_settings(app: AppHandle, value: serde_json::Value) -> Result<(), String> {
     let path = settings_path(&app)?;
     let text = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
-    fs::write(&path, text).map_err(|e| e.to_string())
+    // Temp file + rename, so a crash mid-write never leaves a truncated file.
+    let tmp = path.with_extension("json.tmp");
+    fs::write(&tmp, text).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1318,6 +1358,10 @@ fn apply_gnome_button_layout() {
 }
 
 fn main() {
+    // Before anything starts a thread (see the module for why).
+    #[cfg(target_os = "linux")]
+    appimage_fonts::apply();
+
     tauri::Builder::default()
         .manage({
             #[cfg(target_os = "macos")]

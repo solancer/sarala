@@ -10,6 +10,7 @@ globalThis.__tabPlatform = {
   writeShadow: async (key, value) => { shadows.set(key, value); },
   clearShadow: async (key) => { shadows.delete(key); },
 };
+globalThis.__tabShadows = shadows;
 const out = fileURLToPath(new URL("./.build/autosave-tabs.mjs", import.meta.url));
 await build({
   stdin: { contents: 'export * from "./src/store"; export * from "./src/autosave"; export { createRoot } from "solid-js";', resolveDir: fileURLToPath(new URL("..", import.meta.url)) },
@@ -19,7 +20,7 @@ await build({
     build.onResolve({ filter: /^\.\/settings$/ }, () => ({ path: "settings", namespace: "stub" }));
     build.onLoad({ filter: /.*/, namespace: "stub" }, ({ path }) => ({ contents: path === "settings"
       ? 'export const addRecentFile = async () => {};'
-      : 'export const {writeShadow, clearShadow} = globalThis.__tabPlatform; export const listShadows = async () => []; export const readFileEncoded = async () => ({content:""}); export const watchFile = async () => {};', loader: "js" }));
+      : 'export const {writeShadow, clearShadow} = globalThis.__tabPlatform; export const listShadows = async () => [...globalThis.__tabShadows.values()]; export const readFileEncoded = async () => ({content:"on disk"}); export const watchFile = async () => {};', loader: "js" }));
   } }],
 });
 const s = await import(out);
@@ -44,8 +45,20 @@ try {
   assert.equal(shadows.has(s.keyForPath("/b.md")), true, "saving A preserves B recovery");
   s.removeTab(b); await settle();
   assert.equal(shadows.size, 0, "closing dirty tab clears its shadow");
-  console.log("6 tab autosave checks passed");
+  // Declining recovery keeps the work: the startup prompt skips it, opening
+  // the file still offers it, and only old declined shadows are cleaned up.
+  const session = { path: "/d.md", content: "unsaved work\n", savedAt: 1, encoding: "utf-8", hadBom: false };
+  shadows.set(s.keyForPath("/d.md"), session);
+  assert.equal((await s.findRecoverable()).length, 1, "an undeclined shadow is offered at startup");
+  await s.declineShadows([session]);
+  assert.equal(shadows.get(s.keyForPath("/d.md"))?.content, "unsaved work\n", "declining keeps the shadow");
+  assert.equal((await s.findRecoverable()).length, 0, "a declined shadow isn't offered at startup again");
+  assert.ok(await s.shadowFor("/d.md", "on disk"), "opening the file still offers a declined shadow");
+  shadows.set(s.keyForPath("/d.md"), { ...session, declinedAt: Date.now() - 15 * 24 * 3600 * 1000 });
+  await s.findRecoverable();
+  assert.equal(shadows.has(s.keyForPath("/d.md")), false, "a shadow declined over two weeks ago is cleaned up");
+  console.log("11 tab autosave checks passed");
 } finally {
   dispose?.(); globalThis.setInterval = originalInterval; globalThis.clearInterval = originalClear;
-  delete globalThis.__tabPlatform;
+  delete globalThis.__tabPlatform; delete globalThis.__tabShadows;
 }

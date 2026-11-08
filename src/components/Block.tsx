@@ -80,13 +80,87 @@ function renumberBelow(rest: string, indent: string, n: number): string {
   const lines = rest.split("\n");
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
-    if (line.startsWith(indent + " ") || line.startsWith(indent + "\t")) continue;
+    if (line.trim() === "" || line.startsWith(indent + " ") || line.startsWith(indent + "\t")) continue;
     const m = line.match(/^(\s*)(\d+)([.)]\s.*)$/);
     if (!m || m[1] !== indent || Number(m[2]) !== n) break;
     n++;
     lines[i] = `${indent}${n}${m[3]}`;
   }
   return lines.join("\n");
+}
+
+const LIST_MARKER = /^(\s*)([-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)/;
+
+/** Columns of leading whitespace (a tab counts as four). */
+function indentWidth(line: string): number {
+  return line.match(/^[ \t]*/)![0].replace(/\t/g, "    ").length;
+}
+
+/** The marker for the item after one whose marker is `marker`: the next number,
+ *  an unchecked box. When the number gains a digit, one space less, so the
+ *  item's content stays at the same column. */
+function nextMarker(marker: string): { marker: string; num: RegExpMatchArray | null } {
+  const num = marker.match(/^(\s*)(\d+)([.)])(\s+)$/);
+  let next = marker;
+  if (num) {
+    const n = String(Number(num[2]) + 1);
+    const spaces = n.length > num[2].length && num[4].length > 1 ? num[4].slice(1) : num[4];
+    next = `${num[1]}${n}${num[3]}${spaces}`;
+  }
+  if (/\[[xX]\]/.test(next)) next = next.replace(/\[[xX]\]/, "[ ]");
+  return { marker: next, num };
+}
+
+/**
+ * Where the list item whose marker line ends at `lineEnd` really ends: past
+ * any following lines indented to its content (`contentIndent` columns) and
+ * the blank lines between them, but not trailing blank lines. Returns
+ * `lineEnd` when the item is that one line.
+ */
+export function listItemEnd(t: string, lineEnd: number, contentIndent: number): number {
+  let end = lineEnd;
+  let pos = lineEnd;
+  while (pos < t.length) {
+    const next = t.indexOf("\n", pos + 1);
+    const lineStop = next === -1 ? t.length : next;
+    const line = t.slice(pos + 1, lineStop);
+    if (line.trim() !== "") {
+      if (indentWidth(line) < contentIndent) break;
+      end = lineStop;
+    }
+    pos = lineStop;
+  }
+  return end;
+}
+
+/** Number the items at `indent` in `rest` (after its first line) n, n+1, …,
+ *  through the end of their list. */
+function renumberFrom(rest: string, indent: string, n: number): string {
+  const lines = rest.split("\n");
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim() === "" || line.startsWith(indent + " ") || line.startsWith(indent + "\t")) continue;
+    const m = line.match(/^(\s*)(\d+)([.)]\s.*)$/);
+    if (!m || m[1] !== indent) break;
+    lines[i] = `${indent}${n++}${m[3]}`;
+  }
+  return lines.join("\n");
+}
+
+/**
+ * `rest` is the text after a new, empty list item (it starts with "\n"). When
+ * the lines after it are that item's content (indented to `contentIndent`),
+ * drop the blank lines in between: an item that starts with a blank line is
+ * empty in Markdown, and its indented content then reads as a code block.
+ */
+export function attachToNewItem(rest: string, contentIndent: number): string {
+  const lines = rest.split("\n");
+  let i = 1;
+  while (i < lines.length && lines[i].trim() === "") i++;
+  if (i > 1 && i < lines.length && indentWidth(lines[i]) >= contentIndent) {
+    return ["", ...lines.slice(i)].join("\n");
+  }
+  return rest;
 }
 
 export default function Block(props: Props) {
@@ -410,8 +484,32 @@ export default function Block(props: Props) {
     }
     // List / quote continuation.
     const cont = line.match(/^(\s*)([-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|(?:>\s*)+)/);
+    const sel = getSelectionOffsets(el!);
+    const atLineEnd = sel.start === sel.end && offset >= end;
+    // Put a new item `marker` at [from, to) and the rest of the block after it,
+    // renumbering the items below.
+    const newItem = (from: string, marker: string, num: RegExpMatchArray | null, rest: string) => {
+      const head = from + marker;
+      const after = atLineEnd && !marker.includes(">")
+        ? attachToNewItem(rest, marker.replace(/\t/g, "    ").length)
+        : rest;
+      commit(head + (num ? renumberBelow(after, num[1], Number(num[2]) + 1) : after), head.length);
+    };
     if (cont) {
       const body = line.slice(cont[0].length);
+      if (body.trim() === "" && offset >= end && start > 0 && !cont[0].includes(">")) {
+        // An empty item that still holds content below it (Enter, then Enter
+        // again): drop the marker and give the content back to the item
+        // above. Splitting would leave it as an indented code block.
+        const next = t.slice(end).split("\n").slice(1).find((l) => l.trim() !== "");
+        if (next !== undefined && indentWidth(next) >= cont[0].replace(/\t/g, "    ").length) {
+          const head = t.slice(0, start - 1);
+          const num = cont[0].match(/^(\s*)(\d+)[.)]/);
+          const rest = t.slice(end);
+          commit(head + (num ? renumberFrom(rest, num[1], Number(num[2])) : rest), head.length);
+          return;
+        }
+      }
       if (body.trim() === "" && offset >= end) {
         // Empty item ends the list: drop the marker line and split.
         const before = t.slice(0, start).replace(/\n$/, "");
@@ -419,19 +517,63 @@ export default function Block(props: Props) {
         props.onSplit(before, after);
         return;
       }
-      let marker = cont[0];
-      const num = marker.match(/^(\s*)(\d+)([.)])(\s+)$/);
-      if (num) marker = `${num[1]}${Number(num[2]) + 1}${num[3]}${num[4]}`;
-      if (marker.match(/\[[xX]\]/)) marker = marker.replace(/\[[xX]\]/, "[ ]");
-      if (num) {
-        // A new item mid-list: shift the numbers below it along.
-        const sel = getSelectionOffsets(el!);
-        const head = t.slice(0, sel.start) + "\n" + marker;
-        commit(head + renumberBelow(t.slice(sel.end), num[1], Number(num[2]) + 1), head.length);
+      // The item goes on below this line (an indented heading or paragraph):
+      // a new empty line inside the item, right here. A new item can't go
+      // here without taking that content (its heading would then sit on the
+      // number's line), and putting it after the content moved the caret
+      // away. Enter on the empty line adds the next item (below).
+      const contentIndent = cont[0].replace(/\t/g, "    ").length;
+      if (atLineEnd && !cont[0].includes(">") && listItemEnd(t, end, contentIndent) > end) {
+        const pad = " ".repeat(contentIndent);
+        insertAtCaret("\n" + pad + "\n" + pad);
         return;
       }
-      insertAtCaret("\n" + marker);
+      // A new item right below; text after the caret goes with it.
+      const { marker, num } = nextMarker(cont[0]);
+      newItem(t.slice(0, sel.start) + "\n", marker, num, t.slice(sel.end));
       return;
+    }
+    // An indented line inside a list item (its heading or a later paragraph).
+    // Splitting the block here cut the list in two, and the indented text left
+    // at the top of the new block read as a code block. Stay in the item.
+    const lead = line.match(/^[ \t]+/)?.[0];
+    if (lead && LIST_MARKER.test(t)) {
+      if (line.trim() === "" && atLineEnd) {
+        // Enter on an empty line in an item: the next item, after this
+        // item's content. The empty line itself (and the blank line left
+        // above it) goes, so the item reads as it did before.
+        const width = indentWidth(line);
+        const lines = t.slice(0, start).split("\n");
+        for (let k = lines.length - 1; k >= 0; k--) {
+          const m = lines[k].match(LIST_MARKER);
+          if (m && indentWidth(lines[k]) < width) {
+            // The run of blank lines this one is in: keep one, so paragraphs
+            // on either side stay apart; drop the rest (at most two).
+            const all = t.split("\n");
+            const at = lines.length - 1;
+            let lo = at, hi = at;
+            while (lo > 0 && all[lo - 1].trim() === "") lo--;
+            while (hi < all.length - 1 && all[hi + 1].trim() === "") hi++;
+            const drop = Math.min(2, hi - lo); // run length - 1, capped
+            // `drop` lines inside the run, as close to this one as fits.
+            const first = Math.min(Math.max(lo, at - drop + 1), hi - drop + 1);
+            const u = [...all.slice(0, first), ...all.slice(first + drop)].join("\n");
+            const markerEnd = lines.slice(0, k + 1).join("\n").length;
+            const itemEnd = listItemEnd(u, markerEnd, m[0].replace(/\t/g, "    ").length);
+            const { marker, num } = nextMarker(m[0]);
+            // A blank line before it, so it can't read as part of the item's
+            // last paragraph.
+            const head = u.slice(0, itemEnd) + (itemEnd > markerEnd ? "\n\n" : "\n") + marker;
+            const rest = u.slice(itemEnd);
+            commit(head + (num ? renumberBelow(rest, num[1], Number(num[2]) + 1) : rest), head.length);
+            return;
+          }
+        }
+      } else {
+        // A new paragraph in the same item, at the same indent.
+        insertAtCaret("\n" + lead + "\n" + lead);
+        return;
+      }
     }
     // Plain paragraph: finalize this block, continue in a fresh one.
     props.onSplit(t.slice(0, offset), t.slice(offset));
@@ -1291,10 +1433,14 @@ export default function Block(props: Props) {
           onBlur={(e) => {
             // Keep the block active when focus leaves the page itself (native
             // menu click, app switch) or moves into this block's own chrome
-            // (table toolbar inputs), so commands still have a target.
+            // (table toolbar inputs), so commands still have a target. The
+            // same for the right-click menu: it takes focus for keyboard use,
+            // and ending the edit there re-rendered the block, which threw
+            // away the selection Copy / Cut / Copy as… act on.
             // A disposed block's activation belongs to the one replacing it.
             const to = e.relatedTarget as Node | null;
-            if (!disposed && document.hasFocus() && !(to && rootEl?.contains(to))) props.onDeactivate();
+            const intoMenu = to instanceof Element && !!to.closest(".ctx-menu");
+            if (!disposed && document.hasFocus() && !intoMenu && !(to && rootEl?.contains(to))) props.onDeactivate();
           }}
           onCompositionStart={() => { composing = true; caretBeforeInput = el ? getCaretOffset(el) : null; }}
           onCompositionEnd={() => { composing = false; onInput(); }}

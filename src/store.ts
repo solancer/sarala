@@ -161,6 +161,10 @@ export const [finalNewline, setFinalNewline] =
   createSignal<"ensure" | "preserve" | "trim">("ensure");
 // Autosave shadow cadence in seconds; 0 disables. Drives the autosave loop.
 export const [autosaveInterval, setAutosaveInterval] = createSignal(5);
+/** Closing with unsaved changes: "discard" asks "Close without saving?"; "save"
+ *  asks "Save changes?" with Save / Don't Save / Cancel (issue #40). */
+export type ClosePrompt = "discard" | "save";
+export const [closePrompt, setClosePrompt] = createSignal<ClosePrompt>("discard");
 
 // An external change to the open file detected by the Rust watcher: drives the
 // reload-or-keep conflict banner. `deleted` = the file vanished on disk.
