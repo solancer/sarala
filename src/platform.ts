@@ -255,6 +255,9 @@ export interface ShadowSession {
   savedAt: number;
   encoding: string;
   hadBom: boolean;
+  /** Set when the user answered "No" to restoring it. Kept, not deleted, so a
+   *  wrong click can't destroy unsaved work: opening the file still offers it. */
+  declinedAt?: number;
 }
 
 export async function writeShadow(key: string, data: ShadowSession): Promise<void> {
@@ -357,6 +360,25 @@ export async function confirmDialog(message: string, title = "Sarala"): Promise<
   if (!isTauri) return window.confirm(message);
   const { ask } = await import("@tauri-apps/plugin-dialog");
   return await ask(message, { title });
+}
+
+/**
+ * "Save changes?" with Save / Don't Save / Cancel. The browser has no
+ * three-button dialog, so there OK saves and Cancel keeps the document open
+ * (never a silent discard).
+ */
+export async function askSaveDialog(message: string, title = "Sarala"): Promise<"save" | "discard" | "cancel"> {
+  if (!isTauri) return window.confirm(message) ? "save" : "cancel";
+  const { message: msg } = await import("@tauri-apps/plugin-dialog");
+  const result = await msg(message, {
+    title,
+    kind: "warning",
+    buttons: { yes: "Save", no: "Don't Save", cancel: "Cancel" },
+  });
+  // Custom buttons come back as their label; accept the stock names too.
+  if (result === "Save" || result === "Yes") return "save";
+  if (result === "Don't Save" || result === "No") return "discard";
+  return "cancel";
 }
 
 /** Native message box; window.alert in the browser. */

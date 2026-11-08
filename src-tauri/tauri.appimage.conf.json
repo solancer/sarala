@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "linux": {
+      "appimage": {
+        "files": {
+          "/usr/share/sarala/fonts/NotoColorEmoji.ttf": "linux/fonts/NotoColorEmoji.ttf",
+          "/usr/share/sarala/fonts/NotoColorEmoji-OFL.txt": "linux/fonts/NotoColorEmoji-OFL.txt"
+        }
+      }
+    }
+  }
+}

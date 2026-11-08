@@ -43,7 +43,8 @@ jobs:
           - platform: macos-latest # universal (Apple Silicon + Intel)
             args: "--target universal-apple-darwin"
           - platform: ubuntu-22.04 # AppImage
-            args: ""
+            # Adds the bundled emoji font to the AppImage only (issue #45).
+            args: "--config src-tauri/tauri.appimage.conf.json"
           - platform: windows-latest # NSIS .exe
             args: ""
     runs-on: ${{ matrix.platform }}
@@ -93,6 +94,10 @@ jobs:
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Fetch the AppImage's emoji font (Linux only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: ./scripts/fetch-emoji-font.sh
 
       - name: Link clang's runtime for ggml's Metal @available checks (macOS only)
         if: matrix.platform == 'macos-latest'
@@ -158,6 +163,12 @@ jobs:
           deb=$(ls src-tauri/target/release/bundle/deb/*.deb)
           dpkg-deb -f "$deb" Depends | tee /dev/stderr | grep -q libopenblas0
           dpkg-deb --fsys-tarfile "$deb" | tar -xO --wildcards '*usr/share/applications/*.desktop' | tee /dev/stderr | grep -q '^MimeType=text/markdown'
+          # The AppImage must carry the bitmap emoji font its WebKit falls back
+          # to once colour fonts are hidden (issue #45).
+          appimage=$(ls src-tauri/target/release/bundle/appimage/*.AppImage)
+          (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/$appimage" --appimage-extract 'usr/share/sarala/fonts/*' > /dev/null)
+          test -s "$RUNNER_TEMP/squashfs-root/usr/share/sarala/fonts/NotoColorEmoji.ttf" \
+            || { echo "::error::the AppImage is missing its bundled emoji font"; exit 1; }
 
   # The updater endpoint in tauri.conf.json points at a gist, so mirror the
   # latest.json that tauri-action attached to the release into that gist. Runs

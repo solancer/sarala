@@ -8,7 +8,7 @@ import {
   targetBlockIndex, requestCaret, requestSelection, setActive, undo, redo, setCaretProvider,
   spellcheckOn, setSpellcheckOn, smartPunctuation, setSmartPunctuation,
   preserveBreaks, setPreserveBreaks, lineEnding, setLineEnding,
-  finalNewline, setFinalNewline, setAutosaveInterval,
+  finalNewline, setFinalNewline, setAutosaveInterval, closePrompt,
   setEncodingLossy, setExternalChange, setDocDirty,
   copyImageToAssets, setCopyImageToAssets, copyImagesToFolder, tableFullWidth, setTableFullWidth,
   mathAltDelimiters, setMathAltDelimitersSig, mathFence, setMathFenceSig,
@@ -19,7 +19,7 @@ import {
   alwaysOnTop, setAlwaysOnTop, zoom, setZoom, clampZoom,
   bumpRenderEpoch, proseFont, monoFont, markMissing,
 } from "./store";
-import { selectAllDocument } from "./blockselect";
+import { selectAllDocument, selectedSourceRange } from "./blockselect";
 import { toggleMark, type MarkKind } from "./inlineformat";
 import { linkAt, linkDestination, removeLink, type LinkTarget } from "./links";
 import { applyBlockKind, type BlockKind } from "./blocktype";
@@ -27,8 +27,8 @@ import { fontEmbedCss } from "./fonts";
 import {
   isTauri, isWeb, web, pickFolder, pickMarkdownFile, pickSavePath, pickExportPath, pickImportFile,
   readFileEncoded, reopenWithEncoding, writeTextFile, type EncodedDoc,
-  watchFile, clearShadow, watchTree, openExternal,
-  confirmDialog, alertDialog, renameFile, deleteFile, openNewWindow,
+  watchFile, watchTree, openExternal,
+  confirmDialog, askSaveDialog, alertDialog, renameFile, deleteFile, openNewWindow,
   pandocImport, pandocExport, exportPdf, runCommand, revealInDir,
   clipboardWriteText, clipboardReadText, pathExists,
   pickImageFile, copyAsset,
@@ -46,7 +46,7 @@ import {
 import { renderMermaidIn } from "./mermaid";
 import { renderD2In } from "./d2";
 import { setLiveHighlight, setLiveSubSup } from "./livesource";
-import { shadowFor, restoreSession, keyForPath, discardShadowFor } from "./autosave";
+import { shadowFor, restoreSession, discardShadowFor, declineShadows } from "./autosave";
 import { stripControlChars } from "./richpaste";
 import {
   recentFiles, addRecentFile, clearRecentFiles, removeRecentFile, pinnedFiles,
@@ -180,8 +180,7 @@ export async function closeTab(id = activeTabId()): Promise<void> {
   if (!document) return;
   closingTabs.add(id);
   try {
-    const name = document.filePath ? fileName0(document.filePath) : "Untitled.md";
-    if (document.dirty && !(await confirmDialog(`Close ${name} without saving? Unsaved changes will be lost.`))) return;
+    if (document.dirty && !(await confirmCloseDirty([id], "tab"))) return;
     removeTab(id);
     await discardShadowFor(document.filePath);
   } finally { closingTabs.delete(id); }
@@ -242,7 +241,8 @@ export async function openFile(path?: string) {
   ))) {
     await restoreSession(shadow);
   } else {
-    if (shadow) await clearShadow(keyForPath(p));
+    // Kept, not deleted: a wrong click must not lose the work (see declineShadows).
+    if (shadow) await declineShadows([shadow]);
     await applyOpened(p, ed);
   }
   await addRecentFile(p);
@@ -289,18 +289,19 @@ function textForDisk(text = fullText()): string {
   return lineEnding() === "crlf" ? text.replace(/\n/g, "\r\n") : text;
 }
 
-async function saveTab(as = false) {
-  const id = activeTabId();
+/** Save one tab (the active one by default). Resolves true once it is on disk,
+ *  false when the user backed out of the Save dialog or the save was refused. */
+async function saveTab(as = false, id = activeTabId()): Promise<boolean> {
   const initial = getTabDocument(id)!;
   const name = initial.filePath ? fileName0(initial.filePath) : "Untitled.md";
   const path = as || !initial.filePath ? await pickSavePath(name) : initial.filePath;
-  if (!path && (isTauri || isWeb)) return;
+  if (!path && (isTauri || isWeb)) return false;
   const document = getTabDocument(id);
-  if (!document) return;
+  if (!document) return false;
   const duplicate = path ? findTabByPath(path) : undefined;
   if (duplicate !== undefined && duplicate !== id) {
     await alertDialog("That file is already open in another tab. Choose a different name or save from that tab.");
-    return;
+    return false;
   }
   const text = joinBlocks(document.blocks.map((b) => b.text));
   await writeTextFile(path ?? name, textForDisk(text), document.encoding, document.hadBom);
@@ -311,13 +312,40 @@ async function saveTab(as = false) {
     await addRecentFile(path);
     if (as) await refreshTree();
   }
+  return true;
 }
 export async function save() { await saveTab(); }
+
+/**
+ * Ask what to do with unsaved tabs before closing them (one tab, or a whole
+ * window). Resolves true when closing may go ahead: the user chose to discard,
+ * or chose Save and every tab was saved. The wording follows Settings ▸ Files ▸
+ * "When closing unsaved" (issue #40).
+ */
+export async function confirmCloseDirty(ids: number[], scope: "tab" | "window"): Promise<boolean> {
+  const docs = ids.map((id) => ({ id, doc: getTabDocument(id) })).filter((d) => d.doc?.dirty);
+  if (!docs.length) return true;
+  const names = docs.map(({ doc }) => (doc!.filePath ? fileName0(doc!.filePath) : "Untitled.md")).join(", ");
+  if (closePrompt() === "discard") {
+    return await confirmDialog(scope === "tab"
+      ? `Close ${names} without saving? Unsaved changes will be lost.`
+      : `Close the window and discard unsaved changes to ${names}?`);
+  }
+  const choice = await askSaveDialog(`Save changes to ${names} before closing?`);
+  if (choice === "cancel") return false;
+  if (choice === "discard") return true;
+  for (const { id } of docs) {
+    // Show the tab being saved, so a Save As dialog for an untitled one has context.
+    if (scope === "window") switchTab(id);
+    if (!(await saveTab(false, id))) return false;
+  }
+  return true;
+}
 async function saveAs() { await saveTab(true); }
 
 async function renameCurrent() {
   const from = doc.filePath;
-  if (!from && isWeb) return saveTab();
+  if (!from && isWeb) { await saveTab(); return; }
   if (!from) {
     await alertDialog("Save the document before renaming it.");
     return;
@@ -775,8 +803,35 @@ function insertFrontMatter() {
 
 // ---------- Edit ----------
 
+/** The Markdown source of the current selection, or null when nothing is
+ *  selected. Works for a selection inside the block being edited, inside a
+ *  rendered block, or across several blocks. */
+function selectedMarkdown(): string | null {
+  const range = selectedSourceRange();
+  if (range) {
+    const { start, end } = range;
+    const parts: string[] = [];
+    for (let i = start.block; i <= end.block; i++) {
+      const text = doc.blocks[i]?.text ?? "";
+      const from = i === start.block ? start.offset : 0;
+      const to = i === end.block ? end.offset : text.length;
+      parts.push(text.slice(from, to));
+    }
+    const md = joinBlocks(parts);
+    return md.trim() ? md : null;
+  }
+  // A selection inside the block being edited: its source is the text itself.
+  const sel = blockApi?.selectionOffsets();
+  if (sel && sel.end > sel.start && doc.activeIndex >= 0) {
+    return doc.blocks[doc.activeIndex].text.slice(sel.start, sel.end);
+  }
+  return null;
+}
+
+/** Copy as Markdown: the selection if there is one, else the block being
+ *  edited, else the whole document. */
 async function copyAsMarkdown() {
-  const text = doc.activeIndex >= 0 ? doc.blocks[doc.activeIndex].text : fullText();
+  const text = selectedMarkdown() ?? (doc.activeIndex >= 0 ? doc.blocks[doc.activeIndex].text : fullText());
   await clipboardWriteText(text);
 }
 
@@ -1238,7 +1293,7 @@ const registry: Record<string, Command> = {
   "edit.undo": () => (focusedTextField()?.value ? void document.execCommand("undo") : undo()),
   "edit.redo": () => (focusedTextField()?.value ? void document.execCommand("redo") : redo()),
   "edit.copy_markdown": copyAsMarkdown,
-  "edit.copy_html": async () => clipboardWriteText(await renderBody(fullText())),
+  "edit.copy_html": async () => clipboardWriteText(await renderBody(selectedMarkdown() ?? fullText())),
   "edit.copy_plain": copyPlain,
   "edit.paste": pasteText,
   "edit.paste_plain": pastePlain,

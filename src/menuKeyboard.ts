@@ -94,7 +94,19 @@ export function attachMenuKeyboard(menu: HTMLElement, close: () => void, restore
     });
   };
   menu.addEventListener("keydown", onKey);
-  requestAnimationFrame(() => focusIn(menu, 0));
+  requestAnimationFrame(() => {
+    focusIn(menu, 0);
+    // WebKit drops a selection in rendered (non-editable) text when focus moves
+    // to a menu item: the highlight vanished and Copy found nothing to copy.
+    // Put it back, so it stays visible while the menu is open.
+    if (range && !range.collapsed) {
+      const s = window.getSelection();
+      if (s && (s.rangeCount === 0 || s.isCollapsed)) {
+        s.removeAllRanges();
+        s.addRange(range);
+      }
+    }
+  });
 
   return () => {
     menu.removeEventListener("keydown", onKey);

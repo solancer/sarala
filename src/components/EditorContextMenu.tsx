@@ -45,10 +45,31 @@ interface MenuState {
 
 const [state, setState] = createSignal<MenuState | null>(null);
 
+/** The selection and focus as they were when the menu opened. Menu items act
+ *  on them, not on whatever the selection became once the menu took focus. */
+let opened: { range: Range | null; focus: HTMLElement | null } = { range: null, focus: null };
+
+function restoreOpened() {
+  const { range, focus } = opened;
+  // Only a real selection that is still on the page. With nothing selected,
+  // the right-click placed a caret and may have re-rendered the block, so
+  // leave the caret it set alone (Paste goes there).
+  if (!range || range.collapsed || !range.commonAncestorContainer.isConnected) return;
+  if (focus?.isConnected && focus.isContentEditable) focus.focus({ preventScroll: true });
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+}
+
 /** Open the editor context menu at a screen position, with the current selection. */
 export function openEditorMenu(x: number, y: number, selection: string, inTable = false) {
   // Opened from the keyboard (Shift+F10 / Menu key): no pointer, so use the caret.
   if (x === 0 && y === 0) ({ x, y } = keyboardMenuPoint());
+  const sel = window.getSelection();
+  opened = {
+    range: sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null,
+    focus: document.activeElement as HTMLElement | null,
+  };
   setState({ x, y, selection, inTable, link: !!linkTargetAtCaret() });
 }
 export function closeEditorMenu() {
@@ -76,6 +97,7 @@ export default function EditorContextMenu() {
   // click — execCommand copy/cut and copyPlain all read the live selection.
   const act = (fn: () => void) => (e: MouseEvent) => {
     e.preventDefault();
+    restoreOpened();
     fn();
     closeEditorMenu();
   };
