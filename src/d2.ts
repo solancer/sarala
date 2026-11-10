@@ -113,6 +113,14 @@ class FrameWorker {
   }
 }
 
+// d2.js keeps one pending request, so overlapping calls lose or swap replies: run them one at a time.
+let d2Queue: Promise<unknown> = Promise.resolve();
+function serial<T>(fn: () => Promise<T>): Promise<T> {
+  const run = d2Queue.then(fn, fn);
+  d2Queue = run.catch(() => {});
+  return run;
+}
+
 function getD2(): Promise<D2Instance> {
   d2Ready ??= (async () => {
     const { D2 } = (await import("@terrastruct/d2")) as unknown as { D2: D2Ctor };
@@ -179,8 +187,10 @@ export async function renderD2In(container: HTMLElement, blockKey?: string): Pro
     try {
       let clean = svgCache.get(cacheKey);
       if (clean == null) {
-        const result = await d2.compile(src, { layout: "dagre", themeID, darkThemeID, sketch: false });
-        const svg = await d2.render(result.diagram, { ...result.renderOptions, noXMLTag: true });
+        const svg = await serial(async () => {
+          const result = await d2.compile(src, { layout: "dagre", themeID, darkThemeID, sketch: false });
+          return d2.render(result.diagram, { ...result.renderOptions, noXMLTag: true });
+        });
         // D2 output is our own document's content, but sanitizing the SVG is
         // cheap insurance against a crafted label slipping script through.
         clean = withIntrinsicSize(DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } }));

@@ -29,6 +29,8 @@ const pageHtml = `<!doctype html><html><body>
   <div class="app">
     <div id="good" class="rendered"><div class="d2-block" data-d2="a -&gt; b: hello"></div></div>
     <div id="bad" class="rendered"><div class="d2-block" data-d2="a -&gt; {"></div></div>
+    <div id="par1" class="rendered"><div class="d2-block" data-d2="x -&gt; y"></div></div>
+    <div id="par2" class="rendered"><div class="d2-block" data-d2="p -&gt; q"></div></div>
   </div>
   <script src="/d2-bundle.js"></script>
 </body></html>`;
@@ -56,6 +58,16 @@ for (const engine of [chromium, webkit]) {
 
   await render("#bad", "k-bad");
   check(await page.locator("#bad .render-error").count() > 0, `${name}: invalid d2 shows an inline error`);
+
+  // Two views (document + source preview) fill their diagrams at the same time.
+  await page.evaluate(() => Promise.race([
+    Promise.all(["#par1", "#par2"].map((s) => window.D2Helper.renderD2In(document.querySelector(s)))),
+    new Promise((r) => setTimeout(r, 30000)), // a lost reply never settles
+  ]));
+  for (const sel of ["#par1", "#par2"]) {
+    const text = await page.locator(sel).textContent();
+    check(await page.locator(`${sel} svg`).count() > 0, `${name}: concurrent render ${sel} gives an SVG (got: ${text?.slice(0, 60)})`);
+  }
 
   await browser.close();
 }
