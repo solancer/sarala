@@ -1268,6 +1268,9 @@ export default function Block(props: Props) {
     // rest of the paragraph still enters edit mode normally.
     if (t.closest("img")) { e.preventDefault(); return; }
     if (e.button !== 0) return;
+    // A press on a wide diagram's own scroll box (its scrollbar, not the svg) is scrolling, not a click to
+    // edit; WebKit sends no mousemove during a scrollbar drag, so the drag check below can't tell.
+    if (t.matches(".d2-block, .mermaid-block") && t.scrollWidth > t.clientWidth) return;
     // Defer activation until mouseup: a plain click enters the block for editing,
     // but a drag is left alone so the browser can extend a native selection
     // across sibling (rendered) blocks instead of trapping it in this one once
