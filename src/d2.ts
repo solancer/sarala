@@ -57,10 +57,11 @@ type CompileResult = { diagram: unknown; renderOptions: Record<string, unknown> 
 type D2Instance = {
   compile: (src: string, opts?: Record<string, unknown>) => Promise<CompileResult>;
   render: (diagram: unknown, opts?: Record<string, unknown>) => Promise<string>;
+  version: () => Promise<string>;
 };
 type D2Ctor = new () => D2Instance;
 
-let d2Instance: D2Instance | null = null;
+let d2Ready: Promise<D2Instance> | null = null;
 // Last good SVG per block, so a syntax error mid-edit keeps the diagram.
 const lastGoodSvg = new Map<string, string>();
 // Compiled-SVG cache keyed by theme + source. Diagram size is applied as CSS
@@ -68,12 +69,73 @@ const lastGoodSvg = new Map<string, string>();
 // hits this cache instead of re-running the WASM compiler — no flicker.
 const svgCache = new Map<string, string>();
 
-async function getD2(): Promise<D2Instance> {
-  if (!d2Instance) {
-    const mod = (await import("@terrastruct/d2")) as unknown as { D2: D2Ctor };
-    d2Instance = new mod.D2();
+/**
+ * WebKit (the macOS app's WKWebView, WebKitGTK, Safari) gives a Web Worker a much
+ * smaller stack than the main thread, too small for D2's Go WASM to start: go.run
+ * overflows, d2.js still reports ready, and every compile then fails with
+ * "undefined is not an object (evaluating 'd2.compile')". A worker's stack can't be
+ * raised from script, so there d2.js's worker script runs on the main thread
+ * instead, in a hidden same-origin iframe that keeps its globals (Go, d2, ELK,
+ * onmessage) away from the app. It speaks the slice of the Worker API d2.js uses.
+ */
+class FrameWorker {
+  onmessage: ((e: { data: unknown }) => void) | null = null;
+  onerror: ((e: unknown) => void) | null = null;
+  private frame = document.createElement("iframe");
+  private loaded: Promise<Window>;
+
+  constructor(url: string | URL) {
+    this.frame.hidden = true;
+    this.frame.tabIndex = -1;
+    this.frame.setAttribute("aria-hidden", "true");
+    document.body.appendChild(this.frame);
+    const win = this.frame.contentWindow as Window;
+    // The worker script answers through self.postMessage: deliver that to d2.js.
+    (win as unknown as { postMessage: (data: unknown) => void }).postMessage = (data) =>
+      setTimeout(() => this.onmessage?.({ data }));
+    this.loaded = new Promise((resolve, reject) => {
+      const script = win.document.createElement("script");
+      script.type = "module";
+      script.src = String(url);
+      script.onload = () => resolve(win);
+      script.onerror = (e) => { this.onerror?.(e); reject(e); };
+      win.document.head.appendChild(script);
+    });
   }
-  return d2Instance;
+
+  postMessage(data: unknown): void {
+    // A script load failure was already reported through onerror.
+    this.loaded.then((win) => (win.onmessage as ((e: { data: unknown }) => void) | null)?.({ data }), () => {});
+  }
+
+  terminate(): void {
+    this.frame.remove();
+  }
+}
+
+function getD2(): Promise<D2Instance> {
+  d2Ready ??= (async () => {
+    const { D2 } = (await import("@terrastruct/d2")) as unknown as { D2: D2Ctor };
+    const inWorker = new D2();
+    try {
+      await inWorker.version();
+      return inWorker;
+    } catch {
+      (inWorker as unknown as { worker?: Worker }).worker?.terminate();
+    }
+    // d2.js creates its Worker synchronously in the constructor.
+    const RealWorker = globalThis.Worker;
+    globalThis.Worker = FrameWorker as unknown as typeof Worker;
+    try {
+      return new D2();
+    } finally {
+      globalThis.Worker = RealWorker;
+    }
+  })().catch((e) => {
+    d2Ready = null;
+    throw e;
+  });
+  return d2Ready;
 }
 
 /**
