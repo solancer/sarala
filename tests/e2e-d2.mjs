@@ -31,13 +31,18 @@ const pageHtml = `<!doctype html><html><body>
     <div id="bad" class="rendered"><div class="d2-block" data-d2="a -&gt; {"></div></div>
     <div id="par1" class="rendered"><div class="d2-block" data-d2="x -&gt; y"></div></div>
     <div id="par2" class="rendered"><div class="d2-block" data-d2="p -&gt; q"></div></div>
+    ${[100, 50, 200].map((z) => `<div id="z${z}" class="rendered" style="width:300px"><div class="d2-block"
+      ${z === 100 ? "" : `style="zoom:${z}%;--d2-zoom:${z / 100}"`}
+      data-d2="direction: right&#10;a -&gt; b -&gt; c -&gt; d -&gt; e -&gt; f -&gt; g"></div></div>`).join("")}
   </div>
+  <link rel="stylesheet" href="/app.css">
   <script src="/d2-bundle.js"></script>
 </body></html>`;
+const appCss = readFileSync(path.join(here, "..", "src", "styles", "app.css"), "utf8");
 const server = createServer((req, res) =>
-  req.url === "/d2-bundle.js"
-    ? res.writeHead(200, { "content-type": "text/javascript" }).end(bundle)
-    : res.writeHead(200, { "content-type": "text/html" }).end(pageHtml));
+  req.url === "/d2-bundle.js" ? res.writeHead(200, { "content-type": "text/javascript" }).end(bundle)
+  : req.url === "/app.css" ? res.writeHead(200, { "content-type": "text/css" }).end(appCss)
+  : res.writeHead(200, { "content-type": "text/html" }).end(pageHtml));
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const url = `http://127.0.0.1:${server.address().port}/`;
 
@@ -68,6 +73,16 @@ for (const engine of [chromium, webkit]) {
     const text = await page.locator(sel).textContent();
     check(await page.locator(`${sel} svg`).count() > 0, `${name}: concurrent render ${sel} gives an SVG (got: ${text?.slice(0, 60)})`);
   }
+
+  // A diagram wider than its column: 100% fits the column, zoom scales from there.
+  const width = {};
+  for (const z of [100, 50, 200]) {
+    await render(`#z${z}`, `k-z${z}`);
+    width[z] = await page.locator(`#z${z} .d2-block > svg`).evaluate((el) => el.getBoundingClientRect().width);
+  }
+  check(Math.abs(width[100] - 300) < 2, `${name}: zoom 100% fits a wide diagram to the column (${width[100]})`);
+  check(Math.abs(width[50] - 150) < 2, `${name}: zoom 50% halves it (${width[50]})`);
+  check(Math.abs(width[200] - 600) < 2, `${name}: zoom 200% doubles it (${width[200]})`);
 
   await browser.close();
 }
