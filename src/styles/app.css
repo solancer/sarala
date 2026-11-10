@@ -2037,6 +2037,8 @@ body.tables-full .rendered table { width: 100%; }
 
 .mermaid-block, .d2-block { margin: 0.6em 0; text-align: center; overflow-x: auto; }
 .mermaid-block svg, .d2-block svg { max-width: 100%; height: auto; }
+/* zoom on the block also shrinks this 100% cap; scale it back so zoom resizes wide diagrams. */
+.d2-block svg { max-width: calc(100% * var(--d2-zoom, 1)); }
 /* First render of a diagram (no previous render to keep): a quiet framed
    placeholder of typical diagram height, so the swap to the SVG settles
    rather than jumping from a single line of text. */

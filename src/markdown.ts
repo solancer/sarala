@@ -736,7 +736,9 @@ marked.use({
         // D2 theme id (renderD2In reads it off data-d2-theme). Clamp zoom so a
         // typo can't explode the layout.
         const z = Number(/(?:^|\s)zoom=(\d{1,3})\b/.exec(info)?.[1]);
-        const style = z && z !== 100 ? ` style="zoom:${Math.min(400, Math.max(10, z))}%"` : "";
+        const zc = Math.min(400, Math.max(10, z));
+        // --d2-zoom scales the svg's max-width too, which CSS zoom would otherwise cancel (app.css).
+        const style = z && z !== 100 ? ` style="zoom:${zc}%;--d2-zoom:${zc / 100}"` : "";
         const t = /(?:^|\s)theme=(\d{1,3})\b/.exec(info)?.[1];
         const themeAttr = t ? ` data-d2-theme="${t}"` : "";
         return `<div class="d2-block" data-d2idx="${d2Stash.length - 1}"${themeAttr}${style}></div>`;
