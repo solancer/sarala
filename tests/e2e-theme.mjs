@@ -250,6 +250,36 @@ const scheme = (id) => page.evaluate(async (id) => {
 check(await scheme("graphite") === "dark", "a dark theme declares color-scheme: dark");
 check(await scheme("sarala") !== "dark", "a light theme does not");
 
+// A detected Omarchy palette gets its own card; it never overwrites Custom.
+check(!(await page.evaluate(async () =>
+  (await import("/src/store.ts")).availableThemes().includes("omarchy"))),
+"Omarchy is hidden when no system palette is detected");
+const customBeforeOmarchy = await page.evaluate(async () =>
+  JSON.stringify((await import("/src/store.ts")).customScheme()));
+await page.evaluate(async () => {
+  const store = await import("/src/store.ts");
+  const { parseOmarchyColors } = await import("/src/omarchy.ts");
+  store.setOmarchyScheme(parseOmarchyColors('background = "#141516"\nforeground = "#eeeeee"\naccent = "#aabbcc"\nmode = "dark"'));
+  (await import("/src/components/ThemePicker.tsx")).openThemePicker();
+});
+await page.getByRole("radio", { name: "Omarchy (System)", exact: true }).click();
+await page.waitForFunction(() => document.querySelector(".app").dataset.theme === "omarchy");
+check(await tokenOf("--bg-page") === "#141516", "Omarchy applies system background");
+check(await tokenOf("--accent") === "#aabbcc", "Omarchy applies system accent");
+check(await scheme("omarchy") === "dark", "Omarchy dark native controls");
+await page.evaluate(async () => {
+  const { setOmarchyScheme } = await import("/src/store.ts");
+  const { parseOmarchyColors } = await import("/src/omarchy.ts");
+  setOmarchyScheme(parseOmarchyColors('background = "#fafafa"\nforeground = "#101010"\nmode = "light"'));
+});
+await page.waitForFunction(() => getComputedStyle(document.querySelector(".app")).colorScheme === "light");
+check(await tokenOf("--bg-page") === "#fafafa", "system palette updates without reload");
+check(await page.evaluate(async () =>
+  JSON.stringify((await import("/src/store.ts")).customScheme())) === customBeforeOmarchy,
+"Custom scheme survives following Omarchy");
+await page.evaluate(async () => { (await import("/src/store.ts")).setTheme("sarala"); });
+check(await tokenOf("--accent") === saralaAccent, "switching away restores curated colours");
+
 await browser.close();
 kill();
 console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");

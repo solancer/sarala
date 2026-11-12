@@ -13,7 +13,7 @@ import {
   preserveBreaks, lineEnding, finalNewline, autosaveInterval, copyImageToAssets,
   focusMode, typewriterMode, statusBarVisible, alwaysOnTop, mathAltDelimiters, mathFence,
   emojiEnabled, highlightEnabled, subSupEnabled, autolinkEnabled,
-  targetBlockIndex, doc,
+  targetBlockIndex, doc, omarchyScheme,
 } from "./store";
 import { aiPanelOpen } from "./ai/config";
 import { web } from "./platform";
@@ -82,13 +82,14 @@ export const THEME_LABELS: Record<string, string> = {
   sarala: "Sarala", pro: "Pro", octagon: "Octagon", machine: "Machine",
   ristretto: "Ristretto", spectrum: "Spectrum", classic: "Classic",
   paper: "Paper", graphite: "Graphite", github: "GitHub", night: "Night",
-  newsprint: "Newsprint", whitey: "Whitey",
+  newsprint: "Newsprint", whitey: "Whitey", omarchy: "Omarchy (System)",
 };
 const themeItems: MenuNode[] = THEMES.map((id) => ({
   id: `themes.set.${id}`,
   label: THEME_LABELS[id] ?? id,
   type: "radio",
   checked: () => theme() === id,
+  enabled: () => id !== "omarchy" || omarchyScheme() !== null,
 }));
 
 const ALL_MENUS: TopMenu[] = [

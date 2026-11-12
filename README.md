@@ -118,6 +118,9 @@ cd sarala/aur/sarala-bin && makepkg -si
 
 The AppImage works there too. If it says **"Cannot mount AppImage"**, install FUSE with `sudo pacman -S fuse3`.
 
+On Omarchy, choose **Themes → Omarchy (System)** to follow the desktop palette,
+including live theme changes. See [Omarchy theme integration](docs/OMARCHY.md).
+
 ---
 
 ## What you get

@@ -41,7 +41,7 @@ export const THEMES = [
   "sarala", "pro", "octagon", "machine", "ristretto", "spectrum", "classic",
   "paper", "graphite", "github", "night", "newsprint", "whitey",
   // Derived at runtime from a base16 scheme rather than hand-authored in CSS.
-  "custom",
+  "custom", "omarchy",
 ] as const;
 export type ThemeId = (typeof THEMES)[number];
 
@@ -49,6 +49,11 @@ export const [theme, setTheme] = createSignal<ThemeId>("sarala");
 
 /** The base16 scheme backing the "custom" theme (null until one is imported). */
 export const [customScheme, setCustomScheme] = createSignal<Base16Scheme | null>(null);
+/** Detected system palette; separate from the user's editable Custom scheme. */
+export const [omarchyScheme, setOmarchyScheme] = createSignal<Base16Scheme | null>(null);
+export const availableThemes = () => THEMES.filter((id) =>
+  id !== "omarchy" || omarchyScheme() !== null || theme() === "omarchy",
+);
 export const [sourceMode, setSourceMode] = createSignal(false);
 export const [sidebarOpen, setSidebarOpen] = createSignal(true);
 export const [sidebarTab, setSidebarTab] = createSignal<"files" | "outline" | "search">("files");

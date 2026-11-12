@@ -117,6 +117,12 @@ async function tauriCore() {
   return await import("@tauri-apps/api/core");
 }
 
+export async function readOmarchyColors(): Promise<string | null> {
+  if (!isTauri) return null;
+  const { invoke } = await tauriCore();
+  return invoke<string | null>("read_omarchy_colors");
+}
+
 export async function pickMarkdownFile(): Promise<string | null> {
   if (web) return web.pickMarkdownFile();
   if (!isTauri) return null;
