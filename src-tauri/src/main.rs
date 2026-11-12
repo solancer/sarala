@@ -6,6 +6,8 @@ mod ai;
 mod appimage_fonts;
 mod file_open;
 mod menu;
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+mod omarchy;
 mod voice;
 
 use serde::Serialize;
@@ -1480,6 +1482,7 @@ fn main() {
             list_system_fonts,
             font_faces_b64,
             load_settings,
+            omarchy::read_omarchy_colors,
             save_settings,
             rename_file,
             delete_file,

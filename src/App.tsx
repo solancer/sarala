@@ -33,7 +33,8 @@ import VoiceCommands from "./components/VoiceCommands";
 import { aiPanelOpen, aiRailVisible } from "./ai/config";
 import { flushChatSaves } from "./ai/session";
 import { initSettings } from "./settings";
-import { base16ToCss } from "./base16";
+import { base16ToCss, DEFAULT_SCHEME } from "./base16";
+import { followOmarchyTheme, omarchyToCss, parseOmarchyColors } from "./omarchy";
 import { autoCheckForUpdates } from "./updater";
 import {
   activeTabId, openTabs, removeTab, currentTabView, setTabViewProvider, cycleTab, setTabExternalChange,
@@ -41,13 +42,13 @@ import {
   fileName, setActive, fileTree, setFileTree, setTreeTimes, folderName, folderPath, THEMES, targetBlockIndex,
   spellcheckOn, smartPunctuation, preserveBreaks, lineEnding, copyImageToAssets,
   focusMode, typewriterMode, statusBarVisible, alwaysOnTop, zoom, tableFullWidth,
-  mathAltDelimiters, mathFence, bumpMermaidEpoch, customScheme,
+  mathAltDelimiters, mathFence, bumpMermaidEpoch, customScheme, omarchyScheme, setOmarchyScheme,
   emojiEnabled, highlightEnabled, subSupEnabled, autolinkEnabled,
   finalNewline, autosaveInterval,
 } from "./store";
 import {
   isTauri, isWeb, web, isMac, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS,
-  onExternalChange, onTreeChange, onTreeTouch,
+  onExternalChange, onTreeChange, onTreeTouch, readOmarchyColors,
 } from "./platform";
 import {
   executeCommand, openFile, openFolder, insertImageFromPath, confirmCloseDirty,
@@ -62,6 +63,33 @@ const RECOVERY_ASKED = "sarala.recoveryAsked";
 
 export default function App() {
   let editorEl: HTMLDivElement | undefined;
+
+  // Probe once for the theme gallery. Only the selected Omarchy theme polls.
+  onMount(() => {
+    if (!isTauri) return;
+    let disposed = false;
+    void readOmarchyColors().then((text) => {
+      if (disposed || !text || omarchyScheme()) return;
+      const scheme = parseOmarchyColors(text);
+      if (scheme) setOmarchyScheme(scheme);
+    }).catch(() => {});
+    onCleanup(() => { disposed = true; });
+  });
+  createEffect(() => {
+    if (isTauri && theme() === "omarchy") {
+      const stop = followOmarchyTheme(readOmarchyColors, setOmarchyScheme);
+      onCleanup(stop);
+    }
+  });
+  createEffect(() => {
+    // A saved Omarchy selection stays readable when opened on another system.
+    const scheme = omarchyScheme() ?? DEFAULT_SCHEME;
+    const el = document.createElement("style");
+    el.id = "omarchy-theme";
+    el.textContent = omarchyToCss(scheme);
+    document.head.appendChild(el);
+    onCleanup(() => el.remove());
+  });
 
   const jumpTo = (blockIndex: number) => {
     setActive(-1);
@@ -380,7 +408,10 @@ export default function App() {
   createEffect(() => setMenuChecked("edit.ext.emoji", emojiEnabled()));
   createEffect(() => setMenuChecked("edit.ext.autolink", autolinkEnabled()));
   // Re-render mermaid diagrams when the theme switches (dark/light).
-  createEffect(() => { theme(); bumpMermaidEpoch(); });
+  createEffect(() => {
+    if (theme() === "omarchy") omarchyScheme();
+    bumpMermaidEpoch();
+  });
   createEffect(() => {
     const le = lineEnding();
     void setMenuChecked("edit.line_ending.lf", le === "lf");

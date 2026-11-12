@@ -1,6 +1,6 @@
 import ModalFrame from "./ModalFrame";
 import { For, Show, createMemo, createSignal, createEffect } from "solid-js";
-import { commandPaletteVisible, setCommandPaletteVisible, THEMES, theme } from "../store";
+import { commandPaletteVisible, setCommandPaletteVisible, THEMES, availableThemes, theme } from "../store";
 import { executeCommand, returnToEditing } from "../commands";
 import { BLOCK_TARGETED_IDS, MENUS, THEME_LABELS, blockTargetsEnabled, flatCommands, type MenuNode, type MenuLeaf } from "../menudata";
 import { DOTS } from "./PaletteSwitcher";
@@ -168,9 +168,10 @@ export default function CommandPalette() {
   const matches = createMemo(() => {
     if (!commandPaletteVisible()) return [];
     const q = query().toLowerCase().trim();
-    if (!q) return COMMANDS;
-    if (web) return COMMANDS.map((c) => ({ c, score: rank(c, q) })).filter((m) => m.score < 5).sort((a, b) => a.score - b.score).map((m) => m.c);
-    return COMMANDS.filter(
+    const commands = COMMANDS.filter((c) => c.theme !== "omarchy" || availableThemes().includes("omarchy"));
+    if (!q) return commands;
+    if (web) return commands.map((c) => ({ c, score: rank(c, q) })).filter((m) => m.score < 5).sort((a, b) => a.score - b.score).map((m) => m.c);
+    return commands.filter(
       (c) => c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q),
     );
   });

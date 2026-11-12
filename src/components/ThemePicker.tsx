@@ -16,7 +16,7 @@ import ModalFrame from "./ModalFrame";
  */
 
 import { For, Show, createEffect, createSignal, on } from "solid-js";
-import { THEMES, customScheme, theme, type ThemeId } from "../store";
+import { availableThemes, customScheme, omarchyScheme, theme, type ThemeId } from "../store";
 import { executeCommand } from "../commands";
 import { luminance } from "../base16";
 import { openThemeEditor } from "./ThemeEditor";
@@ -25,7 +25,7 @@ const LABELS: Record<string, string> = {
   sarala: "Sarala", pro: "Pro", octagon: "Octagon", machine: "Machine",
   ristretto: "Ristretto", spectrum: "Spectrum", classic: "Classic",
   paper: "Paper", graphite: "Graphite", github: "GitHub", night: "Night",
-  newsprint: "Newsprint", whitey: "Whitey", custom: "Custom",
+  newsprint: "Newsprint", whitey: "Whitey", custom: "Custom", omarchy: "Omarchy (System)",
 };
 
 const [visible, setVisible] = createSignal(false);
@@ -59,6 +59,10 @@ export default function ThemePicker() {
       if (v) requestAnimationFrame(measure);
     }),
   );
+  createEffect(() => {
+    omarchyScheme();
+    if (visible()) requestAnimationFrame(measure);
+  });
 
   /** Drill into the editor, closing the gallery behind us. Leaving it open
    *  stacked two modals that share a backdrop z-index, and the gallery — being
@@ -97,7 +101,7 @@ export default function ThemePicker() {
           </p>
 
           <div class="tp-grid" ref={gridEl} role="radiogroup" aria-label="Themes">
-            <For each={THEMES}>
+            <For each={availableThemes()}>
               {(id) => (
                 <div class="tp-cell">
                   <button
@@ -109,10 +113,11 @@ export default function ThemePicker() {
                       const step = ["ArrowRight", "ArrowDown"].includes(e.key) ? 1 : ["ArrowLeft", "ArrowUp"].includes(e.key) ? -1 : 0;
                       if (!step) return;
                       e.preventDefault();
-                      const index = THEMES.indexOf(id);
-                      const next = (index + step + THEMES.length) % THEMES.length;
+                      const themes = availableThemes();
+                      const index = themes.indexOf(id);
+                      const next = (index + step + themes.length) % themes.length;
                       gridEl?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
-                      choose(THEMES[next]);
+                      choose(themes[next]);
                     }}
                     aria-checked={theme() === id}
                     aria-label={label(id)}

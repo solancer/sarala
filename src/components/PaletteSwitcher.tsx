@@ -1,5 +1,5 @@
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
-import { theme, THEMES, customScheme } from "../store";
+import { theme, availableThemes, customScheme, omarchyScheme } from "../store";
 import { executeCommand } from "../commands";
 import { openThemeEditor } from "./ThemeEditor";
 import { openThemePicker } from "./ThemePicker";
@@ -23,6 +23,7 @@ export const DOTS: Record<string, string> = {
   // The Custom slot has no fixed signature — its dot follows the imported
   // scheme's accent (base0D), falling back to a neutral when none is set.
   custom: "#81a2be",
+  omarchy: "#81a2be",
 };
 
 const [paletteVisible, setPaletteVisible] = createSignal(false);
@@ -51,7 +52,7 @@ export default function PaletteSwitcher() {
     <Show when={paletteVisible()}>
       <div class="palette">
         <span class="palette-label">palette</span>
-        <For each={THEMES}>
+        <For each={availableThemes()}>
           {(id) => (
             <button
               class="palette-dot" aria-label={`Apply ${id} theme`} aria-pressed={theme() === id}
@@ -62,7 +63,7 @@ export default function PaletteSwitcher() {
               style={{
                 background: id === "custom"
                   ? (customScheme()?.palette.base0D ?? DOTS.custom)
-                  : DOTS[id],
+                  : id === "omarchy" ? (omarchyScheme()?.palette.base0D ?? DOTS.omarchy) : DOTS[id],
               }}
               onClick={() => {
                 // With no scheme yet there is nothing to switch to, so the dot

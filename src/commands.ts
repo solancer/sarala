@@ -2,7 +2,7 @@ import {
   doc, fullText, fileName, retargetTabPath, cycleTab, setHeading,
   activeTabId, openDocument, findTabByPath, switchTab, removeTab, getTabDocument, markTabSaved, replaceTabDocument,
   sourceMode, sidebarOpen, setSidebarOpen,
-  theme, setTheme, THEMES, setFileTree, setFolderName,
+  theme, setTheme, THEMES, omarchyScheme, setFileTree, setFolderName,
   folderPath, setFolderPath, setQuickOpenVisible, setCommandPaletteVisible,
   moveBlock, removeBlock, updateBlock, insertBlockAfter, appendBlock,
   targetBlockIndex, requestCaret, requestSelection, setActive, undo, redo, setCaretProvider,
@@ -468,12 +468,17 @@ async function fontCss(): Promise<string> {
   return fontEmbedCss(proseFont(), monoFont());
 }
 
+/** Snapshot the live system palette into standalone HTML and PDF exports. */
+function systemThemeCss(): string {
+  return theme() === "omarchy" ? document.getElementById("omarchy-theme")?.textContent ?? "" : "";
+}
+
 /** Build the exported HTML document (outline sidebar when there are headings). */
 async function htmlDocument(withStyles: boolean, withOutline: boolean): Promise<string> {
   return buildExportHtml({
     title: exportBaseName(),
     body: await renderBody(fullText()),
-    css: withStyles ? loadExportCss() + (await fontCss()) : "",
+    css: withStyles ? loadExportCss() + systemThemeCss() + (await fontCss()) : "",
     theme: theme(),
     withOutline,
     tablesFull: tableFullWidth(),
@@ -485,7 +490,7 @@ async function pdfDocument(): Promise<string> {
   return buildExportHtml({
     title: exportBaseName(),
     body: await renderBody(fullText()),
-    css: appCssText + PDF_PRINT_CSS + (await fontCss()),
+    css: appCssText + systemThemeCss() + PDF_PRINT_CSS + (await fontCss()),
     theme: theme(),
     withOutline: false,
     tablesFull: tableFullWidth(),
@@ -1477,6 +1482,7 @@ async function changeZoom(value: number) {
 
 for (const id of THEMES) {
   registry[`themes.set.${id}`] = async () => {
+    if (id === "omarchy" && !omarchyScheme()) return;
     setTheme(id);
     await setSetting("theme", id);
   };
