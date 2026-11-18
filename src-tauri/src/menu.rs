@@ -740,6 +740,12 @@ pub fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             "Strike",
             Some("Shift+CmdOrCtrl+X"),
         )?)
+        .item(&mi(
+            app,
+            "format.highlight",
+            "Highlight",
+            Some("Shift+CmdOrCtrl+H"),
+        )?)
         .item(&mi(app, "format.comment", "Comment", Some("Ctrl+Minus"))?)
         .item(&mi(
             app,

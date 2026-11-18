@@ -47,7 +47,7 @@ import {
 } from "./store";
 import {
   isTauri, isWeb, web, isMac, setMenuChecked, setMenuEnabled, confirmDialog, IMAGE_EXTS,
-  onExternalChange, onTreeChange, onTreeTouch,
+  onExternalChange, onTreeChange, onTreeTouch, revealWindow,
 } from "./platform";
 import {
   executeCommand, openFile, openFolder, insertImageFromPath, confirmCloseDirty,
@@ -128,7 +128,10 @@ export default function App() {
       window.removeEventListener("keydown", tabKeys, true);
       window.removeEventListener("beforeunload", beforeUnload);
     });
-    void initSettings();
+    // Show the (hidden) window only after the saved theme has been applied and
+    // painted: two frames, so the themed frame is on screen, not just queued.
+    void initSettings().finally(() =>
+      requestAnimationFrame(() => requestAnimationFrame(() => void revealWindow())));
     // Safety net: no link anywhere may navigate the webview itself (it would
     // replace the whole app with the page). Components open links on purpose
     // through followLink/openExternal; any click they left unhandled, including
@@ -249,7 +252,9 @@ export default function App() {
           import("@tauri-apps/api/core"), import("@tauri-apps/api/event"),
         ]);
         const stop = await connectFileOpen(
-          (notify) => listen("open-files", notify, { target: { kind: "WebviewWindow", label: win.label } }),
+          // A file opened from Finder brings back a window hidden with Cmd+H
+          // (Rust no longer calls show(); see file_open.rs).
+          (notify) => listen("open-files", () => { void revealWindow(); notify(); }, { target: { kind: "WebviewWindow", label: win.label } }),
           () => invoke<string[]>("take_open_files"),
           openFile,
         );

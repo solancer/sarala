@@ -138,6 +138,17 @@ assert(styleSource("- [x] t").includes("md-task md-done"), "checked task marker 
 assert(styleSource("> q").includes("md-quote-pre"), "quote marker wrapped");
 assert(styleSource("1. x").includes('data-number="1."'), "ordered marker has a rendered number stand-in");
 assert(styleSource("1) x").includes("md-olnum"), "1) ordered marker styled like 1.");
+// Extra spaces after an empty item's marker (issue #53): the spaces stay inside
+// the item's visible prefix, so the caret at the line end isn't in hidden text.
+for (const source of ["- one\n-  ", "-  ", "- one\n  -   ", "1. a\n2.  "]) {
+  const el = host();
+  el.innerHTML = styleSource(source);
+  assert(el.textContent === source, "bare marker with spaces preserves exact source");
+  applyMarkerVisibility(el, source, source.length);
+  const last = [...el.querySelectorAll(".md-pre, .md-olnum")].pop();
+  assert(!!last && last.textContent.endsWith("  ") && (last.classList.contains("md-on") || last.classList.contains("md-olnum")),
+    "bare marker with spaces stays a visible prefix at the line end");
+}
 assert(styleSource("==hi==").includes("<mark>"), "highlight ==text== styled as <mark> in source");
 assert(styleSource("H~2~O").includes("<sub>"), "single tilde ~x~ styled as <sub>");
 assert(styleSource("x^2^").includes("<sup>"), "caret ^x^ styled as <sup>");

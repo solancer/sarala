@@ -298,6 +298,12 @@ function layoutTokens(src: string): Token[] | null {
   // Marked normalizes CRLF and can synthesize whitespace for incomplete
   // items. Fall back while typing those forms rather than changing source.
   if (src.startsWith("---\n") || /^\s*(`{3,}|~{3,})/.test(src)) return null;
+  // A bare item marker followed by extra spaces ("-  ", typed while the item
+  // is still empty): marked ends the list at the marker and leaves the spaces
+  // outside it, so the caret at the end of the line sat in hidden text and
+  // typing landed before the marker (issue #53). Flat styling keeps the
+  // whole line as the item's visible prefix until text follows.
+  if (/^[ \t]*(?:[-*+]|\d+[.)])(?:[ \t]+\[[ xX]\])?[ \t]{2,}$/m.test(src)) return null;
   const tokens = blockLexer.lexer(src);
   if (tokens.map((token) => token.raw).join("") !== src) return null;
   return tokens.some((token) => token.type === "list" || token.type === "paragraph" || token.type === "blockquote" || token.type === "heading" || token.type === "code" || token.type === "hr") ? tokens : null;

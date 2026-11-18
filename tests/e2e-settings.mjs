@@ -64,9 +64,34 @@ check(
 {
   const labels = await page.locator(".set-row-label").allTextContents();
   check(
-    JSON.stringify(labels) === '["Theme","Custom theme","Zoom","Status bar","Full-width tables"]',
+    JSON.stringify(labels) === '["Theme","Custom theme","Zoom","Sidebar opens on","Status bar","Full-width tables"]',
     `Appearance opens by default with its rows (${JSON.stringify(labels)})`,
   );
+}
+
+// --- default sidebar tab (issue #48): persisted, applied on the next start ---
+{
+  const tab = rowNamed("Sidebar opens on").locator("select");
+  check(await tab.inputValue() === "files", `sidebar tab defaults to Files (${await tab.inputValue()})`);
+  await tab.selectOption("outline");
+  await page.waitForTimeout(400);
+  check((await stored()).defaultSidebarTab === "outline", "the default sidebar tab is persisted");
+  await page.reload();
+  await page.waitForSelector(".app");
+  await page.waitForTimeout(400);
+  check(
+    await page.evaluate(async () => (await import("/src/store.ts")).sidebarTab()) === "outline",
+    "a new window opens the sidebar on the chosen tab",
+  );
+  await page.evaluate(async () => {
+    const [store, settings] = await Promise.all([import("/src/store.ts"), import("/src/settings.ts")]);
+    store.setDefaultSidebarTab("files");
+    store.setSidebarTab("files");
+    await settings.setSetting("defaultSidebarTab", "files");
+  });
+  await page.waitForTimeout(400);
+  await open();
+  await page.waitForTimeout(600);
 }
 
 await page.locator(".set-rail-item", { hasText: "Markdown" }).click();

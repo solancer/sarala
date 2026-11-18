@@ -16,6 +16,7 @@ import { render } from "solid-js/web";
 import Block from "./src/components/Block";
 import TableReorder from "./src/components/TableReorder";
 export { prepareRender } from "./src/markdown";
+export { shiftListItem } from "./src/listindent";
 export function mountBlock(host, initial) {
  const [text,setText] = createSignal(initial), [active,setActive] = createSignal(false);
  let changes=0;
@@ -42,7 +43,7 @@ globalThis.requestAnimationFrame=fn=>(frames.push(fn),frames.length);
 globalThis.cancelAnimationFrame=()=>{};
 globalThis.ResizeObserver=class {constructor(fn){observers.push(fn)} observe(){} disconnect(){}};
 const flush=async()=>{await Promise.resolve();for(let i=0;frames.length&&i<10;i++){const run=frames;frames=[];for(const fn of run)fn(0);await Promise.resolve()}};
-const {mountBlock,mountTable,prepareRender}=await import("./.build/editor-interactions.mjs");
+const {mountBlock,mountTable,prepareRender,shiftListItem}=await import("./.build/editor-interactions.mjs");
 await prepareRender("$x$"); // KaTeX loads lazily
 let count=0;const check=(value,message)=>{assert.ok(value,message);count++};
 const host=document.createElement("div");host.className="page";document.body.append(host);
@@ -98,6 +99,35 @@ check(await enterAt(L,L.indexOf("### Hard")+8)===L.replace("### Hard","### Hard\
  "Enter at the end of a heading inside an item stays in the item");
 check(await enterAt(L,L.indexOf("Vib.")+4)===L.replace("Vib.","Vib.\n    \n    "),
  "Enter at the end of a paragraph inside an item starts a new paragraph there");
+// List indentation (issue #53): an item moves a whole level with its content,
+// and the caret keeps its place in the text.
+const keyAt=async(source,offset,key,shiftKey=false)=>{
+ const h=document.createElement("div");document.body.append(h);
+ const b=mountBlock(h,source);b.setActive(true);await flush();
+ const src=h.querySelector(".source");
+ const walker=document.createTreeWalker(src,NodeFilter.SHOW_TEXT);let node,left=offset;
+ while((node=walker.nextNode())&&left>node.data.length)left-=node.data.length;
+ const r=document.createRange();r.setStart(node,left);r.collapse(true);
+ window.getSelection().removeAllRanges();window.getSelection().addRange(r);
+ src.dispatchEvent(new window.KeyboardEvent("keydown",{key,shiftKey,bubbles:true,cancelable:true}));await flush();
+ const out=b.text();b.dispose();h.remove();return out;
+};
+const sh=(t,c,d)=>{const r=shiftListItem(t,c,c,d);return r&&[r.text,r.start]};
+check(JSON.stringify(sh("- one\n- ",8,1))===JSON.stringify(["- one\n  - ",10]),"indent nests an empty item, caret after its marker");
+check(JSON.stringify(sh("1. one\n2. two",13,1))===JSON.stringify(["1. one\n   2. two",16]),"indent nests under an ordered item's content column");
+check(JSON.stringify(sh("- a\n- b\n  - c\n- d",6,1))===JSON.stringify(["- a\n  - b\n    - c\n- d",8]),"indent carries the item's nested children");
+check(JSON.stringify(sh("- one\n  - two",13,-1))===JSON.stringify(["- one\n- two",11]),"outdent moves a nested item back out");
+check(JSON.stringify(sh("- one",5,1))===JSON.stringify(["- one",5]),"the first item has nothing to nest under");
+check(JSON.stringify(sh("- one",5,-1))===JSON.stringify(["- one",5]),"a top-level item can't go further out");
+check(sh("plain text",3,1)===null,"not a list item: caller falls back");
+check(JSON.stringify(sh("- a\n  - b",6,-1))===JSON.stringify(["- a\n- b",4]),"a caret inside the indent stays at the line start");
+check(await keyAt("- one\n- ",8,"Tab")==="- one\n  - ","Tab on a list item indents it");
+check(await keyAt("- one\n  - two",13,"Tab",true)==="- one\n- two","Shift+Tab on a list item outdents it");
+check(await keyAt("plain",5,"Tab",true)==="plain","Shift+Tab outside a list inserts nothing");
+check(await keyAt("plain",5,"Tab")==="plain  ","Tab outside a list still inserts spaces");
+check(await enterAt("- one\n  - ",10)==="- one\n- ","Enter on an empty nested item moves it out a level");
+check(await keyAt("- one\n  - ",10,"Backspace")==="- one\n- ","Backspace on an empty nested item moves it out a level");
+check(await keyAt("- one\n- ",8,"Backspace")==="- one","Backspace on an empty top-level item still removes it");
 // On an empty line inside an item: the next item starts there.
 check(await enterAt("1.  a\n    \n    b","1.  a\n    ".length)==="1.  a\n    \n    b\n\n2.  ",
  "Enter on the blank line between an item's paragraphs keeps them apart and adds the next item after them");

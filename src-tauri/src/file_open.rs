@@ -105,20 +105,23 @@ pub fn opened(app: &tauri::AppHandle, urls: Vec<tauri::Url>) {
         requests.push("main", paths);
         return;
     }
-    let window = windows
+    let existing = windows
         .values()
         .find(|window| window.is_focused().unwrap_or(false))
         .cloned()
         .or_else(|| app.get_webview_window("main"))
-        .or_else(|| windows.values().next().cloned())
-        .or_else(|| {
-            tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
-                .title("Sarala")
-                .inner_size(1120.0, 760.0)
-                .min_inner_size(520.0, 400.0)
-                .build()
-                .ok()
-        });
+        .or_else(|| windows.values().next().cloned());
+    let created = existing.is_none();
+    let window = existing.or_else(|| {
+        // Hidden until the frontend has applied the saved theme (issue #47).
+        tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
+            .title("Sarala")
+            .inner_size(1120.0, 760.0)
+            .min_inner_size(520.0, 400.0)
+            .visible(false)
+            .build()
+            .ok()
+    });
     let Some(window) = window else { return };
     app.state::<FileOpenRequests>().push(window.label(), paths);
     // A notification is only a wake-up signal; the command drains the queue.
@@ -128,9 +131,17 @@ pub fn opened(app: &tauri::AppHandle, urls: Vec<tauri::Url>) {
         "open-files",
         (),
     );
+    if created {
+        // The new window shows itself once its frontend is ready.
+        crate::show_window_fallback(window);
+        return;
+    }
     let _ = window.unminimize();
-    let _ = window.show();
-    let _ = window.set_focus();
+    // A window that is still hidden is starting up; it shows itself once its
+    // theme is applied, so showing it here would bring back the white flash.
+    if window.is_visible().unwrap_or(true) {
+        let _ = window.set_focus();
+    }
 }
 
 #[cfg(test)]

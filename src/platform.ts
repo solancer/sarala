@@ -508,6 +508,17 @@ export async function setWindowAlwaysOnTop(onTop: boolean): Promise<void> {
   await getCurrentWindow().setAlwaysOnTop(onTop);
 }
 
+/** Windows start hidden (tauri.conf.json) so the first frame the user sees is
+ *  already in the saved theme instead of a white flash (issue #47). */
+export async function revealWindow(): Promise<void> {
+  if (!isTauri) return;
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  const win = getCurrentWindow();
+  if (await win.isVisible().catch(() => true)) return;
+  await win.show();
+  await win.setFocus().catch(() => {});
+}
+
 export async function minimizeWindow(): Promise<void> {
   if (!isTauri) return;
   const { getCurrentWindow } = await import("@tauri-apps/api/window");

@@ -51,7 +51,11 @@ export const [theme, setTheme] = createSignal<ThemeId>("sarala");
 export const [customScheme, setCustomScheme] = createSignal<Base16Scheme | null>(null);
 export const [sourceMode, setSourceMode] = createSignal(false);
 export const [sidebarOpen, setSidebarOpen] = createSignal(true);
-export const [sidebarTab, setSidebarTab] = createSignal<"files" | "outline" | "search">("files");
+export type SidebarTab = "files" | "outline" | "search";
+export const SIDEBAR_TABS: readonly SidebarTab[] = ["files", "outline", "search"];
+export const [sidebarTab, setSidebarTab] = createSignal<SidebarTab>("files");
+/** The tab the sidebar shows when a window starts (Settings > Appearance). */
+export const [defaultSidebarTab, setDefaultSidebarTab] = createSignal<SidebarTab>("files");
 /** Sidebar width in px, clamped to 180–480 (drag resize). */
 export const [sidebarWidth, setSidebarWidth] = createSignal(240);
 export const clampSidebar = (w: number) => Math.max(180, Math.min(480, Math.round(w)));
