@@ -3,6 +3,14 @@
 The web app has its own version, apart from the desktop app. Each section here
 becomes the notes of a `web-vX.Y.Z` release.
 
+## 0.3.0
+
+- Tab and Shift+Tab move a list item in or out a level, along with what's under it, and the cursor stays where you were typing. Blocks > List Indentation does the same. The cursor used to jump before the bullet.
+- Typing extra spaces after an empty bullet no longer sends what you type before the bullet.
+- Enter or Backspace on an empty nested item moves it out a level.
+- New shortcut: Cmd/Ctrl+Shift+H highlights the selected text (Format > Highlight).
+- New setting under Appearance, "Sidebar opens on": choose Files, Outline or Search.
+
 ## 0.2.0
 
 - Pressing Enter in a list item that has a heading or paragraph under it adds a line inside the item. That content used to turn into a code block.
