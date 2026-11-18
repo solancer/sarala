@@ -3,6 +3,11 @@
 The web app has its own version, apart from the desktop app. Each section here
 becomes the notes of a `web-vX.Y.Z` release.
 
+## 0.3.1
+
+- Pressing the scrollbar of a wide diagram scrolls it instead of opening it for editing.
+- When a D2 diagram can't render in the browser, it shows an error instead of loading forever.
+
 ## 0.3.0
 
 - Tab and Shift+Tab move a list item in or out a level, along with what's under it, and the cursor stays where you were typing. Blocks > List Indentation does the same. The cursor used to jump before the bullet.
