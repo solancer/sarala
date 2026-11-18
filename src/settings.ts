@@ -6,6 +6,7 @@ import {
   setCopyImageToAssets, setCopyImagesToFolder, setTableFullWidth, bumpRenderEpoch,
   setTheme, setZoom, clampZoom, THEMES, type ThemeId,
   setSidebarWidth, clampSidebar, setStatusBarVisible,
+  setSidebarTab, setDefaultSidebarTab, SIDEBAR_TABS, type SidebarTab,
   setMathAltDelimitersSig, setMathFenceSig, setMathAutoNumberSig, setPhysicsEnabledSig, setHtmlEmbedsSig, setImageUploadUrl,
   setEmojiEnabledSig, setHighlightEnabledSig, setSubSupEnabledSig, setAutolinkEnabledSig,
   setProseFont, setMonoFont, setOpenFolders, openFolders, setCustomScheme, customScheme,
@@ -131,6 +132,11 @@ function hydrateStore() {
   if ((THEMES as readonly string[]).includes(savedTheme)) setTheme(savedTheme as ThemeId);
   setZoom(clampZoom(getSetting("zoom", 100)));
   setSidebarWidth(clampSidebar(getSetting("sidebarWidth", 240)));
+  const tab = getSetting<string>("defaultSidebarTab", "files");
+  if ((SIDEBAR_TABS as readonly string[]).includes(tab)) {
+    setDefaultSidebarTab(tab as SidebarTab);
+    setSidebarTab(tab as SidebarTab);
+  }
   setOpenFolders(new Set<string>(getSetting<string[]>("openFolders", [])));
   setCustomScheme(getSetting<Base16Scheme | null>("customScheme", null));
   setStatusBarVisible(getSetting("statusBarVisible", true));

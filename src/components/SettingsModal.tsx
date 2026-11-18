@@ -23,6 +23,7 @@ import {
   autosaveInterval, closePrompt, setClosePrompt, copyImageToAssets, copyImagesToFolder, tableFullWidth,
   mathAltDelimiters, mathFence, emojiEnabled, highlightEnabled, subSupEnabled,
   autolinkEnabled, focusMode, typewriterMode, statusBarVisible, zoom, theme,
+  defaultSidebarTab, setDefaultSidebarTab, SIDEBAR_TABS, type SidebarTab,
   setCopyImagesToFolder, customScheme, htmlEmbeds, setHtmlEmbedsSig, mathAutoNumber, setMathAutoNumberSig, physicsEnabled, setPhysicsEnabledSig, imageUploadUrl, setImageUploadUrl, bumpRenderEpoch,
 } from "../store";
 import { listSystemFonts, applyProseFont, applyMonoFont } from "../fonts";
@@ -155,6 +156,21 @@ const ALL_SECTIONS = (): Section[] => [
             <button class="set-reset" onClick={cmd("view.zoom_actual")}>Reset</button>
           </div>
         ),
+      },
+      {
+        kind: "select", id: "sidebar_tab", label: "Sidebar opens on",
+        desc: "The tab shown when a window starts.",
+        get: defaultSidebarTab,
+        options: [
+          { value: "files", label: "Files" },
+          { value: "outline", label: "Outline" },
+          { value: "search", label: "Search" },
+        ],
+        run: (v) => {
+          if (!(SIDEBAR_TABS as readonly string[]).includes(v)) return;
+          setDefaultSidebarTab(v as SidebarTab);
+          void setSetting("defaultSidebarTab", v);
+        },
       },
       {
         kind: "toggle", id: "status_bar", label: "Status bar",

@@ -47,7 +47,7 @@ export type TopMenu = { label: string; items: MenuNode[] };
  *  with App.tsx (which syncs the same set to the native macOS menu). */
 export const BLOCK_TARGETED_IDS = new Set<string>([
   "format.strong", "format.emphasis", "format.underline", "format.code",
-  "format.strike", "format.comment", "format.inline_math", "format.hyperlink",
+  "format.strike", "format.highlight", "format.comment", "format.inline_math", "format.hyperlink",
   "format.link", "format.image.insert", "format.clear",
   "paragraph.heading.0", "paragraph.heading.1", "paragraph.heading.2",
   "paragraph.heading.3", "paragraph.heading.4", "paragraph.heading.5",
@@ -358,6 +358,7 @@ const ALL_MENUS: TopMenu[] = [
       { id: "format.underline", label: "Underline", accel: "Ctrl+U" },
       { id: "format.code", label: "Code", accel: "Ctrl+E" },
       { id: "format.strike", label: "Strike", accel: "Shift+Ctrl+X" },
+      { id: "format.highlight", label: "Highlight", accel: "Shift+Ctrl+H" },
       { id: "format.comment", label: "Comment", accel: "Ctrl+Minus" },
       { id: "format.inline_math", label: "Inline Math", accel: "Ctrl+M" },
       { sep: true },

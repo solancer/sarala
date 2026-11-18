@@ -7,7 +7,7 @@ import {
 } from "../livesource";
 import { isTauri, web, pickImageFile, alertDialog } from "../platform";
 import {
-  consumeCaretRequest, consumeSelectionRequest,
+  consumeCaretRequest, consumeSelectionRequest, requestSelection,
   spellcheckOn, smartPunctuation, renderEpoch, mermaidEpoch, mathFence, mathAltDelimiters,
   setLiveCaretOffset, blockContextSig, setFactsHold,
 } from "../store";
@@ -15,6 +15,7 @@ import { renderMermaidIn } from "../mermaid";
 import { renderD2In } from "../d2";
 import { executeCommand, registerBlockApi, unregisterBlockApi, imageInsertRef, insertImageFromPath, followLink, linkTargetAtCaret, type BlockApi } from "../commands";
 import { parseTable, cellRanges } from "../tabletools";
+import { shiftListItem } from "../listindent";
 import { findImages } from "../images";
 import { pasteToInsert } from "../richpaste";
 import { openImageMenu } from "./ImageContextMenu";
@@ -510,6 +511,12 @@ export default function Block(props: Props) {
           return;
         }
       }
+      if (body.trim() === "" && offset >= end && cont[1] && !cont[0].includes(">")) {
+        // An empty nested item: Enter moves it out a level, as in other
+        // editors, instead of ending the whole list (issue #53).
+        const out = shiftListItem(t, offset, offset, -1);
+        if (out && out.text !== t) { commit(out.text, out.start); return; }
+      }
       if (body.trim() === "" && offset >= end) {
         // Empty item ends the list: drop the marker line and split.
         const before = t.slice(0, start).replace(/\n$/, "");
@@ -665,7 +672,18 @@ export default function Block(props: Props) {
         setSelection(el, cells[next].start, cells[next].end);
         return;
       }
-      insertAtCaret("  ");
+      // On a list item, Tab nests it under the item above and Shift+Tab moves
+      // it back out, caret staying put (issue #53). Inserting spaces at the
+      // caret instead left "-   " lines and the caret inside hidden markers.
+      const sel = getSelectionOffsets(el!);
+      const shifted = isFence() ? null : shiftListItem(props.text, sel.start, sel.end, e.shiftKey ? -1 : 1);
+      if (shifted) {
+        if (shifted.text === props.text) return;
+        if (shifted.start !== shifted.end) requestSelection(shifted.start, shifted.end);
+        commit(shifted.text, shifted.start);
+        return;
+      }
+      if (!e.shiftKey) insertAtCaret("  ");
       return;
     }
     if (e.key === "Enter") {
@@ -684,6 +702,11 @@ export default function Block(props: Props) {
         if (lineStart > 0 && /^[ \t]*(?:(?:[-*+]|\d+[.)])(?:[ \t]+\[[ xX]\])?)?[ \t]*$/.test(line)) {
           e.preventDefault();
           const t = props.text;
+          // A nested one moves out a level first (issue #53).
+          if (/^[ \t]+[-*+\d]/.test(line)) {
+            const out = shiftListItem(t, start, start, -1);
+            if (out && out.text !== t) { commit(out.text, out.start); return; }
+          }
           commit(t.slice(0, lineStart - 1) + t.slice(lineEnd), lineStart - 1);
           return;
         }

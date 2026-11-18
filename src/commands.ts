@@ -23,6 +23,7 @@ import { selectAllDocument, selectedSourceRange } from "./blockselect";
 import { toggleMark, type MarkKind } from "./inlineformat";
 import { linkAt, linkDestination, removeLink, type LinkTarget } from "./links";
 import { applyBlockKind, type BlockKind } from "./blocktype";
+import { shiftListItem } from "./listindent";
 import { fontEmbedCss } from "./fonts";
 import {
   isTauri, isWeb, web, pickFolder, pickMarkdownFile, pickSavePath, pickExportPath, pickImportFile,
@@ -631,13 +632,37 @@ function transformBlock(fn: (text: string) => string) {
 
 /** Apply fn to the line under the caret of the target block. */
 function mutateCaretLine(fn: (line: string) => string) {
-  transformBlock((text) => {
-    const offset = blockApi?.caretOffset() ?? 0;
-    const start = text.lastIndexOf("\n", offset - 1) + 1;
-    const endIdx = text.indexOf("\n", offset);
-    const end = endIdx === -1 ? text.length : endIdx;
-    return text.slice(0, start) + fn(text.slice(start, end)) + text.slice(end);
-  });
+  const i = targetBlockIndex();
+  if (i < 0) return;
+  const text = doc.blocks[i].text;
+  const offset = blockApi?.caretOffset() ?? text.length;
+  const start = text.lastIndexOf("\n", offset - 1) + 1;
+  const endIdx = text.indexOf("\n", offset);
+  const end = endIdx === -1 ? text.length : endIdx;
+  const line = text.slice(start, end);
+  const next = fn(line);
+  if (next === line) return;
+  // fn edits the start of the line (indent, task box), so the caret moves with
+  // the text after it, never back into the line's leading markers (#53).
+  requestCaret(Math.max(start, offset + next.length - line.length));
+  updateBlock(i, text.slice(0, start) + next + text.slice(end));
+}
+
+/** Indent or outdent: a list item moves a whole level with its content. */
+function shiftIndent(dir: 1 | -1) {
+  const i = targetBlockIndex();
+  if (i < 0) return;
+  const text = doc.blocks[i].text;
+  const sel = blockApi?.selectionOffsets() ?? { start: text.length, end: text.length };
+  const shifted = shiftListItem(text, sel.start, sel.end, dir);
+  if (!shifted) {
+    mutateCaretLine(dir === 1 ? (l) => "  " + l : (l) => l.replace(/^ {1,2}/, ""));
+    return;
+  }
+  if (shifted.text === text) return;
+  if (shifted.start !== shifted.end) requestSelection(shifted.start, shifted.end);
+  else requestCaret(shifted.start);
+  updateBlock(i, shifted.text);
 }
 
 /**
@@ -1370,8 +1395,8 @@ const registry: Record<string, Command> = {
   "paragraph.task_list": () => toggleList("task"),
   "paragraph.task_toggle": () =>
     mutateCaretLine((l) => l.replace(/\[( |x|X)\]/, (_, s) => (s === " " ? "[x]" : "[ ]"))),
-  "paragraph.indent": () => mutateCaretLine((l) => "  " + l),
-  "paragraph.outdent": () => mutateCaretLine((l) => l.replace(/^ {1,2}/, "")),
+  "paragraph.indent": () => shiftIndent(1),
+  "paragraph.outdent": () => shiftIndent(-1),
   "paragraph.insert_before": () => {
     const i = targetBlockIndex();
     if (i >= 0) insertBlockAfter(i - 1);
@@ -1395,6 +1420,13 @@ const registry: Record<string, Command> = {
   "format.emphasis": wrap("*"),
   "format.code": wrap("`"),
   "format.strike": wrap("~~"),
+  // Toggles ==mark== on a selection (same path as the selection toolbar);
+  // with no selection it inserts a placeholder like the other wraps.
+  "format.highlight": () => {
+    const sel = blockApi?.selectionOffsets();
+    if (sel && sel.end > sel.start) toggleInlineMark("highlight");
+    else wrap("==")();
+  },
   "format.underline": wrap("<u>", "</u>"),
   "format.comment": wrap("<!-- ", " -->"),
   "format.inline_math": wrap("$"),

@@ -608,9 +608,26 @@ fn new_window(app: AppHandle) -> Result<(), String> {
         .title("Sarala")
         .inner_size(1120.0, 760.0)
         .min_inner_size(520.0, 400.0)
+        .visible(false)
         .build()
-        .map(|_| ())
+        .map(show_window_fallback)
         .map_err(|e| e.to_string())
+}
+
+/// Windows are created hidden so their first paint is already in the saved
+/// theme (issue #47): the frontend calls `show()` once settings are applied.
+/// This is the safety net for a frontend that never gets that far (a script
+/// error, a hung load), so a window can't stay invisible forever.
+///
+/// `WebviewWindow` is a cheap handle (an `Arc` inside) that is `Send`, so the
+/// thread takes its own clone by value (`move`) and outlives this call.
+pub(crate) fn show_window_fallback(window: tauri::WebviewWindow) {
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(3));
+        if !window.is_visible().unwrap_or(true) {
+            let _ = window.show();
+        }
+    });
 }
 
 /// File name that switches on portable settings (issue #40): when a file with
@@ -1376,6 +1393,12 @@ fn main() {
         .setup(|app| {
             #[cfg(target_os = "linux")]
             apply_gnome_button_layout();
+
+            // The configured window starts hidden (tauri.conf.json); see
+            // show_window_fallback.
+            if let Some(window) = app.get_webview_window("main") {
+                show_window_fallback(window);
+            }
 
             // Auto-updater (desktop only). The plugin reads its pubkey/endpoints
             // from tauri.conf.json; the frontend invokes `plugin:updater|check`.

@@ -29,6 +29,7 @@ const BASE: Cmd[] = [
   { group: "Format", id: "format.emphasis", label: "Italic", icon: "italic" },
   { group: "Format", id: "format.underline", label: "Underline", icon: "underline" },
   { group: "Format", id: "format.strike", label: "Strikethrough", icon: "strike" },
+  { group: "Format", id: "format.highlight", label: "Highlight", icon: "highlight" },
   { group: "Format", id: "format.code", label: "Inline Code", icon: "code" },
   { group: "Format", id: "format.inline_math", label: "Inline Math", icon: "math" },
   { group: "Format", id: "format.hyperlink", label: "Insert Link", icon: "link" },
