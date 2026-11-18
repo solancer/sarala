@@ -104,8 +104,13 @@ class FrameWorker {
   }
 
   postMessage(data: unknown): void {
-    // A script load failure was already reported through onerror.
-    this.loaded.then((win) => (win.onmessage as ((e: { data: unknown }) => void) | null)?.({ data }), () => {});
+    // d2.js only logs onerror; it settles requests from "error" messages. Answer
+    // with one when the script never loaded (e.g. blocked by the web build's
+    // CSP), so the block shows the error instead of waiting forever.
+    this.loaded.then(
+      (win) => (win.onmessage as ((e: { data: unknown }) => void) | null)?.({ data }),
+      () => setTimeout(() => this.onmessage?.({ data: { type: "error", error: "D2 could not start in this browser" } })),
+    );
   }
 
   terminate(): void {
